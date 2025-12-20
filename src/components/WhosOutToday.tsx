@@ -3,8 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { CalendarOff, Loader2 } from 'lucide-react';
-import { format, parseISO, isWithinInterval } from 'date-fns';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CalendarOff, Loader2, CalendarClock } from 'lucide-react';
+import { format, parseISO, addDays, isToday, isTomorrow } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface LeaveEntry {
@@ -32,11 +33,12 @@ const LEAVE_TYPE_LABELS: Record<string, string> = {
 };
 
 export function WhosOutToday() {
-  const [leaves, setLeaves] = useState<LeaveEntry[]>([]);
+  const [todayLeaves, setTodayLeaves] = useState<LeaveEntry[]>([]);
+  const [upcomingLeaves, setUpcomingLeaves] = useState<LeaveEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchTodayLeaves();
+    fetchLeaves();
     
     // Subscribe to realtime updates
     const channel = supabase
@@ -49,7 +51,7 @@ export function WhosOutToday() {
           table: 'leave_requests',
         },
         () => {
-          fetchTodayLeaves();
+          fetchLeaves();
         }
       )
       .subscribe();
@@ -59,45 +61,71 @@ export function WhosOutToday() {
     };
   }, []);
 
-  const fetchTodayLeaves = async () => {
-    const today = format(new Date(), 'yyyy-MM-dd');
+  const fetchLeaves = async () => {
+    const today = new Date();
+    const todayStr = format(today, 'yyyy-MM-dd');
+    const nextWeek = addDays(today, 7);
+    const nextWeekStr = format(nextWeek, 'yyyy-MM-dd');
 
     try {
-      const { data: leaveData, error } = await supabase
+      // Fetch leaves for today
+      const { data: todayData, error: todayError } = await supabase
         .from('leave_requests')
         .select('id, user_id, start_date, end_date, leave_type')
         .eq('status', 'approved')
-        .lte('start_date', today)
-        .gte('end_date', today);
+        .lte('start_date', todayStr)
+        .gte('end_date', todayStr);
 
-      if (error) throw error;
+      if (todayError) throw todayError;
 
-      if (!leaveData || leaveData.length === 0) {
-        setLeaves([]);
+      // Fetch upcoming leaves (next 7 days, excluding today)
+      const tomorrowStr = format(addDays(today, 1), 'yyyy-MM-dd');
+      const { data: upcomingData, error: upcomingError } = await supabase
+        .from('leave_requests')
+        .select('id, user_id, start_date, end_date, leave_type')
+        .eq('status', 'approved')
+        .gte('start_date', tomorrowStr)
+        .lte('start_date', nextWeekStr)
+        .order('start_date', { ascending: true });
+
+      if (upcomingError) throw upcomingError;
+
+      // Get all user IDs
+      const allUserIds = [
+        ...new Set([
+          ...(todayData || []).map(l => l.user_id),
+          ...(upcomingData || []).map(l => l.user_id),
+        ]),
+      ];
+
+      if (allUserIds.length === 0) {
+        setTodayLeaves([]);
+        setUpcomingLeaves([]);
         setLoading(false);
         return;
       }
 
-      // Fetch user names and departments
-      const userIds = [...new Set(leaveData.map(l => l.user_id))];
+      // Fetch user profiles
       const { data: profiles } = await supabase
         .from('profiles')
         .select('user_id, full_name, department')
-        .in('user_id', userIds);
+        .in('user_id', allUserIds);
 
       const profileMap = new Map(
         (profiles || []).map(p => [p.user_id, { name: p.full_name, department: p.department }])
       );
 
-      const leavesWithNames = leaveData.map(l => ({
-        ...l,
-        user_name: profileMap.get(l.user_id)?.name || 'Unknown',
-        department: profileMap.get(l.user_id)?.department || null,
-      }));
+      const mapLeaves = (leaves: typeof todayData) =>
+        (leaves || []).map(l => ({
+          ...l,
+          user_name: profileMap.get(l.user_id)?.name || 'Unknown',
+          department: profileMap.get(l.user_id)?.department || null,
+        }));
 
-      setLeaves(leavesWithNames);
+      setTodayLeaves(mapLeaves(todayData));
+      setUpcomingLeaves(mapLeaves(upcomingData));
     } catch (error) {
-      console.error('Error fetching today leaves:', error);
+      console.error('Error fetching leaves:', error);
     } finally {
       setLoading(false);
     }
@@ -123,13 +151,20 @@ export function WhosOutToday() {
     return `Until ${format(end, 'MMM d')}`;
   };
 
+  const getDateLabel = (startDate: string) => {
+    const date = parseISO(startDate);
+    if (isToday(date)) return 'Today';
+    if (isTomorrow(date)) return 'Tomorrow';
+    return format(date, 'EEE, MMM d');
+  };
+
   if (loading) {
     return (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <CalendarOff className="h-5 w-5 text-amber-500" />
-            Who's Out Today
+            Who's Out
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -141,53 +176,77 @@ export function WhosOutToday() {
     );
   }
 
+  const renderLeaveList = (leaves: LeaveEntry[], emptyMessage: string, showDateLabel = false) => {
+    if (leaves.length === 0) {
+      return (
+        <div className="text-center py-6 text-muted-foreground">
+          <CalendarOff className="h-10 w-10 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">{emptyMessage}</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-2 max-h-[240px] overflow-auto">
+        {leaves.map(leave => (
+          <div
+            key={leave.id}
+            className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+          >
+            <Avatar className="h-8 w-8">
+              <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                {getInitials(leave.user_name)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm truncate">{leave.user_name}</p>
+              <p className="text-xs text-muted-foreground truncate">
+                {showDateLabel ? getDateLabel(leave.start_date) : leave.department || 'No dept'} 
+                {showDateLabel && ` • ${getReturnDate(leave.end_date)}`}
+                {!showDateLabel && ` • ${getReturnDate(leave.end_date)}`}
+              </p>
+            </div>
+            <Badge
+              variant="outline"
+              className={cn('text-xs shrink-0', LEAVE_TYPE_COLORS[leave.leave_type])}
+            >
+              {LEAVE_TYPE_LABELS[leave.leave_type] || leave.leave_type}
+            </Badge>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between">
           <span className="flex items-center gap-2 text-base">
             <CalendarOff className="h-5 w-5 text-amber-500" />
-            Who's Out Today
+            Who's Out
           </span>
-          <Badge variant="secondary" className="text-xs">
-            {leaves.length} {leaves.length === 1 ? 'person' : 'people'}
-          </Badge>
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        {leaves.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground">
-            <CalendarOff className="h-10 w-10 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Everyone's in today!</p>
-          </div>
-        ) : (
-          <div className="space-y-3 max-h-[300px] overflow-auto">
-            {leaves.map(leave => (
-              <div
-                key={leave.id}
-                className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-              >
-                <Avatar className="h-9 w-9">
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                    {getInitials(leave.user_name)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{leave.user_name}</p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {leave.department || 'No department'} • {getReturnDate(leave.end_date)}
-                  </p>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={cn('text-xs shrink-0', LEAVE_TYPE_COLORS[leave.leave_type])}
-                >
-                  {LEAVE_TYPE_LABELS[leave.leave_type] || leave.leave_type}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        )}
+      <CardContent className="pt-0">
+        <Tabs defaultValue="today" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-3">
+            <TabsTrigger value="today" className="text-xs gap-1">
+              <CalendarOff className="h-3 w-3" />
+              Today ({todayLeaves.length})
+            </TabsTrigger>
+            <TabsTrigger value="upcoming" className="text-xs gap-1">
+              <CalendarClock className="h-3 w-3" />
+              Next 7 Days ({upcomingLeaves.length})
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="today" className="mt-0">
+            {renderLeaveList(todayLeaves, "Everyone's in today!")}
+          </TabsContent>
+          <TabsContent value="upcoming" className="mt-0">
+            {renderLeaveList(upcomingLeaves, 'No upcoming leaves', true)}
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );
