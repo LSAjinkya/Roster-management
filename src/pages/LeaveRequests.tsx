@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Plus, Calendar, Check, X, Clock, AlertCircle, Briefcase, Thermometer } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
+import { TeamLeaveCalendar } from '@/components/TeamLeaveCalendar';
 
 type LeaveType = 'casual' | 'sick' | 'comp-off' | 'other';
 type LeaveStatus = 'pending' | 'approved' | 'rejected';
@@ -380,6 +381,9 @@ export default function LeaveRequests() {
                 )}
               </TabsTrigger>
             )}
+            {canEditShifts && (
+              <TabsTrigger value="team-calendar">Team Calendar</TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="my-requests" className="mt-4">
@@ -530,6 +534,12 @@ export default function LeaveRequests() {
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+          )}
+
+          {canEditShifts && (
+            <TabsContent value="team-calendar" className="mt-4">
+              <TeamLeaveCalendar />
             </TabsContent>
           )}
         </Tabs>
