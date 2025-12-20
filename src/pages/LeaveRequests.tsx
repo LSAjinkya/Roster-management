@@ -17,6 +17,7 @@ import { Loader2, Plus, Calendar, Check, X, Clock, AlertCircle, Briefcase, Therm
 import { format, differenceInDays } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
 import { TeamLeaveCalendar } from '@/components/TeamLeaveCalendar';
+import { PublicHolidaysCalendar } from '@/components/PublicHolidaysCalendar';
 
 type LeaveType = 'casual' | 'sick' | 'comp-off' | 'other';
 type LeaveStatus = 'pending' | 'approved' | 'rejected';
@@ -415,6 +416,7 @@ export default function LeaveRequests() {
             {canEditShifts && (
               <TabsTrigger value="team-calendar">Team Calendar</TabsTrigger>
             )}
+            <TabsTrigger value="holidays">Holidays</TabsTrigger>
           </TabsList>
 
           <TabsContent value="my-requests" className="mt-4">
@@ -573,6 +575,10 @@ export default function LeaveRequests() {
               <TeamLeaveCalendar />
             </TabsContent>
           )}
+
+          <TabsContent value="holidays" className="mt-4">
+            <PublicHolidaysCalendar />
+          </TabsContent>
         </Tabs>
       </div>
 
