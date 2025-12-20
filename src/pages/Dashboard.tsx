@@ -2,6 +2,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { StatCard } from '@/components/StatCard';
 import { ShiftBadge } from '@/components/ShiftBadge';
 import { WhosOutToday } from '@/components/WhosOutToday';
+import { MyUpcomingShifts } from '@/components/MyUpcomingShifts';
 import { teamMembers, currentWeekAssignments } from '@/data/mockData';
 import { SHIFT_DEFINITIONS, DEPARTMENTS } from '@/types/roster';
 import { Users, Calendar, Building2, TrendingUp, ArrowRightLeft, Plus } from 'lucide-react';
@@ -127,31 +128,37 @@ export default function Dashboard() {
           <WhosOutToday />
         </div>
 
-        {/* Department Distribution */}
-        <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
-          <div className="p-4 border-b border-border/50">
-            <h2 className="font-semibold text-lg">Department Distribution</h2>
-            <p className="text-sm text-muted-foreground">Team members by department</p>
-          </div>
-          <div className="p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
-              {DEPARTMENTS.map(dept => {
-                const count = teamMembers.filter(m => m.department === dept).length;
-                const percentage = Math.round((count / teamMembers.length) * 100);
-                
-                return (
-                  <div key={dept} className="text-center p-4 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors">
-                    <p className="text-2xl font-bold text-foreground">{count}</p>
-                    <p className="text-sm text-muted-foreground mt-1 truncate">{dept}</p>
-                    <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-primary rounded-full transition-all"
-                        style={{ width: `${percentage}%` }}
-                      />
+        {/* My Upcoming Shifts + Department Distribution */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* My Upcoming Shifts Widget */}
+          <MyUpcomingShifts />
+          
+          {/* Department Distribution */}
+          <div className="lg:col-span-2 bg-card rounded-xl border border-border/50 overflow-hidden">
+            <div className="p-4 border-b border-border/50">
+              <h2 className="font-semibold text-lg">Department Distribution</h2>
+              <p className="text-sm text-muted-foreground">Team members by department</p>
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                {DEPARTMENTS.map(dept => {
+                  const count = teamMembers.filter(m => m.department === dept).length;
+                  const percentage = Math.round((count / teamMembers.length) * 100);
+                  
+                  return (
+                    <div key={dept} className="text-center p-4 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors">
+                      <p className="text-2xl font-bold text-foreground">{count}</p>
+                      <p className="text-sm text-muted-foreground mt-1 truncate">{dept}</p>
+                      <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
