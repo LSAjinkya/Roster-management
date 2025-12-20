@@ -1,1 +1,10 @@
 project_id = "wlbraezdazmwkvsomxrn"
+
+[functions.admin-impersonate]
+verify_jwt = true
+
+[functions.sync-razorpay]
+verify_jwt = false
+
+[functions.send-2fa-otp]
+verify_jwt = false
