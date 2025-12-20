@@ -81,6 +81,14 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
     return teamMembers.filter(m => m.role === 'TL');
   }, [teamMembers]);
 
+  // Get selected TL for highlighted row
+  const selectedTL = useMemo(() => {
+    if (tlFilter !== 'all') {
+      return teamMembers.find(m => m.id === tlFilter);
+    }
+    return null;
+  }, [teamMembers, tlFilter]);
+
   // Filter members by department and TL (show only members reporting to selected TL)
   const filteredMembers = useMemo(() => {
     let members = teamMembers;
@@ -284,6 +292,81 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
               </tr>
             </thead>
             <tbody>
+              {/* Highlighted TL row when filtering by TL */}
+              {selectedTL && (
+                (() => {
+                  const stats = getMemberStats(selectedTL.id);
+                  return (
+                    <tr className="border-b-2 border-primary/50 bg-primary/5">
+                      {/* Manager/TL column */}
+                      <td className="sticky left-0 z-10 bg-primary/10 p-2 font-semibold text-primary truncate">
+                        Team Lead
+                      </td>
+                      {/* Member name */}
+                      <td className="sticky left-[120px] z-10 bg-primary/10 p-2 font-semibold">
+                        <div className="truncate text-primary">{selectedTL.name}</div>
+                        <div className="text-primary/70 text-[10px] truncate">{selectedTL.department}</div>
+                      </td>
+                      {/* Level */}
+                      <td className="sticky left-[260px] z-10 bg-primary/10 p-2">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary text-primary-foreground">
+                          {selectedTL.role}
+                        </span>
+                      </td>
+                      {/* Day cells */}
+                      {monthDays.map(day => {
+                        const shift = getMemberShift(selectedTL.id, day);
+                        const weekend = isWeekend(day);
+                        const today = isToday(day);
+                        
+                        return (
+                          <td 
+                            key={format(day, 'yyyy-MM-dd')}
+                            className={cn(
+                              "p-0.5 text-center bg-primary/5",
+                              weekend && !shift && "bg-primary/10",
+                              today && "ring-1 ring-primary ring-inset",
+                              canEditShifts && "cursor-pointer hover:bg-primary/20"
+                            )}
+                            onClick={() => canEditShifts && handleCellClick(selectedTL, day, false)}
+                            onContextMenu={(e) => {
+                              if (canEditShifts && shift) {
+                                e.preventDefault();
+                                handleCellClick(selectedTL, day, true);
+                              }
+                            }}
+                            title={canEditShifts ? "Click to edit, Right-click to swap" : undefined}
+                          >
+                            {shift ? (
+                              <span className={cn(
+                                "inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-bold",
+                                shiftCellColors[shift]
+                              )}>
+                                {shiftLetters[shift]}
+                              </span>
+                            ) : (
+                              <span className={cn(
+                                "inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-medium",
+                                shiftCellColors.off
+                              )}>
+                                -
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      {/* Summary columns */}
+                      <td className="p-1 text-center font-medium bg-shift-morning/30">{stats.morning || '-'}</td>
+                      <td className="p-1 text-center font-medium bg-shift-afternoon/30">{stats.afternoon || '-'}</td>
+                      <td className="p-1 text-center font-medium bg-shift-night/30">{stats.night || '-'}</td>
+                      <td className="p-1 text-center font-medium bg-shift-general/30">{stats.general || '-'}</td>
+                      <td className="p-1 text-center font-medium bg-red-100/30">{stats.leave || '-'}</td>
+                      <td className="p-1 text-center font-medium bg-muted/50">{stats.off}</td>
+                      <td className="p-1 text-center font-bold">{stats.total}</td>
+                    </tr>
+                  );
+                })()
+              )}
               {Object.entries(membersByDepartment).map(([department, members]) => (
                 members.map((member, memberIndex) => {
                   const stats = getMemberStats(member.id);
