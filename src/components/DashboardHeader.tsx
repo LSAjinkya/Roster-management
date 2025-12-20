@@ -2,18 +2,23 @@ import { Bell, Search, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ReactNode } from 'react';
 
 interface DashboardHeaderProps {
   title: string;
   subtitle?: string;
+  children?: ReactNode;
 }
 
-export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
+export function DashboardHeader({ title, subtitle, children }: DashboardHeaderProps) {
   return (
-    <header className="bg-card border-b border-border h-16 px-6 flex items-center justify-between sticky top-0 z-10">
-      <div>
-        <h1 className="text-xl font-bold text-foreground">{title}</h1>
-        {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+    <header className="bg-card border-b border-border min-h-16 px-6 py-3 flex items-center justify-between sticky top-0 z-10 gap-4">
+      <div className="flex items-center gap-6">
+        <div>
+          <h1 className="text-xl font-bold text-foreground">{title}</h1>
+          {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+        </div>
+        {children}
       </div>
       
       <div className="flex items-center gap-4">
