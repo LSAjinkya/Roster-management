@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Shield, UserCog, LogIn, History } from 'lucide-react';
+import { Loader2, Shield, UserCog, LogIn, History, Building2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format } from 'date-fns';
+import { DEPARTMENTS, Department } from '@/types/roster';
 
 type AppRole = 'admin' | 'hr' | 'tl' | 'member';
 
@@ -18,6 +19,7 @@ interface UserWithRoles {
   id: string;
   email: string;
   full_name: string;
+  department: string | null;
   roles: AppRole[];
 }
 
@@ -73,7 +75,7 @@ export default function RoleManagement() {
     try {
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('user_id, email, full_name')
+        .select('user_id, email, full_name, department')
         .order('full_name');
 
       if (profilesError) throw profilesError;
@@ -88,6 +90,7 @@ export default function RoleManagement() {
         id: profile.user_id,
         email: profile.email,
         full_name: profile.full_name,
+        department: profile.department,
         roles: (allRoles || [])
           .filter(r => r.user_id === profile.user_id)
           .map(r => r.role as AppRole),
@@ -139,6 +142,23 @@ export default function RoleManagement() {
     } catch (error) {
       console.error('Error updating role:', error);
       toast.error('Failed to update role');
+    }
+  };
+
+  const handleDepartmentChange = async (userId: string, department: string) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ department: department === 'none' ? null : department })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      toast.success('Department updated successfully');
+      fetchUsers();
+    } catch (error) {
+      console.error('Error updating department:', error);
+      toast.error('Failed to update department');
     }
   };
 
@@ -229,6 +249,7 @@ export default function RoleManagement() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Department</TableHead>
                 <TableHead>Current Role</TableHead>
                 <TableHead>Change Role</TableHead>
                 <TableHead>Actions</TableHead>
@@ -239,6 +260,24 @@ export default function RoleManagement() {
                 <TableRow key={u.id}>
                   <TableCell className="font-medium">{u.full_name}</TableCell>
                   <TableCell className="text-muted-foreground">{u.email}</TableCell>
+                  <TableCell>
+                    <Select
+                      value={u.department || 'none'}
+                      onValueChange={(value) => handleDepartmentChange(u.id, value)}
+                    >
+                      <SelectTrigger className="w-40">
+                        <SelectValue placeholder="Select department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No Department</SelectItem>
+                        {DEPARTMENTS.map((dept) => (
+                          <SelectItem key={dept} value={dept}>
+                            {dept}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
                   <TableCell>
                     <div className="flex gap-1 flex-wrap">
                       {u.roles.length > 0 ? (
