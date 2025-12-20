@@ -26,6 +26,8 @@ const shiftColors: Record<ShiftType, string> = {
   afternoon: 'bg-shift-afternoon',
   night: 'bg-shift-night',
   general: 'bg-shift-general',
+  leave: 'bg-red-100',
+  'comp-off': 'bg-orange-100',
 };
 
 export function MonthlyRosterView({ assignments, teamMembers }: MonthlyRosterViewProps) {
@@ -54,6 +56,8 @@ export function MonthlyRosterView({ assignments, teamMembers }: MonthlyRosterVie
       afternoon: dayAssignments.filter(a => a.shiftType === 'afternoon').length,
       night: dayAssignments.filter(a => a.shiftType === 'night').length,
       general: dayAssignments.filter(a => a.shiftType === 'general').length,
+      leave: dayAssignments.filter(a => a.shiftType === 'leave').length,
+      'comp-off': dayAssignments.filter(a => a.shiftType === 'comp-off').length,
     };
 
     return { total: dayAssignments.length, shiftCounts };

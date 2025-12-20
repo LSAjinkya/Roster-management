@@ -29,13 +29,14 @@ interface TableRosterViewProps {
   teamMembers: TeamMember[];
 }
 
-const shiftCellColors: Record<ShiftType | 'off' | 'leave', string> = {
+const shiftCellColors: Record<ShiftType | 'off', string> = {
   morning: 'bg-shift-morning text-amber-900',
   afternoon: 'bg-shift-afternoon text-sky-900',
   night: 'bg-shift-night text-violet-900',
   general: 'bg-shift-general text-emerald-900',
-  off: 'bg-muted text-muted-foreground',
   leave: 'bg-red-100 text-red-700',
+  'comp-off': 'bg-orange-100 text-orange-700',
+  off: 'bg-muted text-muted-foreground',
 };
 
 const shiftLetters: Record<ShiftType, string> = {
@@ -43,6 +44,8 @@ const shiftLetters: Record<ShiftType, string> = {
   afternoon: 'A',
   night: 'N',
   general: 'G',
+  leave: 'L',
+  'comp-off': 'CO',
 };
 
 export function TableRosterView({ assignments, teamMembers }: TableRosterViewProps) {

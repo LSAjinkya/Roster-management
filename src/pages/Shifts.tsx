@@ -4,11 +4,13 @@ import { ShiftBadge } from '@/components/ShiftBadge';
 import { Clock, Users, Sun, Sunset, Moon } from 'lucide-react';
 
 export default function Shifts() {
-  const shiftComposition = {
+  const shiftComposition: Record<string, Record<string, number>> = {
     morning: { L2: 2, Monitoring: 1, CloudPe: 1, Network: 2, AW: 1, Infra: 2 },
     afternoon: { L2: 2, Monitoring: 1, CloudPe: 1, Network: 2, AW: 1, Infra: 2 },
     night: { L2: 2, Monitoring: 1, CloudPe: 1, Network: 2, AW: 1, Infra: 2 },
     general: { TL: 5, 'Vendor Coordinator': 1 },
+    leave: {},
+    'comp-off': {},
   };
 
   return (
