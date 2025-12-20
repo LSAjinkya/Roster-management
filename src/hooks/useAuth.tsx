@@ -12,6 +12,7 @@ interface AuthContextType {
   roles: AppRole[];
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
+  signInWithGoogle: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   canEditShifts: boolean;
   isHR: boolean;
@@ -134,6 +135,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
+  const signInWithGoogle = async () => {
+    const redirectUrl = `${window.location.origin}/`;
+    
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+        queryParams: {
+          hd: 'leapswitch.com', // Restrict to leapswitch.com domain
+        },
+      },
+    });
+
+    if (error) {
+      return { error };
+    }
+
+    return { error: null };
+  };
+
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -156,6 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     roles,
     signIn,
     signUp,
+    signInWithGoogle,
     signOut,
     canEditShifts,
     isHR,
