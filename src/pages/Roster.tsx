@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { WeeklyRosterView } from '@/components/WeeklyRosterView';
 import { SingleDayRosterView } from '@/components/SingleDayRosterView';
@@ -6,16 +6,50 @@ import { MonthlyRosterView } from '@/components/MonthlyRosterView';
 import { MemberRosterView } from '@/components/MemberRosterView';
 import { TableRosterView } from '@/components/TableRosterView';
 import { ExportDropdown } from '@/components/ExportDropdown';
-import { teamMembers, currentWeekAssignments } from '@/data/mockData';
+import { SetupMonthlyRosterDialog } from '@/components/SetupMonthlyRosterDialog';
+import { teamMembers as mockTeamMembers, currentWeekAssignments } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CalendarDays, Calendar, CalendarRange, User, Table2 } from 'lucide-react';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { TeamMember, Department, Role } from '@/types/roster';
 
 type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member';
 
 export default function Roster() {
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [currentDate] = useState(new Date());
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(mockTeamMembers);
+
+  useEffect(() => {
+    fetchTeamMembers();
+  }, []);
+
+  const fetchTeamMembers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const members: TeamMember[] = data.map(member => ({
+          id: member.id,
+          name: member.name,
+          email: member.email,
+          role: member.role as Role,
+          department: member.department as Department,
+          status: (member.status as 'available' | 'on-leave' | 'unavailable') || 'available',
+          reportingTLId: member.reporting_tl_id || undefined,
+        }));
+        setTeamMembers(members);
+      }
+    } catch (error) {
+      console.error('Error fetching team members:', error);
+    }
+  };
 
   // Calculate date ranges for export
   const exportDates = useMemo(() => {
@@ -40,6 +74,8 @@ export default function Roster() {
         subtitle="View and manage shift assignments"
       >
         <div className="flex items-center gap-3">
+          <SetupMonthlyRosterDialog teamMembers={teamMembers} />
+          
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
             <TabsList className="bg-muted/50">
               <TabsTrigger value="table" className="gap-2">
