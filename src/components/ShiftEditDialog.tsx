@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ShiftType, SHIFT_DEFINITIONS, TeamMember } from '@/types/roster';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +12,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
 interface ShiftEditDialogProps {
   open: boolean;
@@ -41,11 +44,54 @@ export function ShiftEditDialog({
   onSave,
 }: ShiftEditDialogProps) {
   const [selectedShift, setSelectedShift] = useState<ShiftType | 'off'>(currentShift || 'off');
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
-    if (member && date) {
-      onSave(member.id, format(date, 'yyyy-MM-dd'), selectedShift);
+  // Reset selected shift when dialog opens with new data
+  useEffect(() => {
+    if (open) {
+      setSelectedShift(currentShift || 'off');
+    }
+  }, [open, currentShift]);
+
+  const handleSave = async () => {
+    if (!member || !date) return;
+    
+    setSaving(true);
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    try {
+      // First, delete any existing assignment for this member on this date
+      const { error: deleteError } = await supabase
+        .from('shift_assignments')
+        .delete()
+        .eq('member_id', member.id)
+        .eq('date', dateStr);
+
+      if (deleteError) throw deleteError;
+
+      // If not "off", insert the new assignment
+      if (selectedShift !== 'off') {
+        const { error: insertError } = await supabase
+          .from('shift_assignments')
+          .insert({
+            member_id: member.id,
+            shift_type: selectedShift,
+            date: dateStr,
+            department: member.department,
+          });
+
+        if (insertError) throw insertError;
+      }
+
+      onSave(member.id, dateStr, selectedShift);
       onOpenChange(false);
+    } catch (error) {
+      console.error('Error saving shift:', error);
+      toast.error('Failed to save shift', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -157,11 +203,18 @@ export function ShiftEditDialog({
         </div>
 
         <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button onClick={handleSave}>
-            Save Changes
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
           </Button>
         </div>
       </DialogContent>
