@@ -4,16 +4,17 @@ import { WeeklyRosterView } from '@/components/WeeklyRosterView';
 import { SingleDayRosterView } from '@/components/SingleDayRosterView';
 import { MonthlyRosterView } from '@/components/MonthlyRosterView';
 import { MemberRosterView } from '@/components/MemberRosterView';
+import { TableRosterView } from '@/components/TableRosterView';
 import { ExportDropdown } from '@/components/ExportDropdown';
 import { teamMembers, currentWeekAssignments } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarDays, Calendar, CalendarRange, User } from 'lucide-react';
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays } from 'date-fns';
+import { CalendarDays, Calendar, CalendarRange, User, Table2 } from 'lucide-react';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 
-type ViewMode = 'daily' | 'weekly' | 'monthly' | 'member';
+type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member';
 
 export default function Roster() {
-  const [viewMode, setViewMode] = useState<ViewMode>('weekly');
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [currentDate] = useState(new Date());
 
   // Calculate date ranges for export
@@ -22,7 +23,7 @@ export default function Roster() {
       const start = startOfWeek(currentDate, { weekStartsOn: 1 });
       const end = endOfWeek(currentDate, { weekStartsOn: 1 });
       return { start, end };
-    } else if (viewMode === 'monthly' || viewMode === 'member') {
+    } else if (viewMode === 'monthly' || viewMode === 'member' || viewMode === 'table') {
       const start = startOfMonth(currentDate);
       const end = endOfMonth(currentDate);
       return { start, end };
@@ -41,6 +42,10 @@ export default function Roster() {
         <div className="flex items-center gap-3">
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
             <TabsList className="bg-muted/50">
+              <TabsTrigger value="table" className="gap-2">
+                <Table2 size={16} />
+                <span className="hidden sm:inline">Table</span>
+              </TabsTrigger>
               <TabsTrigger value="daily" className="gap-2">
                 <CalendarDays size={16} />
                 <span className="hidden sm:inline">Daily</span>
@@ -73,6 +78,12 @@ export default function Roster() {
       </DashboardHeader>
       
       <div className="flex-1 overflow-auto p-6">
+        {viewMode === 'table' && (
+          <TableRosterView 
+            assignments={currentWeekAssignments} 
+            teamMembers={teamMembers} 
+          />
+        )}
         {viewMode === 'daily' && (
           <SingleDayRosterView 
             assignments={currentWeekAssignments} 
