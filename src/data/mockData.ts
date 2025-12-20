@@ -22,6 +22,10 @@ const roles: Role[] = ['TL', 'L2', 'L1'];
 export const generateTeamMembers = (): TeamMember[] => {
   const members: TeamMember[] = [];
   
+  // First, create TLs (one per department that has TLs)
+  const tlDepartments: Department[] = ['Support', 'Monitoring', 'CloudPe', 'Network', 'AW'];
+  const tlMembers: { [key in Department]?: string } = {};
+  
   // Generate 62 team members
   for (let i = 0; i < 62; i++) {
     const firstName = firstNames[i];
@@ -39,9 +43,15 @@ export const generateTeamMembers = (): TeamMember[] => {
     
     // Distribute departments
     const department = departments[i % departments.length];
+    const memberId = `member-${i + 1}`;
+    
+    // Track TLs for each department
+    if (role === 'TL' && tlDepartments.includes(department)) {
+      tlMembers[department] = memberId;
+    }
     
     members.push({
-      id: `member-${i + 1}`,
+      id: memberId,
       name: `${firstName} ${lastName}`,
       email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@company.com`,
       role,
@@ -49,6 +59,20 @@ export const generateTeamMembers = (): TeamMember[] => {
       status: Math.random() > 0.1 ? 'available' : (Math.random() > 0.5 ? 'on-leave' : 'unavailable'),
     });
   }
+  
+  // Assign reporting TLs based on department
+  members.forEach(member => {
+    if (member.role !== 'TL') {
+      // Find TL for this department
+      const deptTL = tlMembers[member.department];
+      if (deptTL) {
+        member.reportingTLId = deptTL;
+      } else {
+        // If no TL for department, assign Support TL
+        member.reportingTLId = tlMembers['Support'] || members.find(m => m.role === 'TL')?.id;
+      }
+    }
+  });
   
   return members;
 };

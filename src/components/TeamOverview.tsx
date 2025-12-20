@@ -123,25 +123,37 @@ export function TeamOverview({ members }: TeamOverviewProps) {
       {/* Team Grid/List */}
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredMembers.map((member, index) => (
-            <TeamMemberCard 
-              key={member.id} 
-              member={member}
-              className="animate-fade-in"
-              style={{ animationDelay: `${index * 30}ms` } as React.CSSProperties}
-            />
-          ))}
+          {filteredMembers.map((member, index) => {
+            const reportingTL = member.reportingTLId 
+              ? members.find(m => m.id === member.reportingTLId) 
+              : undefined;
+            return (
+              <TeamMemberCard 
+                key={member.id} 
+                member={member}
+                reportingTL={reportingTL}
+                className="animate-fade-in"
+                style={{ animationDelay: `${index * 30}ms` } as React.CSSProperties}
+              />
+            );
+          })}
         </div>
       ) : (
         <div className="bg-card rounded-xl border border-border/50 divide-y divide-border">
-          {filteredMembers.map((member) => (
-            <TeamMemberCard 
-              key={member.id} 
-              member={member} 
-              compact 
-              className="hover:bg-secondary/30"
-            />
-          ))}
+          {filteredMembers.map((member) => {
+            const reportingTL = member.reportingTLId 
+              ? members.find(m => m.id === member.reportingTLId) 
+              : undefined;
+            return (
+              <TeamMemberCard 
+                key={member.id} 
+                member={member} 
+                reportingTL={reportingTL}
+                compact 
+                className="hover:bg-secondary/30"
+              />
+            );
+          })}
         </div>
       )}
 
