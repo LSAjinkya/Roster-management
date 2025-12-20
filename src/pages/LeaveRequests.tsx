@@ -413,9 +413,7 @@ export default function LeaveRequests() {
                 )}
               </TabsTrigger>
             )}
-            {canEditShifts && (
-              <TabsTrigger value="team-calendar">Team Calendar</TabsTrigger>
-            )}
+            <TabsTrigger value="team-calendar">Team Calendar</TabsTrigger>
             <TabsTrigger value="holidays">Holidays</TabsTrigger>
           </TabsList>
 

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronLeft, ChevronRight, Users, Filter } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameDay, addMonths, subMonths, isWithinInterval, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface LeaveEntry {
   id: string;
@@ -45,6 +46,51 @@ export function TeamLeaveCalendar() {
     fetchApprovedLeaves();
     fetchDepartments();
   }, [currentMonth]);
+
+  // Real-time subscription for leave approval notifications
+  useEffect(() => {
+    const channel = supabase
+      .channel('leave-approvals')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'leave_requests',
+        },
+        async (payload) => {
+          const newRecord = payload.new as { status: string; user_id: string; start_date: string; end_date: string };
+          const oldRecord = payload.old as { status: string };
+          
+          // Only notify when status changes to approved
+          if (newRecord.status === 'approved' && oldRecord.status !== 'approved') {
+            // Fetch user name
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('user_id', newRecord.user_id)
+              .single();
+            
+            const userName = profile?.full_name || 'A team member';
+            const startDate = format(parseISO(newRecord.start_date), 'MMM d');
+            const endDate = format(parseISO(newRecord.end_date), 'MMM d');
+            
+            toast.info(`${userName}'s leave approved`, {
+              description: `${startDate} - ${endDate}`,
+              duration: 5000,
+            });
+            
+            // Refresh the calendar
+            fetchApprovedLeaves();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const fetchDepartments = async () => {
     const { data } = await supabase
