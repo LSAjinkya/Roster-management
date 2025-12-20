@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Plus, Calendar, Check, X, Clock, AlertCircle, Briefcase, Thermometer } from 'lucide-react';
+import { Loader2, Plus, Calendar, Check, X, Clock, AlertCircle, Briefcase, Thermometer, CalendarDays } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
 import { TeamLeaveCalendar } from '@/components/TeamLeaveCalendar';
@@ -45,10 +45,12 @@ interface LeaveBalance {
   casual_leave_used: number;
   sick_leave_total: number;
   sick_leave_used: number;
+  public_holidays_total: number;
+  public_holidays_used: number;
 }
 
 const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
-  casual: 'Casual Leave',
+  casual: 'Paid Leave',
   sick: 'Sick Leave',
   'comp-off': 'Compensatory Off',
   other: 'Other',
@@ -113,10 +115,12 @@ export default function LeaveRequests() {
         id: '',
         user_id: user.id,
         year: currentYear,
-        casual_leave_total: 12,
+        casual_leave_total: 20,
         casual_leave_used: 0,
         sick_leave_total: 10,
         sick_leave_used: 0,
+        public_holidays_total: 11,
+        public_holidays_used: 0,
       });
     }
   };
@@ -306,13 +310,14 @@ export default function LeaveRequests() {
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {/* Leave Balance Cards */}
         {leaveBalance && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Briefcase className="h-4 w-4 text-blue-500" />
-                  Casual Leave
+                  Paid Leave
                 </CardTitle>
+                <p className="text-xs text-muted-foreground">1.7 days/month</p>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
@@ -354,6 +359,32 @@ export default function LeaveRequests() {
                   />
                   <p className="text-xs text-muted-foreground">
                     {leaveBalance.sick_leave_total - leaveBalance.sick_leave_used} days remaining
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-green-500" />
+                  Public Holidays
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Availed</span>
+                    <span className="font-medium">
+                      {leaveBalance.public_holidays_used} / {leaveBalance.public_holidays_total} days
+                    </span>
+                  </div>
+                  <Progress 
+                    value={(leaveBalance.public_holidays_used / leaveBalance.public_holidays_total) * 100} 
+                    className="h-2"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {leaveBalance.public_holidays_total - leaveBalance.public_holidays_used} holidays remaining
                   </p>
                 </div>
               </CardContent>

@@ -56,6 +56,8 @@ export type Database = {
           casual_leave_used: number
           created_at: string
           id: string
+          public_holidays_total: number
+          public_holidays_used: number
           sick_leave_total: number
           sick_leave_used: number
           updated_at: string
@@ -67,6 +69,8 @@ export type Database = {
           casual_leave_used?: number
           created_at?: string
           id?: string
+          public_holidays_total?: number
+          public_holidays_used?: number
           sick_leave_total?: number
           sick_leave_used?: number
           updated_at?: string
@@ -78,6 +82,8 @@ export type Database = {
           casual_leave_used?: number
           created_at?: string
           id?: string
+          public_holidays_total?: number
+          public_holidays_used?: number
           sick_leave_total?: number
           sick_leave_used?: number
           updated_at?: string
