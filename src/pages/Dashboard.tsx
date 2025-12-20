@@ -4,10 +4,15 @@ import { ShiftBadge } from '@/components/ShiftBadge';
 import { TeamMemberCard } from '@/components/TeamMemberCard';
 import { teamMembers, currentWeekAssignments } from '@/data/mockData';
 import { SHIFT_DEFINITIONS, DEPARTMENTS } from '@/types/roster';
-import { Users, Calendar, Clock, Building2, TrendingUp, AlertCircle } from 'lucide-react';
+import { Users, Calendar, Building2, TrendingUp, AlertCircle, ArrowRightLeft } from 'lucide-react';
 import { format } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { Link } from 'react-router-dom';
 
 export default function Dashboard() {
+  const { isAdmin, isHR, isTL } = useAuth();
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const todayAssignments = currentWeekAssignments.filter(a => a.date === todayStr);
   
@@ -18,6 +23,23 @@ export default function Dashboard() {
     acc[shift.id] = todayAssignments.filter(a => a.shiftType === shift.id).length;
     return acc;
   }, {} as Record<string, number>);
+
+  const canSeeSwapRequests = isAdmin || isHR || isTL;
+
+  // Fetch pending swap requests count for TLs/HR/Admins
+  const { data: pendingSwapCount = 0 } = useQuery({
+    queryKey: ['pending-swap-count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('swap_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: canSeeSwapRequests,
+  });
 
   return (
     <div className="flex flex-col h-full">
@@ -50,6 +72,17 @@ export default function Dashboard() {
             icon={Calendar}
             iconColor="text-shift-afternoon"
           />
+          {canSeeSwapRequests && (
+            <Link to="/shifts" className="block">
+              <StatCard
+                title="Pending Swaps"
+                value={pendingSwapCount}
+                subtitle="Awaiting approval"
+                icon={ArrowRightLeft}
+                iconColor={pendingSwapCount > 0 ? "text-amber-500" : "text-muted-foreground"}
+              />
+            </Link>
+          )}
           <StatCard
             title="Departments"
             value={DEPARTMENTS.length}
