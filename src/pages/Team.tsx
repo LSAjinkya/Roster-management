@@ -5,19 +5,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { TeamMember, Department, Role } from '@/types/roster';
 import { Loader2 } from 'lucide-react';
 
-// Map app_role to Role type for display
-const mapAppRoleToRole = (appRole: string): Role => {
-  switch (appRole) {
-    case 'admin':
-    case 'tl':
-      return 'TL';
-    case 'hr':
-      return 'HR';
-    default:
-      return 'L1';
-  }
-};
-
 export default function Team() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,35 +15,22 @@ export default function Team() {
 
   const fetchTeamMembers = async () => {
     try {
-      // Fetch profiles with their departments and status
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('user_id, email, full_name, department, status')
-        .order('full_name');
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('*')
+        .order('name');
 
-      if (profilesError) throw profilesError;
+      if (error) throw error;
 
-      // Fetch all user roles
-      const { data: allRoles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id, role');
-
-      if (rolesError) throw rolesError;
-
-      // Transform profiles to TeamMember format
-      const teamMembers: TeamMember[] = (profiles || [])
-        .filter(p => p.department) // Only include users with a department
-        .map(profile => {
-          const userRole = (allRoles || []).find(r => r.user_id === profile.user_id);
-          return {
-            id: profile.user_id,
-            name: profile.full_name,
-            email: profile.email,
-            role: mapAppRoleToRole(userRole?.role || 'member'),
-            department: profile.department as Department,
-            status: (profile.status as 'available' | 'on-leave' | 'unavailable') || 'available',
-          };
-        });
+      const teamMembers: TeamMember[] = (data || []).map(member => ({
+        id: member.id,
+        name: member.name,
+        email: member.email,
+        role: member.role as Role,
+        department: member.department as Department,
+        status: (member.status as 'available' | 'on-leave' | 'unavailable') || 'available',
+        reportingTLId: member.reporting_tl_id || undefined,
+      }));
 
       setMembers(teamMembers);
     } catch (error) {
