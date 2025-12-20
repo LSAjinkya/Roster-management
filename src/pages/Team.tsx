@@ -28,10 +28,10 @@ export default function Team() {
 
   const fetchTeamMembers = async () => {
     try {
-      // Fetch profiles with their departments
+      // Fetch profiles with their departments and status
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('user_id, email, full_name, department')
+        .select('user_id, email, full_name, department, status')
         .order('full_name');
 
       if (profilesError) throw profilesError;
@@ -54,7 +54,7 @@ export default function Team() {
             email: profile.email,
             role: mapAppRoleToRole(userRole?.role || 'member'),
             department: profile.department as Department,
-            status: 'available' as const,
+            status: (profile.status as 'available' | 'on-leave' | 'unavailable') || 'available',
           };
         });
 
