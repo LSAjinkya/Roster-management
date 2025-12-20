@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Shield, UserCog, LogIn } from 'lucide-react';
+import { Loader2, Shield, UserCog, LogIn, History } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { format } from 'date-fns';
 
 type AppRole = 'admin' | 'hr' | 'tl' | 'member';
 
@@ -18,6 +19,15 @@ interface UserWithRoles {
   email: string;
   full_name: string;
   roles: AppRole[];
+}
+
+interface ImpersonationLog {
+  id: string;
+  admin_email: string;
+  target_email: string;
+  action: string;
+  ip_address: string | null;
+  created_at: string;
 }
 
 const ROLE_LABELS: Record<AppRole, string> = {
@@ -42,6 +52,8 @@ export default function RoleManagement() {
   const [impersonateDialogOpen, setImpersonateDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserWithRoles | null>(null);
   const [impersonating, setImpersonating] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<ImpersonationLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(true);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -53,12 +65,12 @@ export default function RoleManagement() {
   useEffect(() => {
     if (isAdmin) {
       fetchUsers();
+      fetchAuditLogs();
     }
   }, [isAdmin]);
 
   const fetchUsers = async () => {
     try {
-      // Fetch profiles
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('user_id, email, full_name')
@@ -66,14 +78,12 @@ export default function RoleManagement() {
 
       if (profilesError) throw profilesError;
 
-      // Fetch all user roles
       const { data: allRoles, error: rolesError } = await supabase
         .from('user_roles')
         .select('user_id, role');
 
       if (rolesError) throw rolesError;
 
-      // Combine profiles with roles
       const usersWithRoles: UserWithRoles[] = (profiles || []).map(profile => ({
         id: profile.user_id,
         email: profile.email,
@@ -92,9 +102,25 @@ export default function RoleManagement() {
     }
   };
 
+  const fetchAuditLogs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('impersonation_logs')
+        .select('id, admin_email, target_email, action, ip_address, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      setAuditLogs(data || []);
+    } catch (error) {
+      console.error('Error fetching audit logs:', error);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
   const handleRoleChange = async (userId: string, newRole: AppRole) => {
     try {
-      // Remove existing roles for this user
       const { error: deleteError } = await supabase
         .from('user_roles')
         .delete()
@@ -102,7 +128,6 @@ export default function RoleManagement() {
 
       if (deleteError) throw deleteError;
 
-      // Add new role
       const { error: insertError } = await supabase
         .from('user_roles')
         .insert({ user_id: userId, role: newRole });
@@ -143,7 +168,6 @@ export default function RoleManagement() {
 
       const { access_token, refresh_token } = response.data;
 
-      // Sign out current session and sign in with impersonated tokens
       await supabase.auth.signOut();
       
       const { error: setSessionError } = await supabase.auth.setSession({
@@ -261,6 +285,59 @@ export default function RoleManagement() {
               ))}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {/* Impersonation Audit Log */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <History className="h-5 w-5" />
+            Impersonation Audit Log
+          </CardTitle>
+          <CardDescription>
+            Track when admins login as other users
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {logsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : auditLogs.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground">No impersonation logs yet</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Timestamp</TableHead>
+                  <TableHead>Admin</TableHead>
+                  <TableHead>Target User</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>IP Address</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {auditLogs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell className="text-muted-foreground">
+                      {format(new Date(log.created_at), 'MMM d, yyyy HH:mm:ss')}
+                    </TableCell>
+                    <TableCell className="font-medium">{log.admin_email}</TableCell>
+                    <TableCell>{log.target_email}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize">
+                        {log.action}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-xs">
+                      {log.ip_address || 'N/A'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

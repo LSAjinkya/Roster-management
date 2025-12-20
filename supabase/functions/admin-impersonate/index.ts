@@ -95,11 +95,6 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Extract the token from the link and verify it
-    const url = new URL(linkData.properties.action_link)
-    const token = url.searchParams.get('token')
-    const tokenHash = url.hash.replace('#', '') || url.searchParams.get('token_hash')
-
     // Verify the OTP to get session tokens
     const { data: sessionData, error: verifyError } = await supabaseAdmin.auth.verifyOtp({
       token_hash: linkData.properties.hashed_token,
@@ -114,7 +109,27 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Log the impersonation action
+    // Log the impersonation action to audit table
+    const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown'
+    const userAgent = req.headers.get('user-agent') || 'unknown'
+
+    const { error: logError } = await supabaseAdmin
+      .from('impersonation_logs')
+      .insert({
+        admin_user_id: callingUser.id,
+        admin_email: callingUser.email,
+        target_user_id: targetUserId,
+        target_email: targetUserData.user.email,
+        action: 'impersonate',
+        ip_address: ipAddress,
+        user_agent: userAgent,
+      })
+
+    if (logError) {
+      console.error('Error logging impersonation:', logError)
+      // Don't fail the request, just log the error
+    }
+
     console.log(`Admin ${callingUser.email} impersonated user ${targetUserData.user.email} at ${new Date().toISOString()}`)
 
     return new Response(
