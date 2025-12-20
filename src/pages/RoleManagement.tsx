@@ -14,12 +14,14 @@ import { format } from 'date-fns';
 import { DEPARTMENTS, Department } from '@/types/roster';
 
 type AppRole = 'admin' | 'hr' | 'tl' | 'member';
+type UserStatus = 'available' | 'on-leave' | 'unavailable';
 
 interface UserWithRoles {
   id: string;
   email: string;
   full_name: string;
   department: string | null;
+  status: UserStatus;
   roles: AppRole[];
 }
 
@@ -44,6 +46,18 @@ const ROLE_COLORS: Record<AppRole, string> = {
   hr: 'bg-primary text-primary-foreground',
   tl: 'bg-secondary text-secondary-foreground',
   member: 'bg-muted text-muted-foreground',
+};
+
+const STATUS_LABELS: Record<UserStatus, string> = {
+  available: 'Available',
+  'on-leave': 'On Leave',
+  unavailable: 'Unavailable',
+};
+
+const STATUS_COLORS: Record<UserStatus, string> = {
+  available: 'bg-green-500/20 text-green-700 border-green-500/30',
+  'on-leave': 'bg-amber-500/20 text-amber-700 border-amber-500/30',
+  unavailable: 'bg-red-500/20 text-red-700 border-red-500/30',
 };
 
 export default function RoleManagement() {
@@ -75,7 +89,7 @@ export default function RoleManagement() {
     try {
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('user_id, email, full_name, department')
+        .select('user_id, email, full_name, department, status')
         .order('full_name');
 
       if (profilesError) throw profilesError;
@@ -91,6 +105,7 @@ export default function RoleManagement() {
         email: profile.email,
         full_name: profile.full_name,
         department: profile.department,
+        status: (profile.status as UserStatus) || 'available',
         roles: (allRoles || [])
           .filter(r => r.user_id === profile.user_id)
           .map(r => r.role as AppRole),
@@ -159,6 +174,23 @@ export default function RoleManagement() {
     } catch (error) {
       console.error('Error updating department:', error);
       toast.error('Failed to update department');
+    }
+  };
+
+  const handleStatusChange = async (userId: string, status: UserStatus) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      toast.success('Status updated successfully');
+      fetchUsers();
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error('Failed to update status');
     }
   };
 
@@ -250,8 +282,8 @@ export default function RoleManagement() {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Department</TableHead>
-                <TableHead>Current Role</TableHead>
-                <TableHead>Change Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Role</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -259,17 +291,17 @@ export default function RoleManagement() {
               {users.map((u) => (
                 <TableRow key={u.id}>
                   <TableCell className="font-medium">{u.full_name}</TableCell>
-                  <TableCell className="text-muted-foreground">{u.email}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">{u.email}</TableCell>
                   <TableCell>
                     <Select
                       value={u.department || 'none'}
                       onValueChange={(value) => handleDepartmentChange(u.id, value)}
                     >
-                      <SelectTrigger className="w-40">
-                        <SelectValue placeholder="Select department" />
+                      <SelectTrigger className="w-36">
+                        <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">No Department</SelectItem>
+                        <SelectItem value="none">No Dept</SelectItem>
                         {DEPARTMENTS.map((dept) => (
                           <SelectItem key={dept} value={dept}>
                             {dept}
@@ -279,17 +311,23 @@ export default function RoleManagement() {
                     </Select>
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-1 flex-wrap">
-                      {u.roles.length > 0 ? (
-                        u.roles.map((role) => (
-                          <Badge key={role} className={ROLE_COLORS[role]}>
-                            {ROLE_LABELS[role]}
-                          </Badge>
-                        ))
-                      ) : (
-                        <Badge variant="outline">No Role</Badge>
-                      )}
-                    </div>
+                    <Select
+                      value={u.status}
+                      onValueChange={(value) => handleStatusChange(u.id, value as UserStatus)}
+                    >
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(['available', 'on-leave', 'unavailable'] as UserStatus[]).map((status) => (
+                          <SelectItem key={status} value={status}>
+                            <Badge variant="outline" className={STATUS_COLORS[status]}>
+                              {STATUS_LABELS[status]}
+                            </Badge>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell>
                     <Select
@@ -297,7 +335,7 @@ export default function RoleManagement() {
                       onValueChange={(value) => handleRoleChange(u.id, value as AppRole)}
                       disabled={u.id === user?.id}
                     >
-                      <SelectTrigger className="w-32">
+                      <SelectTrigger className="w-28">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

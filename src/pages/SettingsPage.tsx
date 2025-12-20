@@ -1,11 +1,81 @@
+import { useState, useEffect } from 'react';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Settings, Bell, Shield, Clock, Save } from 'lucide-react';
+import { Settings, Bell, Shield, Clock, Save, User, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+type UserStatus = 'available' | 'on-leave' | 'unavailable';
+
+const STATUS_LABELS: Record<UserStatus, string> = {
+  available: 'Available',
+  'on-leave': 'On Leave',
+  unavailable: 'Unavailable',
+};
+
+const STATUS_COLORS: Record<UserStatus, string> = {
+  available: 'bg-green-500/20 text-green-700 border-green-500/30',
+  'on-leave': 'bg-amber-500/20 text-amber-700 border-amber-500/30',
+  unavailable: 'bg-red-500/20 text-red-700 border-red-500/30',
+};
 
 export default function SettingsPage() {
+  const { user } = useAuth();
+  const [status, setStatus] = useState<UserStatus>('available');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      fetchUserProfile();
+    }
+  }, [user]);
+
+  const fetchUserProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('status')
+        .eq('user_id', user?.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data?.status) {
+        setStatus(data.status as UserStatus);
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: UserStatus) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status: newStatus })
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+
+      setStatus(newStatus);
+      toast.success('Status updated successfully');
+    } catch (error) {
+      console.error('Error updating status:', error);
+      toast.error('Failed to update status');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <DashboardHeader 
@@ -14,6 +84,44 @@ export default function SettingsPage() {
       />
       
       <div className="flex-1 overflow-auto p-6 space-y-6 max-w-4xl">
+        {/* My Status */}
+        <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+          <div className="p-4 border-b border-border/50 flex items-center gap-3">
+            <User size={20} className="text-muted-foreground" />
+            <h2 className="font-semibold">My Status</h2>
+          </div>
+          <div className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Current Availability</p>
+                <p className="text-sm text-muted-foreground">Update your status to let your team know your availability</p>
+              </div>
+              {loading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : (
+                <Select
+                  value={status}
+                  onValueChange={(value) => handleStatusChange(value as UserStatus)}
+                  disabled={saving}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(['available', 'on-leave', 'unavailable'] as UserStatus[]).map((s) => (
+                      <SelectItem key={s} value={s}>
+                        <Badge variant="outline" className={STATUS_COLORS[s]}>
+                          {STATUS_LABELS[s]}
+                        </Badge>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* General Settings */}
         <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
           <div className="p-4 border-b border-border/50 flex items-center gap-3">
