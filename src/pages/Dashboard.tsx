@@ -1,10 +1,10 @@
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { StatCard } from '@/components/StatCard';
 import { ShiftBadge } from '@/components/ShiftBadge';
-import { TeamMemberCard } from '@/components/TeamMemberCard';
+import { WhosOutToday } from '@/components/WhosOutToday';
 import { teamMembers, currentWeekAssignments } from '@/data/mockData';
 import { SHIFT_DEFINITIONS, DEPARTMENTS } from '@/types/roster';
-import { Users, Calendar, Building2, TrendingUp, AlertCircle, ArrowRightLeft } from 'lucide-react';
+import { Users, Calendar, Building2, TrendingUp, ArrowRightLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -115,25 +115,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
-            <div className="p-4 border-b border-border/50">
-              <h2 className="font-semibold text-lg">On Leave Today</h2>
-              <p className="text-sm text-muted-foreground">{onLeaveMembers.length} team members</p>
-            </div>
-            <div className="p-2 max-h-[280px] overflow-auto">
-              {onLeaveMembers.length > 0 ? (
-                onLeaveMembers.slice(0, 5).map(member => (
-                  <TeamMemberCard key={member.id} member={member} compact />
-                ))
-              ) : (
-                <div className="py-8 text-center text-muted-foreground">
-                  <AlertCircle className="mx-auto mb-2 opacity-50" size={24} />
-                  <p className="text-sm">No one on leave today</p>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Who's Out Today Widget */}
+          <WhosOutToday />
         </div>
 
         {/* Department Distribution */}
