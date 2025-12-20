@@ -13,10 +13,12 @@ import { CalendarDays, Calendar, CalendarRange, User, Table2 } from 'lucide-reac
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { TeamMember, Department, Role } from '@/types/roster';
+import { useAuth } from '@/hooks/useAuth';
 
 type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member';
 
 export default function Roster() {
+  const { canEditShifts } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [currentDate] = useState(new Date());
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(mockTeamMembers);
@@ -74,7 +76,7 @@ export default function Roster() {
         subtitle="View and manage shift assignments"
       >
         <div className="flex items-center gap-3">
-          <SetupMonthlyRosterDialog teamMembers={teamMembers} />
+          {canEditShifts && <SetupMonthlyRosterDialog teamMembers={teamMembers} />}
           
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
             <TabsList className="bg-muted/50">
