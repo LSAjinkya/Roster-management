@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { ShiftAssignment, TeamMember, ShiftType, Department, DEPARTMENTS } from '@/types/roster';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Calendar, Edit2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Edit2, ArrowLeftRight } from 'lucide-react';
 import { 
   format, 
   startOfMonth, 
@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select';
 import { ExportDropdown } from './ExportDropdown';
 import { ShiftEditDialog } from './ShiftEditDialog';
+import { ShiftSwapDialog } from './ShiftSwapDialog';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +32,7 @@ interface TableRosterViewProps {
   assignments: ShiftAssignment[];
   teamMembers: TeamMember[];
   onShiftChange?: (memberId: string, date: string, shiftType: ShiftType | 'off') => void;
+  onRefresh?: () => void;
 }
 
 const shiftCellColors: Record<ShiftType | 'off', string> = {
@@ -52,10 +54,12 @@ const shiftLetters: Record<ShiftType, string> = {
   'comp-off': 'CO',
 };
 
-export function TableRosterView({ assignments, teamMembers, onShiftChange }: TableRosterViewProps) {
+export function TableRosterView({ assignments, teamMembers, onShiftChange, onRefresh }: TableRosterViewProps) {
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'all'>('all');
+  const [tlFilter, setTlFilter] = useState<string>('all');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [editingDate, setEditingDate] = useState<Date | null>(null);
   const [editingShift, setEditingShift] = useState<ShiftType | null>(null);
@@ -72,14 +76,22 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange }: Tab
 
   const isCurrentMonth = isSameMonth(currentMonth, new Date());
 
-  // Filter members
+  // Get list of TLs for filter
+  const tlMembers = useMemo(() => {
+    return teamMembers.filter(m => m.role === 'TL');
+  }, [teamMembers]);
+
+  // Filter members by department and TL
   const filteredMembers = useMemo(() => {
     let members = teamMembers;
     if (departmentFilter !== 'all') {
       members = members.filter(m => m.department === departmentFilter);
     }
+    if (tlFilter !== 'all') {
+      members = members.filter(m => m.reportingTLId === tlFilter || m.id === tlFilter);
+    }
     return members;
-  }, [teamMembers, departmentFilter]);
+  }, [teamMembers, departmentFilter, tlFilter]);
 
   // Group members by department for display
   const membersByDepartment = useMemo(() => {
@@ -125,7 +137,7 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange }: Tab
     return undefined;
   };
 
-  const handleCellClick = (member: TeamMember, day: Date) => {
+  const handleCellClick = (member: TeamMember, day: Date, isRightClick = false) => {
     if (!canEditShifts) {
       toast.error('You do not have permission to edit shifts');
       return;
@@ -135,14 +147,23 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange }: Tab
     setEditingMember(member);
     setEditingDate(day);
     setEditingShift(shift);
-    setEditDialogOpen(true);
+    
+    if (isRightClick && shift) {
+      setSwapDialogOpen(true);
+    } else {
+      setEditDialogOpen(true);
+    }
   };
 
   const handleShiftSave = (memberId: string, date: string, shiftType: ShiftType | 'off') => {
     if (onShiftChange) {
       onShiftChange(memberId, date, shiftType);
     }
-    toast.success('Shift updated successfully');
+    onRefresh?.();
+  };
+
+  const handleSwapComplete = () => {
+    onRefresh?.();
   };
 
   return (
@@ -170,15 +191,27 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange }: Tab
           )}
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <Select value={departmentFilter} onValueChange={(v) => setDepartmentFilter(v as Department | 'all')}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="All Departments" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Departments</SelectItem>
               {DEPARTMENTS.map(dept => (
                 <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={tlFilter} onValueChange={setTlFilter}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="All TLs" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All TLs</SelectItem>
+              {tlMembers.map(tl => (
+                <SelectItem key={tl.id} value={tl.id}>{tl.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -300,7 +333,14 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange }: Tab
                               today && "ring-1 ring-primary ring-inset",
                               canEditShifts && "cursor-pointer hover:bg-primary/10"
                             )}
-                            onClick={() => canEditShifts && handleCellClick(member, day)}
+                            onClick={() => canEditShifts && handleCellClick(member, day, false)}
+                            onContextMenu={(e) => {
+                              if (canEditShifts && shift) {
+                                e.preventDefault();
+                                handleCellClick(member, day, true);
+                              }
+                            }}
+                            title={canEditShifts ? "Click to edit, Right-click to swap" : undefined}
                           >
                             {shift ? (
                               <span className={cn(
@@ -367,6 +407,12 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange }: Tab
           <span className={cn("w-5 h-4 rounded flex items-center justify-center", shiftCellColors.off)}>-</span>
           <span className="text-muted-foreground">Weekly Off</span>
         </div>
+        {canEditShifts && (
+          <div className="flex items-center gap-1.5 border-l pl-4 ml-2">
+            <ArrowLeftRight size={14} className="text-muted-foreground" />
+            <span className="text-muted-foreground">Right-click to swap</span>
+          </div>
+        )}
       </div>
 
       {/* Edit Dialog */}
@@ -377,6 +423,18 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange }: Tab
         date={editingDate}
         currentShift={editingShift}
         onSave={handleShiftSave}
+      />
+
+      {/* Swap Dialog */}
+      <ShiftSwapDialog
+        open={swapDialogOpen}
+        onOpenChange={setSwapDialogOpen}
+        member={editingMember}
+        date={editingDate}
+        currentShift={editingShift}
+        teamMembers={teamMembers}
+        getShiftForMember={getMemberShift}
+        onSwapComplete={handleSwapComplete}
       />
     </div>
   );
