@@ -4,12 +4,13 @@ import { ShiftBadge } from '@/components/ShiftBadge';
 import { WhosOutToday } from '@/components/WhosOutToday';
 import { teamMembers, currentWeekAssignments } from '@/data/mockData';
 import { SHIFT_DEFINITIONS, DEPARTMENTS } from '@/types/roster';
-import { Users, Calendar, Building2, TrendingUp, ArrowRightLeft } from 'lucide-react';
+import { Users, Calendar, Building2, TrendingUp, ArrowRightLeft, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 
 export default function Dashboard() {
   const { isAdmin, isHR, isTL } = useAuth();
@@ -46,7 +47,14 @@ export default function Dashboard() {
       <DashboardHeader 
         title="Dashboard" 
         subtitle={format(new Date(), 'EEEE, MMMM d, yyyy')} 
-      />
+      >
+        <Link to="/leave-requests">
+          <Button className="gap-2">
+            <Plus className="h-4 w-4" />
+            Request Leave
+          </Button>
+        </Link>
+      </DashboardHeader>
       
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {/* Stats Grid */}
