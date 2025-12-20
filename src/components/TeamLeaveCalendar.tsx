@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Users } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, isSameDay, addMonths, subMonths, isWithinInterval, parseISO } from 'date-fns';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ChevronLeft, ChevronRight, Users, Filter } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameDay, addMonths, subMonths, isWithinInterval, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface LeaveEntry {
@@ -14,6 +15,7 @@ interface LeaveEntry {
   end_date: string;
   leave_type: string;
   user_name: string;
+  department: string | null;
 }
 
 const LEAVE_COLORS: Record<string, string> = {
@@ -23,14 +25,38 @@ const LEAVE_COLORS: Record<string, string> = {
   other: 'bg-gray-500',
 };
 
+const LEAVE_TYPES = [
+  { value: 'all', label: 'All Types' },
+  { value: 'casual', label: 'Casual Leave' },
+  { value: 'sick', label: 'Sick Leave' },
+  { value: 'comp-off', label: 'Comp-Off' },
+  { value: 'other', label: 'Other' },
+];
+
 export function TeamLeaveCalendar() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [leaves, setLeaves] = useState<LeaveEntry[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [selectedLeaveType, setSelectedLeaveType] = useState<string>('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchApprovedLeaves();
+    fetchDepartments();
   }, [currentMonth]);
+
+  const fetchDepartments = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('department')
+      .not('department', 'is', null);
+    
+    if (data) {
+      const uniqueDepts = [...new Set(data.map(d => d.department).filter(Boolean))] as string[];
+      setDepartments(uniqueDepts);
+    }
+  };
 
   const fetchApprovedLeaves = async () => {
     const monthStart = startOfMonth(currentMonth);
@@ -45,18 +71,19 @@ export function TeamLeaveCalendar() {
 
       if (error) throw error;
 
-      // Fetch user names
+      // Fetch user names and departments
       const userIds = [...new Set((leaveData || []).map(l => l.user_id))];
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('user_id, full_name')
+        .select('user_id, full_name, department')
         .in('user_id', userIds);
 
-      const profileMap = new Map((profiles || []).map(p => [p.user_id, p.full_name]));
+      const profileMap = new Map((profiles || []).map(p => [p.user_id, { name: p.full_name, department: p.department }]));
 
       const leavesWithNames = (leaveData || []).map(l => ({
         ...l,
-        user_name: profileMap.get(l.user_id) || 'Unknown',
+        user_name: profileMap.get(l.user_id)?.name || 'Unknown',
+        department: profileMap.get(l.user_id)?.department || null,
       }));
 
       setLeaves(leavesWithNames);
@@ -77,8 +104,17 @@ export function TeamLeaveCalendar() {
   // Create padding for days before the month starts
   const paddingDays = Array.from({ length: startDay }, (_, i) => null);
 
-  const getLeavesForDay = (day: Date) => {
+  // Filtered leaves based on selections
+  const filteredLeaves = useMemo(() => {
     return leaves.filter(leave => {
+      const deptMatch = selectedDepartment === 'all' || leave.department === selectedDepartment;
+      const typeMatch = selectedLeaveType === 'all' || leave.leave_type === selectedLeaveType;
+      return deptMatch && typeMatch;
+    });
+  }, [leaves, selectedDepartment, selectedLeaveType]);
+
+  const getLeavesForDay = (day: Date) => {
+    return filteredLeaves.filter(leave => {
       const start = parseISO(leave.start_date);
       const end = parseISO(leave.end_date);
       return isWithinInterval(day, { start, end }) || isSameDay(day, start) || isSameDay(day, end);
@@ -92,24 +128,67 @@ export function TeamLeaveCalendar() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Team Leave Calendar
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={goToToday}>
-              Today
-            </Button>
-            <Button variant="outline" size="icon" onClick={previousMonth}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <span className="min-w-[140px] text-center font-medium">
-              {format(currentMonth, 'MMMM yyyy')}
-            </span>
-            <Button variant="outline" size="icon" onClick={nextMonth}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Team Leave Calendar
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={goToToday}>
+                Today
+              </Button>
+              <Button variant="outline" size="icon" onClick={previousMonth}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="min-w-[140px] text-center font-medium">
+                {format(currentMonth, 'MMMM yyyy')}
+              </span>
+              <Button variant="outline" size="icon" onClick={nextMonth}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Filters:</span>
+            </div>
+            <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Departments" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Departments</SelectItem>
+                {departments.map(dept => (
+                  <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedLeaveType} onValueChange={setSelectedLeaveType}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue placeholder="All Types" />
+              </SelectTrigger>
+              <SelectContent>
+                {LEAVE_TYPES.map(type => (
+                  <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(selectedDepartment !== 'all' || selectedLeaveType !== 'all') && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => {
+                  setSelectedDepartment('all');
+                  setSelectedLeaveType('all');
+                }}
+              >
+                Clear filters
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -193,11 +272,11 @@ export function TeamLeaveCalendar() {
         </div>
 
         {/* Upcoming leaves list */}
-        {leaves.length > 0 && (
+        {filteredLeaves.length > 0 && (
           <div className="mt-6 border-t pt-4">
             <h4 className="text-sm font-medium mb-3">Upcoming Leaves This Month</h4>
             <div className="space-y-2">
-              {leaves
+              {filteredLeaves
                 .filter(l => parseISO(l.end_date) >= new Date())
                 .sort((a, b) => parseISO(a.start_date).getTime() - parseISO(b.start_date).getTime())
                 .slice(0, 5)
@@ -205,6 +284,9 @@ export function TeamLeaveCalendar() {
                   <div key={leave.id} className="flex items-center gap-3 text-sm">
                     <div className={cn('w-2 h-2 rounded-full', LEAVE_COLORS[leave.leave_type] || LEAVE_COLORS.other)} />
                     <span className="font-medium">{leave.user_name}</span>
+                    {leave.department && (
+                      <Badge variant="secondary" className="text-xs">{leave.department}</Badge>
+                    )}
                     <span className="text-muted-foreground">
                       {format(parseISO(leave.start_date), 'MMM d')} - {format(parseISO(leave.end_date), 'MMM d')}
                     </span>
