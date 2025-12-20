@@ -232,15 +232,103 @@ export default function SettingsPage() {
             <h2 className="font-semibold">Integrations</h2>
           </div>
           <div className="p-6 space-y-4">
-            {/* Razorpay Integration */}
+            {/* BioTime Attendance */}
             <div className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-muted/20">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-lg bg-[#072654] flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">R</span>
+                <div className="w-12 h-12 rounded-lg bg-[#00A651] flex items-center justify-center">
+                  <Clock size={24} className="text-white" />
                 </div>
                 <div>
-                  <p className="font-medium">Razorpay Payroll</p>
-                  <p className="text-sm text-muted-foreground">Process payroll and manage employee salaries</p>
+                  <p className="font-medium">BioTime Attendance</p>
+                  <p className="text-sm text-muted-foreground">Sync attendance data from biometric devices</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" className="bg-amber-500/20 text-amber-700 border-amber-500/30">
+                  Not Connected
+                </Badge>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <ExternalLink size={14} />
+                  Connect
+                </Button>
+              </div>
+            </div>
+
+            {/* Zoho People */}
+            <div className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-muted/20">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-[#D4382E] flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">Z</span>
+                </div>
+                <div>
+                  <p className="font-medium">Zoho People</p>
+                  <p className="text-sm text-muted-foreground">Sync employee data and leave management</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" className="bg-amber-500/20 text-amber-700 border-amber-500/30">
+                  Not Connected
+                </Badge>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <ExternalLink size={14} />
+                  Connect
+                </Button>
+              </div>
+            </div>
+
+            {/* Slack */}
+            <div className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-muted/20">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-[#4A154B] flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">S</span>
+                </div>
+                <div>
+                  <p className="font-medium">Slack</p>
+                  <p className="text-sm text-muted-foreground">Send shift notifications and reminders</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" className="bg-amber-500/20 text-amber-700 border-amber-500/30">
+                  Not Connected
+                </Badge>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <ExternalLink size={14} />
+                  Connect
+                </Button>
+              </div>
+            </div>
+
+            {/* Google Calendar */}
+            <div className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-muted/20">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-[#4285F4] flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">G</span>
+                </div>
+                <div>
+                  <p className="font-medium">Google Calendar</p>
+                  <p className="text-sm text-muted-foreground">Sync roster schedules to team calendars</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" className="bg-amber-500/20 text-amber-700 border-amber-500/30">
+                  Not Connected
+                </Badge>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <ExternalLink size={14} />
+                  Connect
+                </Button>
+              </div>
+            </div>
+
+            {/* Zapier */}
+            <div className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-muted/20">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-[#FF4A00] flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">⚡</span>
+                </div>
+                <div>
+                  <p className="font-medium">Zapier</p>
+                  <p className="text-sm text-muted-foreground">Connect to 5000+ apps via webhooks</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
