@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   roles: AppRole[];
+  allowedDomains: string[];
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
@@ -27,6 +28,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<AppRole[]>([]);
+  const [allowedDomains, setAllowedDomains] = useState<string[]>(['leapswitch.com']);
+
+  // Fetch allowed domains on mount
+  useEffect(() => {
+    const fetchAllowedDomains = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'allowed_google_domains')
+          .maybeSingle();
+
+        if (error) throw error;
+        
+        if (data?.value) {
+          const parsedValue = typeof data.value === 'string' 
+            ? JSON.parse(data.value) 
+            : data.value;
+          if (Array.isArray(parsedValue)) {
+            setAllowedDomains(parsedValue);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching allowed domains:', error);
+      }
+    };
+
+    fetchAllowedDomains();
+  }, []);
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -37,6 +67,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         // Defer role fetching with setTimeout to avoid deadlock
         if (session?.user) {
+          // Check if Google login is from allowed domain
+          if (event === 'SIGNED_IN' && session.user.app_metadata?.provider === 'google') {
+            const email = session.user.email;
+            if (email) {
+              const domain = email.split('@')[1];
+              if (!allowedDomains.includes(domain)) {
+                // Sign out if domain not allowed
+                setTimeout(async () => {
+                  await supabase.auth.signOut();
+                  toast.error(`Only users from allowed domains (${allowedDomains.join(', ')}) can sign in with Google`);
+                }, 0);
+                return;
+              }
+            }
+          }
+          
           setTimeout(() => {
             fetchUserRoles(session.user.id);
           }, 0);
@@ -57,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [allowedDomains]);
 
   const fetchUserRoles = async (userId: string) => {
     try {
@@ -81,13 +127,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return emailRegex.test(email);
   };
 
+  const isEmailDomainAllowed = (email: string): boolean => {
+    const domain = email.split('@')[1];
+    return allowedDomains.includes(domain);
+  };
+
   const signIn = async (email: string, password: string) => {
     if (!validateEmail(email)) {
       return { error: new Error('Please enter a valid email address') };
     }
     
-    if (!email.endsWith('@leapswitch.com')) {
-      return { error: new Error('Only @leapswitch.com email addresses are allowed') };
+    if (!isEmailDomainAllowed(email)) {
+      return { error: new Error(`Only emails from allowed domains (${allowedDomains.join(', ')}) are permitted`) };
     }
 
     const { error } = await supabase.auth.signInWithPassword({
@@ -107,8 +158,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: new Error('Please enter a valid email address') };
     }
     
-    if (!email.endsWith('@leapswitch.com')) {
-      return { error: new Error('Only @leapswitch.com email addresses are allowed') };
+    if (!isEmailDomainAllowed(email)) {
+      return { error: new Error(`Only emails from allowed domains (${allowedDomains.join(', ')}) are permitted`) };
     }
 
     if (password.length < 6) {
@@ -138,12 +189,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     const redirectUrl = `${window.location.origin}/`;
     
+    // Use the first allowed domain for Google's hd parameter
+    // This hints to Google to show only accounts from this domain
+    const primaryDomain = allowedDomains[0] || 'leapswitch.com';
+    
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: redirectUrl,
         queryParams: {
-          hd: 'leapswitch.com', // Restrict to leapswitch.com domain
+          hd: primaryDomain, // Restrict to primary domain (hint only)
         },
       },
     });
@@ -175,6 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     loading,
     roles,
+    allowedDomains,
     signIn,
     signUp,
     signInWithGoogle,

@@ -4,14 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Settings, Bell, Shield, Clock, Save, User, Loader2, Link2 } from 'lucide-react';
+import { Settings, Bell, Shield, Clock, Save, User, Loader2, Link2, KeyRound } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { IntegrationCard, IntegrationConfig } from '@/components/IntegrationCard';
-
+import { TwoFactorSetup } from '@/components/TwoFactorSetup';
+import { GoogleDomainSettings } from '@/components/GoogleDomainSettings';
 type UserStatus = 'available' | 'on-leave' | 'unavailable';
 
 const STATUS_LABELS: Record<UserStatus, string> = {
@@ -98,7 +99,7 @@ const INTEGRATIONS: IntegrationConfig[] = [
 ];
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [status, setStatus] = useState<UserStatus>('available');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -210,6 +211,31 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Two-Factor Authentication */}
+        <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+          <div className="p-4 border-b border-border/50 flex items-center gap-3">
+            <KeyRound size={20} className="text-muted-foreground" />
+            <h2 className="font-semibold">Two-Factor Authentication</h2>
+          </div>
+          <div className="p-6">
+            <TwoFactorSetup />
+          </div>
+        </div>
+
+        {/* Google Domain Settings - Admin Only */}
+        {isAdmin && (
+          <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+            <div className="p-4 border-b border-border/50 flex items-center gap-3">
+              <Shield size={20} className="text-muted-foreground" />
+              <h2 className="font-semibold">Google Authentication Domains</h2>
+              <Badge variant="outline" className="ml-auto">Admin Only</Badge>
+            </div>
+            <div className="p-6">
+              <GoogleDomainSettings />
+            </div>
+          </div>
+        )}
 
         {/* General Settings */}
         <div className="bg-card rounded-xl border border-border/50 overflow-hidden">

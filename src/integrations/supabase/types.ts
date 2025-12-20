@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       impersonation_logs: {
         Row: {
           action: string
@@ -133,6 +160,33 @@ export type Database = {
           start_date?: string
           status?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      pending_2fa_verification: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          method: string
+          otp_code: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          method: string
+          otp_code: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          method?: string
+          otp_code?: string
           user_id?: string
         }
         Relationships: []
@@ -380,6 +434,39 @@ export type Database = {
           role?: string
           status?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      user_2fa_settings: {
+        Row: {
+          backup_codes: Json | null
+          created_at: string
+          email_otp_enabled: boolean
+          id: string
+          totp_enabled: boolean
+          totp_secret: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          backup_codes?: Json | null
+          created_at?: string
+          email_otp_enabled?: boolean
+          id?: string
+          totp_enabled?: boolean
+          totp_secret?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          backup_codes?: Json | null
+          created_at?: string
+          email_otp_enabled?: boolean
+          id?: string
+          totp_enabled?: boolean
+          totp_secret?: string | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
