@@ -9,7 +9,8 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Shield
+  Shield,
+  CalendarDays
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ const navItems = [
   { icon: Calendar, label: 'Roster', path: '/roster', adminOnly: false },
   { icon: Users, label: 'Team', path: '/team', adminOnly: false },
   { icon: Clock, label: 'Shifts', path: '/shifts', adminOnly: false },
+  { icon: CalendarDays, label: 'Leave', path: '/leave', adminOnly: false },
   { icon: Building2, label: 'Departments', path: '/departments', adminOnly: false },
   { icon: Shield, label: 'Role Management', path: '/admin/roles', adminOnly: true },
   { icon: Settings, label: 'Settings', path: '/settings', adminOnly: false },
