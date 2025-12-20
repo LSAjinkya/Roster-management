@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { ThemeToggle } from './ThemeToggle';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', adminOnly: false },
@@ -118,6 +119,8 @@ export function AppSidebar() {
         )}
 
         <div className="flex gap-2">
+          <ThemeToggle />
+          
           <Button
             variant="ghost"
             size="sm"

@@ -233,6 +233,45 @@ export type Database = {
         }
         Relationships: []
       }
+      shift_history: {
+        Row: {
+          action: string
+          changed_by: string | null
+          created_at: string
+          date: string
+          id: string
+          member_id: string
+          new_shift_type: string | null
+          notes: string | null
+          old_shift_type: string | null
+          swap_with_member_id: string | null
+        }
+        Insert: {
+          action?: string
+          changed_by?: string | null
+          created_at?: string
+          date: string
+          id?: string
+          member_id: string
+          new_shift_type?: string | null
+          notes?: string | null
+          old_shift_type?: string | null
+          swap_with_member_id?: string | null
+        }
+        Update: {
+          action?: string
+          changed_by?: string | null
+          created_at?: string
+          date?: string
+          id?: string
+          member_id?: string
+          new_shift_type?: string | null
+          notes?: string | null
+          old_shift_type?: string | null
+          swap_with_member_id?: string | null
+        }
+        Relationships: []
+      }
       status_history: {
         Row: {
           changed_at: string
@@ -257,6 +296,54 @@ export type Database = {
           new_status?: string
           old_status?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      swap_requests: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          reason: string | null
+          requester_id: string
+          requester_shift: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewer_notes: string | null
+          status: string
+          target_id: string
+          target_shift: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          id?: string
+          reason?: string | null
+          requester_id: string
+          requester_shift: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_notes?: string | null
+          status?: string
+          target_id: string
+          target_shift: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          reason?: string | null
+          requester_id?: string
+          requester_shift?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewer_notes?: string | null
+          status?: string
+          target_id?: string
+          target_shift?: string
+          updated_at?: string
         }
         Relationships: []
       }
