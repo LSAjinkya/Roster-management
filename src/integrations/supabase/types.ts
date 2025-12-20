@@ -173,6 +173,33 @@ export type Database = {
         }
         Relationships: []
       }
+      public_holidays: {
+        Row: {
+          created_at: string
+          date: string
+          description: string | null
+          id: string
+          name: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          description?: string | null
+          id?: string
+          name: string
+          year?: number
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          description?: string | null
+          id?: string
+          name?: string
+          year?: number
+        }
+        Relationships: []
+      }
       shift_assignments: {
         Row: {
           created_at: string
