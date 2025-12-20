@@ -28,6 +28,18 @@ const STATUS_COLORS: Record<UserStatus, string> = {
 
 const INTEGRATIONS: IntegrationConfig[] = [
   {
+    id: 'razorpay',
+    name: 'Razorpay HR',
+    description: 'Sync employees, attendance, leaves & public holidays',
+    icon: <span className="text-white font-bold text-lg">R</span>,
+    bgColor: 'bg-[#072654]',
+    fields: [
+      { key: 'keyId', label: 'Key ID', type: 'text', placeholder: 'rzp_live_xxxxxxxxxx', helpText: 'Your Razorpay API Key ID' },
+      { key: 'keySecret', label: 'Key Secret', type: 'password', placeholder: 'Enter your Key Secret' },
+      { key: 'accountId', label: 'Account ID (Optional)', type: 'text', placeholder: 'acc_xxxxxxxxxx', helpText: 'For connected accounts only' },
+    ],
+  },
+  {
     id: 'biotime',
     name: 'BioTime Attendance',
     description: 'Sync attendance data from biometric devices',
