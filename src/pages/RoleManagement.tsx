@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Shield, UserCog, LogIn, History, Building2 } from 'lucide-react';
+import { Loader2, Shield, UserCog, LogIn, History, Upload, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { DEPARTMENTS, Department } from '@/types/roster';
 
@@ -32,6 +33,15 @@ interface ImpersonationLog {
   action: string;
   ip_address: string | null;
   created_at: string;
+}
+
+interface StatusHistoryLog {
+  id: string;
+  user_id: string;
+  old_status: string | null;
+  new_status: string;
+  changed_at: string;
+  user_name?: string;
 }
 
 const ROLE_LABELS: Record<AppRole, string> = {
@@ -61,7 +71,7 @@ const STATUS_COLORS: Record<UserStatus, string> = {
 };
 
 export default function RoleManagement() {
-  const { isAdmin, loading: authLoading, user } = useAuth();
+  const { isAdmin, isHR, loading: authLoading, user, roles } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,20 +80,32 @@ export default function RoleManagement() {
   const [impersonating, setImpersonating] = useState(false);
   const [auditLogs, setAuditLogs] = useState<ImpersonationLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(true);
+  const [statusHistory, setStatusHistory] = useState<StatusHistoryLog[]>([]);
+  const [statusHistoryLoading, setStatusHistoryLoading] = useState(true);
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
+  const [csvData, setCsvData] = useState('');
+  const [importing, setImporting] = useState(false);
+
+  // Check if user can access - admin or HR
+  const canAccess = isAdmin || isHR;
 
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      toast.error('Access denied. Admin only.');
-      navigate('/');
+    // Wait for auth and roles to fully load before checking access
+    if (!authLoading && roles.length >= 0 && user) {
+      if (!canAccess) {
+        toast.error('Access denied. Admin or HR only.');
+        navigate('/');
+      }
     }
-  }, [authLoading, isAdmin, navigate]);
+  }, [authLoading, canAccess, navigate, roles, user]);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (canAccess) {
       fetchUsers();
       fetchAuditLogs();
+      fetchStatusHistory();
     }
-  }, [isAdmin]);
+  }, [canAccess]);
 
   const fetchUsers = async () => {
     try {
@@ -134,6 +156,39 @@ export default function RoleManagement() {
       console.error('Error fetching audit logs:', error);
     } finally {
       setLogsLoading(false);
+    }
+  };
+
+  const fetchStatusHistory = async () => {
+    try {
+      // Fetch status history with user names
+      const { data: history, error: historyError } = await supabase
+        .from('status_history')
+        .select('id, user_id, old_status, new_status, changed_at')
+        .order('changed_at', { ascending: false })
+        .limit(50);
+
+      if (historyError) throw historyError;
+
+      // Get user names for the history entries
+      const userIds = [...new Set((history || []).map(h => h.user_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, full_name')
+        .in('user_id', userIds);
+
+      const profileMap = new Map((profiles || []).map(p => [p.user_id, p.full_name]));
+
+      const historyWithNames: StatusHistoryLog[] = (history || []).map(h => ({
+        ...h,
+        user_name: profileMap.get(h.user_id) || 'Unknown',
+      }));
+
+      setStatusHistory(historyWithNames);
+    } catch (error) {
+      console.error('Error fetching status history:', error);
+    } finally {
+      setStatusHistoryLoading(false);
     }
   };
 
@@ -188,9 +243,78 @@ export default function RoleManagement() {
 
       toast.success('Status updated successfully');
       fetchUsers();
+      fetchStatusHistory();
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update status');
+    }
+  };
+
+  const handleCsvImport = async () => {
+    if (!csvData.trim()) {
+      toast.error('Please enter CSV data');
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const lines = csvData.trim().split('\n');
+      const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+      
+      // Expected headers: name, email, department, role
+      const nameIdx = headers.indexOf('name');
+      const emailIdx = headers.indexOf('email');
+      const deptIdx = headers.indexOf('department');
+
+      if (nameIdx === -1 || emailIdx === -1) {
+        throw new Error('CSV must have "name" and "email" columns');
+      }
+
+      let imported = 0;
+      let errors = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim());
+        const name = values[nameIdx];
+        const email = values[emailIdx];
+        const department = deptIdx !== -1 ? values[deptIdx] : null;
+
+        if (!name || !email) continue;
+
+        // Check if profile already exists
+        const { data: existing } = await supabase
+          .from('profiles')
+          .select('user_id')
+          .eq('email', email)
+          .maybeSingle();
+
+        if (existing) {
+          // Update existing profile
+          const { error } = await supabase
+            .from('profiles')
+            .update({ 
+              full_name: name, 
+              department: department && DEPARTMENTS.includes(department as Department) ? department : null 
+            })
+            .eq('email', email);
+
+          if (error) {
+            errors++;
+          } else {
+            imported++;
+          }
+        }
+      }
+
+      toast.success(`Imported ${imported} users. ${errors > 0 ? `${errors} errors.` : ''}`);
+      setCsvImportOpen(false);
+      setCsvData('');
+      fetchUsers();
+    } catch (error: any) {
+      console.error('Import error:', error);
+      toast.error(error.message || 'Failed to import users');
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -249,20 +373,26 @@ export default function RoleManagement() {
     );
   }
 
-  if (!isAdmin) {
+  if (!canAccess) {
     return null;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-primary/10">
-          <Shield className="h-6 w-6 text-primary" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <Shield className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Role Management</h1>
+            <p className="text-muted-foreground">Manage user roles and permissions</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">Role Management</h1>
-          <p className="text-muted-foreground">Manage user roles and permissions</p>
-        </div>
+        <Button onClick={() => setCsvImportOpen(true)} variant="outline">
+          <Upload className="h-4 w-4 mr-2" />
+          Bulk Import
+        </Button>
       </div>
 
       <Card>
@@ -321,9 +451,9 @@ export default function RoleManagement() {
                       <SelectContent>
                         {(['available', 'on-leave', 'unavailable'] as UserStatus[]).map((status) => (
                           <SelectItem key={status} value={status}>
-                            <Badge variant="outline" className={STATUS_COLORS[status]}>
+                            <span className={`px-2 py-0.5 rounded text-xs border ${STATUS_COLORS[status]}`}>
                               {STATUS_LABELS[status]}
-                            </Badge>
+                            </span>
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -418,6 +548,64 @@ export default function RoleManagement() {
         </CardContent>
       </Card>
 
+      {/* Status History */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Status Change History
+          </CardTitle>
+          <CardDescription>
+            Track when users changed their availability status
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {statusHistoryLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : statusHistory.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground">No status changes yet</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Timestamp</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead>Previous Status</TableHead>
+                  <TableHead>New Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {statusHistory.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell className="text-muted-foreground">
+                      {format(new Date(log.changed_at), 'MMM d, yyyy HH:mm:ss')}
+                    </TableCell>
+                    <TableCell className="font-medium">{log.user_name}</TableCell>
+                    <TableCell>
+                      {log.old_status ? (
+                        <Badge variant="outline" className={STATUS_COLORS[log.old_status as UserStatus] || ''}>
+                          {STATUS_LABELS[log.old_status as UserStatus] || log.old_status}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={STATUS_COLORS[log.new_status as UserStatus] || ''}>
+                        {STATUS_LABELS[log.new_status as UserStatus] || log.new_status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Impersonate Dialog */}
       <Dialog open={impersonateDialogOpen} onOpenChange={setImpersonateDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -439,6 +627,45 @@ export default function RoleManagement() {
                 </>
               ) : (
                 'Continue'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CSV Import Dialog */}
+      <Dialog open={csvImportOpen} onOpenChange={setCsvImportOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Bulk Import Users</DialogTitle>
+            <DialogDescription>
+              Paste CSV data to update user departments. Format: name,email,department
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Textarea
+              placeholder={`name,email,department\nJohn Doe,john@leapswitch.com,Support\nJane Smith,jane@leapswitch.com,Monitoring`}
+              value={csvData}
+              onChange={(e) => setCsvData(e.target.value)}
+              rows={8}
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              Supported departments: {DEPARTMENTS.join(', ')}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCsvImportOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCsvImport} disabled={importing}>
+              {importing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Importing...
+                </>
+              ) : (
+                'Import'
               )}
             </Button>
           </DialogFooter>
