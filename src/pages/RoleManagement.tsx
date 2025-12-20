@@ -305,11 +305,23 @@ export default function RoleManagement() {
         throw new Error('No active session');
       }
 
+      // Store current admin session info before impersonating
+      const adminInfo = users.find(u => u.id === user?.id);
+      const impersonationData = {
+        adminEmail: user?.email || '',
+        adminName: adminInfo?.full_name || user?.email || '',
+        impersonatedEmail: selectedUser.email,
+        impersonatedName: selectedUser.full_name,
+        timestamp: new Date().toISOString(),
+      };
+      localStorage.setItem('impersonation_session', JSON.stringify(impersonationData));
+
       const response = await supabase.functions.invoke('admin-impersonate', {
         body: { targetUserId: selectedUser.id },
       });
 
       if (response.error) {
+        localStorage.removeItem('impersonation_session');
         throw new Error(response.error.message || 'Impersonation failed');
       }
 
@@ -322,7 +334,10 @@ export default function RoleManagement() {
         refresh_token,
       });
 
-      if (setSessionError) throw setSessionError;
+      if (setSessionError) {
+        localStorage.removeItem('impersonation_session');
+        throw setSessionError;
+      }
 
       toast.success(`Now logged in as ${selectedUser.full_name}`);
       setImpersonateDialogOpen(false);
