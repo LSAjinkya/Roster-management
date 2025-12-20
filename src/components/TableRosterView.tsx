@@ -81,14 +81,14 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
     return teamMembers.filter(m => m.role === 'TL');
   }, [teamMembers]);
 
-  // Filter members by department and TL
+  // Filter members by department and TL (show only members reporting to selected TL)
   const filteredMembers = useMemo(() => {
     let members = teamMembers;
     if (departmentFilter !== 'all') {
       members = members.filter(m => m.department === departmentFilter);
     }
     if (tlFilter !== 'all') {
-      members = members.filter(m => m.reportingTLId === tlFilter || m.id === tlFilter);
+      members = members.filter(m => m.reportingTLId === tlFilter);
     }
     return members;
   }, [teamMembers, departmentFilter, tlFilter]);
