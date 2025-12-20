@@ -1,0 +1,137 @@
+import { DashboardHeader } from '@/components/DashboardHeader';
+import { StatCard } from '@/components/StatCard';
+import { ShiftBadge } from '@/components/ShiftBadge';
+import { TeamMemberCard } from '@/components/TeamMemberCard';
+import { teamMembers, currentWeekAssignments } from '@/data/mockData';
+import { SHIFT_DEFINITIONS, DEPARTMENTS } from '@/types/roster';
+import { Users, Calendar, Clock, Building2, TrendingUp, AlertCircle } from 'lucide-react';
+import { format } from 'date-fns';
+
+export default function Dashboard() {
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const todayAssignments = currentWeekAssignments.filter(a => a.date === todayStr);
+  
+  const availableMembers = teamMembers.filter(m => m.status === 'available');
+  const onLeaveMembers = teamMembers.filter(m => m.status === 'on-leave');
+  
+  const shiftCounts = SHIFT_DEFINITIONS.reduce((acc, shift) => {
+    acc[shift.id] = todayAssignments.filter(a => a.shiftType === shift.id).length;
+    return acc;
+  }, {} as Record<string, number>);
+
+  return (
+    <div className="flex flex-col h-full">
+      <DashboardHeader 
+        title="Dashboard" 
+        subtitle={format(new Date(), 'EEEE, MMMM d, yyyy')} 
+      />
+      
+      <div className="flex-1 overflow-auto p-6 space-y-6">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            title="Total Team"
+            value={teamMembers.length}
+            subtitle="Active members"
+            icon={Users}
+            iconColor="text-primary"
+          />
+          <StatCard
+            title="Available Today"
+            value={availableMembers.length}
+            subtitle={`${onLeaveMembers.length} on leave`}
+            icon={TrendingUp}
+            iconColor="text-status-available"
+          />
+          <StatCard
+            title="Today's Shifts"
+            value={todayAssignments.length}
+            subtitle="Assignments made"
+            icon={Calendar}
+            iconColor="text-shift-afternoon"
+          />
+          <StatCard
+            title="Departments"
+            value={DEPARTMENTS.length}
+            subtitle="Active departments"
+            icon={Building2}
+            iconColor="text-shift-general"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Today's Shift Overview */}
+          <div className="lg:col-span-2 bg-card rounded-xl border border-border/50 overflow-hidden">
+            <div className="p-4 border-b border-border/50">
+              <h2 className="font-semibold text-lg">Today's Shift Overview</h2>
+              <p className="text-sm text-muted-foreground">Current shift distribution</p>
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {SHIFT_DEFINITIONS.map(shift => (
+                  <div 
+                    key={shift.id} 
+                    className={`p-4 rounded-xl border-2 ${shift.color} transition-all hover:scale-[1.02]`}
+                  >
+                    <ShiftBadge type={shift.id} size="sm" />
+                    <p className="text-3xl font-bold mt-3">{shiftCounts[shift.id]}</p>
+                    <p className="text-sm opacity-75 mt-1">{shift.startTime} - {shift.endTime}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+            <div className="p-4 border-b border-border/50">
+              <h2 className="font-semibold text-lg">On Leave Today</h2>
+              <p className="text-sm text-muted-foreground">{onLeaveMembers.length} team members</p>
+            </div>
+            <div className="p-2 max-h-[280px] overflow-auto">
+              {onLeaveMembers.length > 0 ? (
+                onLeaveMembers.slice(0, 5).map(member => (
+                  <TeamMemberCard key={member.id} member={member} compact />
+                ))
+              ) : (
+                <div className="py-8 text-center text-muted-foreground">
+                  <AlertCircle className="mx-auto mb-2 opacity-50" size={24} />
+                  <p className="text-sm">No one on leave today</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Department Distribution */}
+        <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+          <div className="p-4 border-b border-border/50">
+            <h2 className="font-semibold text-lg">Department Distribution</h2>
+            <p className="text-sm text-muted-foreground">Team members by department</p>
+          </div>
+          <div className="p-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
+              {DEPARTMENTS.map(dept => {
+                const count = teamMembers.filter(m => m.department === dept).length;
+                const percentage = Math.round((count / teamMembers.length) * 100);
+                
+                return (
+                  <div key={dept} className="text-center p-4 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors">
+                    <p className="text-2xl font-bold text-foreground">{count}</p>
+                    <p className="text-sm text-muted-foreground mt-1 truncate">{dept}</p>
+                    <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-primary rounded-full transition-all"
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
