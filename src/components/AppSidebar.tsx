@@ -8,7 +8,8 @@ import {
   Building2,
   ChevronLeft,
   ChevronRight,
-  LogOut
+  LogOut,
+  Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -18,12 +19,13 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-  { icon: Calendar, label: 'Roster', path: '/roster' },
-  { icon: Users, label: 'Team', path: '/team' },
-  { icon: Clock, label: 'Shifts', path: '/shifts' },
-  { icon: Building2, label: 'Departments', path: '/departments' },
-  { icon: Settings, label: 'Settings', path: '/settings' },
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/', adminOnly: false },
+  { icon: Calendar, label: 'Roster', path: '/roster', adminOnly: false },
+  { icon: Users, label: 'Team', path: '/team', adminOnly: false },
+  { icon: Clock, label: 'Shifts', path: '/shifts', adminOnly: false },
+  { icon: Building2, label: 'Departments', path: '/departments', adminOnly: false },
+  { icon: Shield, label: 'Role Management', path: '/admin/roles', adminOnly: true },
+  { icon: Settings, label: 'Settings', path: '/settings', adminOnly: false },
 ];
 
 export function AppSidebar() {
@@ -65,25 +67,27 @@ export function AppSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1">
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
-                isActive 
-                  ? 'bg-sidebar-accent text-sidebar-primary' 
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                collapsed && 'justify-center px-2'
-              )}
-            >
-              <item.icon size={20} />
-              {!collapsed && <span className="font-medium">{item.label}</span>}
-            </NavLink>
-          );
-        })}
+        {navItems
+          .filter(item => !item.adminOnly || isAdmin)
+          .map((item) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
+                  isActive 
+                    ? 'bg-sidebar-accent text-sidebar-primary' 
+                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                  collapsed && 'justify-center px-2'
+                )}
+              >
+                <item.icon size={20} />
+                {!collapsed && <span className="font-medium">{item.label}</span>}
+              </NavLink>
+            );
+          })}
       </nav>
 
       {/* User Info & Actions */}

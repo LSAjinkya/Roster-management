@@ -13,6 +13,7 @@ import Departments from "./pages/Departments";
 import SettingsPage from "./pages/SettingsPage";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import RoleManagement from "./pages/RoleManagement";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,7 @@ const App = () => (
               <Route path="/team" element={<Team />} />
               <Route path="/shifts" element={<Shifts />} />
               <Route path="/departments" element={<Departments />} />
+              <Route path="/admin/roles" element={<RoleManagement />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
