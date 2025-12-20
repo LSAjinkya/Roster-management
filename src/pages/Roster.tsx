@@ -67,7 +67,7 @@ export default function Roster() {
     return { start: currentDate, end: currentDate };
   }, [viewMode, currentDate]);
 
-  const showExport = viewMode === 'weekly' || viewMode === 'monthly';
+  const showExport = canEditShifts && (viewMode === 'weekly' || viewMode === 'monthly');
 
   return (
     <div className="flex flex-col h-full">
