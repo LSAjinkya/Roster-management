@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Settings, Bell, Shield, Clock, Save, User, Loader2 } from 'lucide-react';
+import { Settings, Bell, Shield, Clock, Save, User, Loader2, Link2, ExternalLink } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
@@ -221,6 +221,37 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground">Allow members to request shift swaps</p>
               </div>
               <Switch defaultChecked />
+            </div>
+          </div>
+        </div>
+
+        {/* Integrations */}
+        <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+          <div className="p-4 border-b border-border/50 flex items-center gap-3">
+            <Link2 size={20} className="text-muted-foreground" />
+            <h2 className="font-semibold">Integrations</h2>
+          </div>
+          <div className="p-6 space-y-4">
+            {/* Razorpay Integration */}
+            <div className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-muted/20">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-lg bg-[#072654] flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">R</span>
+                </div>
+                <div>
+                  <p className="font-medium">Razorpay Payroll</p>
+                  <p className="text-sm text-muted-foreground">Process payroll and manage employee salaries</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" className="bg-amber-500/20 text-amber-700 border-amber-500/30">
+                  Not Connected
+                </Badge>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <ExternalLink size={14} />
+                  Connect
+                </Button>
+              </div>
             </div>
           </div>
         </div>
