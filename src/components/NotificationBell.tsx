@@ -156,7 +156,7 @@ export function NotificationBell() {
               {allItems.map(item => (
                 <Link
                   key={`${item.type}-${item.id}`}
-                  to={item.type === 'leave' ? '/leave-requests' : '/shifts'}
+                  to={item.type === 'leave' ? '/leave' : '/shifts'}
                   onClick={() => setOpen(false)}
                   className="block p-3 hover:bg-muted transition-colors"
                 >
@@ -185,7 +185,7 @@ export function NotificationBell() {
         {totalPending > 0 && (
           <div className="p-2 border-t">
             <Link
-              to="/leave-requests"
+              to="/leave"
               onClick={() => setOpen(false)}
               className="block w-full"
             >
