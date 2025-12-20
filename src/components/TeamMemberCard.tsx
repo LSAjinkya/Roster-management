@@ -2,15 +2,17 @@ import { TeamMember } from '@/types/roster';
 import { RoleBadge } from './RoleBadge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { UserCheck } from 'lucide-react';
 
 interface TeamMemberCardProps {
   member: TeamMember;
   compact?: boolean;
   className?: string;
   style?: React.CSSProperties;
+  reportingTL?: TeamMember;
 }
 
-export function TeamMemberCard({ member, compact = false, className, style }: TeamMemberCardProps) {
+export function TeamMemberCard({ member, compact = false, className, style, reportingTL }: TeamMemberCardProps) {
   const initials = member.name
     .split(' ')
     .map(n => n[0])
@@ -75,7 +77,7 @@ export function TeamMemberCard({ member, compact = false, className, style }: Te
           <p className="text-xs text-muted-foreground mt-1 truncate">{member.email}</p>
         </div>
       </div>
-      <div className="mt-3 pt-3 border-t border-border/50">
+      <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Status</span>
           <span className={cn(
@@ -87,6 +89,17 @@ export function TeamMemberCard({ member, compact = false, className, style }: Te
             {member.status.replace('-', ' ')}
           </span>
         </div>
+        {reportingTL && member.role !== 'TL' && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground flex items-center gap-1">
+              <UserCheck size={14} />
+              Reporting TL
+            </span>
+            <span className="font-medium text-primary truncate max-w-[120px]">
+              {reportingTL.name}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

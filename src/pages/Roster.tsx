@@ -1,16 +1,36 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { WeeklyRosterView } from '@/components/WeeklyRosterView';
 import { SingleDayRosterView } from '@/components/SingleDayRosterView';
 import { MonthlyRosterView } from '@/components/MonthlyRosterView';
+import { MemberRosterView } from '@/components/MemberRosterView';
+import { ExportDropdown } from '@/components/ExportDropdown';
 import { teamMembers, currentWeekAssignments } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarDays, Calendar, CalendarRange } from 'lucide-react';
+import { CalendarDays, Calendar, CalendarRange, User } from 'lucide-react';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, addDays } from 'date-fns';
 
-type ViewMode = 'daily' | 'weekly' | 'monthly';
+type ViewMode = 'daily' | 'weekly' | 'monthly' | 'member';
 
 export default function Roster() {
   const [viewMode, setViewMode] = useState<ViewMode>('weekly');
+  const [currentDate] = useState(new Date());
+
+  // Calculate date ranges for export
+  const exportDates = useMemo(() => {
+    if (viewMode === 'weekly') {
+      const start = startOfWeek(currentDate, { weekStartsOn: 1 });
+      const end = endOfWeek(currentDate, { weekStartsOn: 1 });
+      return { start, end };
+    } else if (viewMode === 'monthly' || viewMode === 'member') {
+      const start = startOfMonth(currentDate);
+      const end = endOfMonth(currentDate);
+      return { start, end };
+    }
+    return { start: currentDate, end: currentDate };
+  }, [viewMode, currentDate]);
+
+  const showExport = viewMode === 'weekly' || viewMode === 'monthly';
 
   return (
     <div className="flex flex-col h-full">
@@ -18,22 +38,38 @@ export default function Roster() {
         title="Shift Roster" 
         subtitle="View and manage shift assignments"
       >
-        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-          <TabsList className="bg-muted/50">
-            <TabsTrigger value="daily" className="gap-2">
-              <CalendarDays size={16} />
-              Daily
-            </TabsTrigger>
-            <TabsTrigger value="weekly" className="gap-2">
-              <CalendarRange size={16} />
-              Weekly
-            </TabsTrigger>
-            <TabsTrigger value="monthly" className="gap-2">
-              <Calendar size={16} />
-              Monthly
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-3">
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+            <TabsList className="bg-muted/50">
+              <TabsTrigger value="daily" className="gap-2">
+                <CalendarDays size={16} />
+                <span className="hidden sm:inline">Daily</span>
+              </TabsTrigger>
+              <TabsTrigger value="weekly" className="gap-2">
+                <CalendarRange size={16} />
+                <span className="hidden sm:inline">Weekly</span>
+              </TabsTrigger>
+              <TabsTrigger value="monthly" className="gap-2">
+                <Calendar size={16} />
+                <span className="hidden sm:inline">Monthly</span>
+              </TabsTrigger>
+              <TabsTrigger value="member" className="gap-2">
+                <User size={16} />
+                <span className="hidden sm:inline">Member</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {showExport && (
+            <ExportDropdown
+              assignments={currentWeekAssignments}
+              teamMembers={teamMembers}
+              startDate={exportDates.start}
+              endDate={exportDates.end}
+              viewType={viewMode === 'weekly' ? 'weekly' : 'monthly'}
+            />
+          )}
+        </div>
       </DashboardHeader>
       
       <div className="flex-1 overflow-auto p-6">
@@ -51,6 +87,12 @@ export default function Roster() {
         )}
         {viewMode === 'monthly' && (
           <MonthlyRosterView 
+            assignments={currentWeekAssignments} 
+            teamMembers={teamMembers} 
+          />
+        )}
+        {viewMode === 'member' && (
+          <MemberRosterView 
             assignments={currentWeekAssignments} 
             teamMembers={teamMembers} 
           />

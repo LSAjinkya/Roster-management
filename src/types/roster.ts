@@ -29,6 +29,7 @@ export interface TeamMember {
   department: Department;
   avatar?: string;
   status: 'available' | 'on-leave' | 'unavailable';
+  reportingTLId?: string; // Assigned based on department
 }
 
 export interface ShiftAssignment {
