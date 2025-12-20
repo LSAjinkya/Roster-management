@@ -1,8 +1,9 @@
-import { Bell, Search, User } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ReactNode } from 'react';
+import { NotificationBell } from '@/components/NotificationBell';
+import { useAuth } from '@/hooks/useAuth';
 
 interface DashboardHeaderProps {
   title: string;
@@ -11,6 +12,14 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ title, subtitle, children }: DashboardHeaderProps) {
+  const { user } = useAuth();
+  
+  const getInitials = (email: string | undefined) => {
+    if (!email) return 'U';
+    const name = email.split('@')[0];
+    return name.slice(0, 2).toUpperCase();
+  };
+
   return (
     <header className="bg-card border-b border-border min-h-16 px-6 py-3 flex items-center justify-between sticky top-0 z-10 gap-4">
       <div className="flex items-center gap-6">
@@ -30,20 +39,17 @@ export function DashboardHeader({ title, subtitle, children }: DashboardHeaderPr
           />
         </div>
         
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell size={20} />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full" />
-        </Button>
+        <NotificationBell />
         
         <div className="flex items-center gap-3 pl-4 border-l border-border">
           <Avatar className="h-9 w-9">
             <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-              AD
+              {getInitials(user?.email)}
             </AvatarFallback>
           </Avatar>
           <div className="hidden md:block">
-            <p className="text-sm font-medium">Admin User</p>
-            <p className="text-xs text-muted-foreground">Operations</p>
+            <p className="text-sm font-medium">{user?.email?.split('@')[0] || 'User'}</p>
+            <p className="text-xs text-muted-foreground">{user?.email?.split('@')[1] || ''}</p>
           </div>
         </div>
       </div>
