@@ -72,15 +72,15 @@ export function SetupMonthlyRosterDialog({ teamMembers, onComplete }: SetupMonth
     fixedDays: [0],
   });
 
-  // Department shift configuration
+  // Department shift configuration - Rotation order: Afternoon → Morning → Night
   const [deptConfigs, setDeptConfigs] = useState<DepartmentShiftConfig[]>(() => 
     DEPARTMENTS.map(dept => ({
       department: dept,
-      defaultShift: dept === 'HR' || dept === 'Vendor Coordinator' ? 'general' : 'morning',
+      defaultShift: dept === 'HR' || dept === 'Vendor Coordinator' ? 'general' : 'afternoon',
       rotateShifts: dept !== 'HR' && dept !== 'Vendor Coordinator',
       availableShifts: dept === 'HR' || dept === 'Vendor Coordinator' 
         ? ['general'] 
-        : ['morning', 'afternoon', 'night'],
+        : ['afternoon', 'morning', 'night'], // Order: A → M → N
     }))
   );
 
