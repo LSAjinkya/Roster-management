@@ -1,6 +1,6 @@
-export type ShiftType = 'morning' | 'afternoon' | 'night' | 'general';
+export type ShiftType = 'morning' | 'afternoon' | 'night' | 'general' | 'leave' | 'comp-off';
 
-export type Role = 'TL' | 'L2' | 'L1';
+export type Role = 'TL' | 'L2' | 'L1' | 'HR';
 
 export type Department = 
   | 'Support' 
@@ -9,9 +9,10 @@ export type Department =
   | 'Network' 
   | 'AW' 
   | 'Infra' 
-  | 'Vendor Coordinator';
+  | 'Vendor Coordinator'
+  | 'HR';
 
-export type UserRole = 'admin' | 'tl' | 'member';
+export type UserRole = 'admin' | 'hr' | 'tl' | 'member';
 
 export interface ShiftDefinition {
   id: ShiftType;
@@ -55,6 +56,8 @@ export const SHIFT_DEFINITIONS: ShiftDefinition[] = [
   { id: 'afternoon', name: 'Afternoon', startTime: '13:00', endTime: '22:00', color: 'shift-afternoon' },
   { id: 'night', name: 'Night', startTime: '21:00', endTime: '07:00', color: 'shift-night' },
   { id: 'general', name: 'General', startTime: '10:00', endTime: '19:00', color: 'shift-general' },
+  { id: 'leave', name: 'Leave', startTime: '', endTime: '', color: 'shift-leave' },
+  { id: 'comp-off', name: 'Comp Off', startTime: '', endTime: '', color: 'shift-compoff' },
 ];
 
 export const DEPARTMENTS: Department[] = [
@@ -65,6 +68,7 @@ export const DEPARTMENTS: Department[] = [
   'AW',
   'Infra',
   'Vendor Coordinator',
+  'HR',
 ];
 
-export const ROLES: Role[] = ['TL', 'L2', 'L1'];
+export const ROLES: Role[] = ['TL', 'L2', 'L1', 'HR'];

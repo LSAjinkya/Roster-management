@@ -36,6 +36,8 @@ const shiftColors: Record<ShiftType, string> = {
   afternoon: 'bg-shift-afternoon',
   night: 'bg-shift-night',
   general: 'bg-shift-general',
+  leave: 'bg-red-100',
+  'comp-off': 'bg-orange-100',
 };
 
 const shiftLetters: Record<ShiftType, string> = {
@@ -43,6 +45,8 @@ const shiftLetters: Record<ShiftType, string> = {
   afternoon: 'A',
   night: 'N',
   general: 'G',
+  leave: 'L',
+  'comp-off': 'CO',
 };
 
 export function MemberRosterView({ assignments, teamMembers }: MemberRosterViewProps) {

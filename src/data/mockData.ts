@@ -92,6 +92,11 @@ export const teamMembers: TeamMember[] = [
   { id: 'l1-infra-yotta-6', name: 'Karan Pawar', email: 'karan.pawar@leapswitch.com', role: 'L1', department: 'Infra', status: 'available', reportingTLId: 'tl-infra-2' },
   { id: 'l1-infra-yotta-7', name: 'Hemant Gujar', email: 'hemant.gujar@leapswitch.com', role: 'L1', department: 'Infra', status: 'available', reportingTLId: 'tl-infra-2' },
   { id: 'l1-infra-yotta-8', name: 'Ganesh', email: 'ganesh@leapswitch.com', role: 'L1', department: 'Infra', status: 'available', reportingTLId: 'tl-infra-2' },
+  
+  // HR Team (Admin role)
+  { id: 'hr-1', name: 'Ayushi Parshivar', email: 'ayushi.parshivar@leapswitch.com', role: 'HR', department: 'HR', status: 'available' },
+  { id: 'hr-2', name: 'Chandar Rana Singh', email: 'chandar.ranasingh@leapswitch.com', role: 'HR', department: 'HR', status: 'available' },
+  { id: 'hr-3', name: 'Tejashri Mandhare', email: 'tejashri.mandhare@leapswitch.com', role: 'HR', department: 'HR', status: 'available' },
 ];
 
 // Generate sample shift assignments for current week
@@ -99,8 +104,8 @@ export const generateWeeklyAssignments = (startDate: Date): ShiftAssignment[] =>
   const assignments: ShiftAssignment[] = [];
   const shiftTypes: ShiftType[] = ['morning', 'afternoon', 'night', 'general'];
   
-  // Filter out TLs and Vendor Coordinator for rotational shifts
-  const rotationalMembers = teamMembers.filter(m => m.role !== 'TL' && m.department !== 'Vendor Coordinator');
+  // Filter out TLs, HR, and Vendor Coordinator for rotational shifts
+  const rotationalMembers = teamMembers.filter(m => m.role !== 'TL' && m.role !== 'HR' && m.department !== 'Vendor Coordinator');
   const tlsAndVC = teamMembers.filter(m => m.role === 'TL' || m.department === 'Vendor Coordinator');
   
   for (let day = 0; day < 7; day++) {
