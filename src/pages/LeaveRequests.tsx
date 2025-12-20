@@ -13,8 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Plus, Calendar, Check, X, Clock, AlertCircle } from 'lucide-react';
+import { Loader2, Plus, Calendar, Check, X, Clock, AlertCircle, Briefcase, Thermometer } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
+import { Progress } from '@/components/ui/progress';
 
 type LeaveType = 'casual' | 'sick' | 'comp-off' | 'other';
 type LeaveStatus = 'pending' | 'approved' | 'rejected';
@@ -33,6 +34,16 @@ interface LeaveRequest {
   created_at: string;
   user_name?: string;
   user_email?: string;
+}
+
+interface LeaveBalance {
+  id: string;
+  user_id: string;
+  year: number;
+  casual_leave_total: number;
+  casual_leave_used: number;
+  sick_leave_total: number;
+  sick_leave_used: number;
 }
 
 const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
@@ -58,6 +69,7 @@ export default function LeaveRequests() {
   const { user, canEditShifts, isHR, isTL, isAdmin } = useAuth();
   const [myRequests, setMyRequests] = useState<LeaveRequest[]>([]);
   const [allRequests, setAllRequests] = useState<LeaveRequest[]>([]);
+  const [leaveBalance, setLeaveBalance] = useState<LeaveBalance | null>(null);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
@@ -73,7 +85,40 @@ export default function LeaveRequests() {
 
   useEffect(() => {
     fetchRequests();
+    fetchLeaveBalance();
   }, [user]);
+
+  const fetchLeaveBalance = async () => {
+    if (!user) return;
+    
+    const currentYear = new Date().getFullYear();
+    const { data, error } = await supabase
+      .from('leave_balances')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('year', currentYear)
+      .maybeSingle();
+    
+    if (error) {
+      console.error('Error fetching leave balance:', error);
+      return;
+    }
+    
+    if (data) {
+      setLeaveBalance(data as LeaveBalance);
+    } else {
+      // Set default balance if no record exists
+      setLeaveBalance({
+        id: '',
+        user_id: user.id,
+        year: currentYear,
+        casual_leave_total: 12,
+        casual_leave_used: 0,
+        sick_leave_total: 10,
+        sick_leave_used: 0,
+      });
+    }
+  };
 
   const fetchRequests = async () => {
     if (!user) return;
@@ -152,6 +197,7 @@ export default function LeaveRequests() {
       setCreateDialogOpen(false);
       resetForm();
       fetchRequests();
+      fetchLeaveBalance();
     } catch (error) {
       console.error('Error creating leave request:', error);
       toast.error('Failed to submit leave request');
@@ -193,6 +239,7 @@ export default function LeaveRequests() {
       setSelectedRequest(null);
       setReviewerNotes('');
       fetchRequests();
+      fetchLeaveBalance();
     } catch (error) {
       console.error('Error reviewing leave request:', error);
       toast.error('Failed to update leave request');
@@ -256,6 +303,63 @@ export default function LeaveRequests() {
       />
       
       <div className="flex-1 overflow-auto p-6 space-y-6">
+        {/* Leave Balance Cards */}
+        {leaveBalance && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-blue-500" />
+                  Casual Leave
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Used</span>
+                    <span className="font-medium">
+                      {leaveBalance.casual_leave_used} / {leaveBalance.casual_leave_total} days
+                    </span>
+                  </div>
+                  <Progress 
+                    value={(leaveBalance.casual_leave_used / leaveBalance.casual_leave_total) * 100} 
+                    className="h-2"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {leaveBalance.casual_leave_total - leaveBalance.casual_leave_used} days remaining
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Thermometer className="h-4 w-4 text-orange-500" />
+                  Sick Leave
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Used</span>
+                    <span className="font-medium">
+                      {leaveBalance.sick_leave_used} / {leaveBalance.sick_leave_total} days
+                    </span>
+                  </div>
+                  <Progress 
+                    value={(leaveBalance.sick_leave_used / leaveBalance.sick_leave_total) * 100} 
+                    className="h-2"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {leaveBalance.sick_leave_total - leaveBalance.sick_leave_used} days remaining
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         <div className="flex justify-end">
           <Button onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
