@@ -51,7 +51,7 @@ const shiftLetters: Record<ShiftType, string> = {
   night: 'N',
   general: 'G',
   leave: 'L',
-  'comp-off': 'CO',
+  'comp-off': 'WO',
 };
 
 export function TableRosterView({ assignments, teamMembers, onShiftChange, onRefresh }: TableRosterViewProps) {
@@ -400,12 +400,12 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
           <span className="text-muted-foreground">Leave</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={cn("w-5 h-4 rounded flex items-center justify-center font-bold", shiftCellColors['comp-off'])}>CO</span>
-          <span className="text-muted-foreground">Comp Off</span>
+          <span className={cn("w-5 h-4 rounded flex items-center justify-center font-bold", shiftCellColors['comp-off'])}>WO</span>
+          <span className="text-muted-foreground">Weekly Off</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className={cn("w-5 h-4 rounded flex items-center justify-center", shiftCellColors.off)}>-</span>
-          <span className="text-muted-foreground">Weekly Off</span>
+          <span className="text-muted-foreground">No Assignment</span>
         </div>
         {canEditShifts && (
           <div className="flex items-center gap-1.5 border-l pl-4 ml-2">

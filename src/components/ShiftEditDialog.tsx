@@ -60,6 +60,8 @@ export function ShiftEditDialog({
     const dateStr = format(date, 'yyyy-MM-dd');
     
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
       // First, delete any existing assignment for this member on this date
       const { error: deleteError } = await supabase
         .from('shift_assignments')
@@ -83,6 +85,21 @@ export function ShiftEditDialog({
         if (insertError) throw insertError;
       }
 
+      // Log to shift history
+      const action = !currentShift && selectedShift !== 'off' ? 'create' 
+        : selectedShift === 'off' && currentShift ? 'delete' 
+        : 'update';
+      
+      await supabase.from('shift_history').insert({
+        member_id: member.id,
+        date: dateStr,
+        old_shift_type: currentShift,
+        new_shift_type: selectedShift === 'off' ? null : selectedShift,
+        action,
+        changed_by: user?.id,
+      });
+
+      toast.success('Shift updated successfully');
       onSave(member.id, dateStr, selectedShift);
       onOpenChange(false);
     } catch (error) {
@@ -175,8 +192,8 @@ export function ShiftEditDialog({
                   shiftColors['comp-off']
                 )}
               >
-                <span className="text-lg font-bold">CO</span>
-                <span className="text-sm font-medium">Comp Off</span>
+                <span className="text-lg font-bold">WO</span>
+                <span className="text-sm font-medium">Weekly Off</span>
               </Label>
             </div>
 
@@ -196,7 +213,7 @@ export function ShiftEditDialog({
                 )}
               >
                 <span className="text-lg font-bold">-</span>
-                <span className="text-sm font-medium">Weekly Off</span>
+                <span className="text-sm font-medium">No Assignment</span>
               </Label>
             </div>
           </RadioGroup>
