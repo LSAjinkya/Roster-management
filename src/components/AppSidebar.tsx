@@ -7,11 +7,15 @@ import {
   Clock,
   Building2,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -25,6 +29,14 @@ const navItems = [
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
+  const { user, signOut, roles, isHR, isTL, isAdmin } = useAuth();
+
+  const getRoleBadge = () => {
+    if (isAdmin) return 'Admin';
+    if (isHR) return 'HR';
+    if (isTL) return 'TL';
+    return 'Member';
+  };
 
   return (
     <aside className={cn(
@@ -74,26 +86,73 @@ export function AppSidebar() {
         })}
       </nav>
 
-      {/* Collapse Toggle */}
-      <div className="p-3 border-t border-sidebar-border">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setCollapsed(!collapsed)}
-          className={cn(
-            'w-full text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent',
-            collapsed && 'px-2'
+      {/* User Info & Actions */}
+      <div className="p-3 border-t border-sidebar-border space-y-3">
+        {user && (
+          <div className={cn(
+            'flex items-center gap-3 p-2 rounded-lg bg-sidebar-accent/50',
+            collapsed && 'justify-center'
+          )}>
+            <Avatar className="h-8 w-8">
+              <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
+                {user.email?.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-sidebar-foreground truncate">
+                  {user.email?.split('@')[0]}
+                </p>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  {getRoleBadge()}
+                </Badge>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCollapsed(!collapsed)}
+            className={cn(
+              'flex-1 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent',
+              collapsed && 'px-2'
+            )}
+          >
+            {collapsed ? (
+              <ChevronRight size={18} />
+            ) : (
+              <>
+                <ChevronLeft size={18} className="mr-2" />
+                <span>Collapse</span>
+              </>
+            )}
+          </Button>
+          
+          {!collapsed && user && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={signOut}
+              className="text-sidebar-foreground/70 hover:text-destructive hover:bg-destructive/10"
+            >
+              <LogOut size={18} />
+            </Button>
           )}
-        >
-          {collapsed ? (
-            <ChevronRight size={18} />
-          ) : (
-            <>
-              <ChevronLeft size={18} className="mr-2" />
-              <span>Collapse</span>
-            </>
-          )}
-        </Button>
+        </div>
+        
+        {collapsed && user && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={signOut}
+            className="w-full text-sidebar-foreground/70 hover:text-destructive hover:bg-destructive/10"
+          >
+            <LogOut size={18} />
+          </Button>
+        )}
       </div>
     </aside>
   );

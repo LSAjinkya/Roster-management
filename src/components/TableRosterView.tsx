@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { ShiftAssignment, TeamMember, ShiftType, Department, DEPARTMENTS } from '@/types/roster';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Edit2 } from 'lucide-react';
 import { 
   format, 
   startOfMonth, 
@@ -11,7 +11,6 @@ import {
   subMonths,
   isSameMonth,
   isToday,
-  getDay,
   isWeekend
 } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -23,10 +22,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ExportDropdown } from './ExportDropdown';
+import { ShiftEditDialog } from './ShiftEditDialog';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
 
 interface TableRosterViewProps {
   assignments: ShiftAssignment[];
   teamMembers: TeamMember[];
+  onShiftChange?: (memberId: string, date: string, shiftType: ShiftType | 'off') => void;
 }
 
 const shiftCellColors: Record<ShiftType | 'off', string> = {
@@ -48,9 +52,15 @@ const shiftLetters: Record<ShiftType, string> = {
   'comp-off': 'CO',
 };
 
-export function TableRosterView({ assignments, teamMembers }: TableRosterViewProps) {
+export function TableRosterView({ assignments, teamMembers, onShiftChange }: TableRosterViewProps) {
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'all'>('all');
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [editingDate, setEditingDate] = useState<Date | null>(null);
+  const [editingShift, setEditingShift] = useState<ShiftType | null>(null);
+  
+  const { canEditShifts, isTL, user } = useAuth();
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -64,8 +74,11 @@ export function TableRosterView({ assignments, teamMembers }: TableRosterViewPro
 
   // Filter members
   const filteredMembers = useMemo(() => {
-    if (departmentFilter === 'all') return teamMembers;
-    return teamMembers.filter(m => m.department === departmentFilter);
+    let members = teamMembers;
+    if (departmentFilter !== 'all') {
+      members = members.filter(m => m.department === departmentFilter);
+    }
+    return members;
   }, [teamMembers, departmentFilter]);
 
   // Group members by department for display
@@ -80,7 +93,7 @@ export function TableRosterView({ assignments, teamMembers }: TableRosterViewPro
     return grouped;
   }, [filteredMembers]);
 
-  const getMemberShift = (memberId: string, date: Date): ShiftType | 'off' | null => {
+  const getMemberShift = (memberId: string, date: Date): ShiftType | null => {
     const dateStr = format(date, 'yyyy-MM-dd');
     const assignment = assignments.find(a => a.memberId === memberId && a.date === dateStr);
     return assignment?.shiftType || null;
@@ -97,6 +110,8 @@ export function TableRosterView({ assignments, teamMembers }: TableRosterViewPro
       afternoon: memberAssignments.filter(a => a.shiftType === 'afternoon').length,
       night: memberAssignments.filter(a => a.shiftType === 'night').length,
       general: memberAssignments.filter(a => a.shiftType === 'general').length,
+      leave: memberAssignments.filter(a => a.shiftType === 'leave').length,
+      compOff: memberAssignments.filter(a => a.shiftType === 'comp-off').length,
       off: monthDays.length - memberAssignments.length,
       total: memberAssignments.length,
     };
@@ -108,6 +123,26 @@ export function TableRosterView({ assignments, teamMembers }: TableRosterViewPro
       return teamMembers.find(m => m.id === member.reportingTLId);
     }
     return undefined;
+  };
+
+  const handleCellClick = (member: TeamMember, day: Date) => {
+    if (!canEditShifts) {
+      toast.error('You do not have permission to edit shifts');
+      return;
+    }
+    
+    const shift = getMemberShift(member.id, day);
+    setEditingMember(member);
+    setEditingDate(day);
+    setEditingShift(shift);
+    setEditDialogOpen(true);
+  };
+
+  const handleShiftSave = (memberId: string, date: string, shiftType: ShiftType | 'off') => {
+    if (onShiftChange) {
+      onShiftChange(memberId, date, shiftType);
+    }
+    toast.success('Shift updated successfully');
   };
 
   return (
@@ -127,6 +162,12 @@ export function TableRosterView({ assignments, teamMembers }: TableRosterViewPro
             <h2 className="text-lg font-semibold">{format(currentMonth, 'MMMM yyyy')}</h2>
             <p className="text-sm text-muted-foreground">{filteredMembers.length} members</p>
           </div>
+          {canEditShifts && (
+            <Badge variant="outline" className="gap-1">
+              <Edit2 size={12} />
+              Edit Mode
+            </Badge>
+          )}
         </div>
         
         <div className="flex items-center gap-3">
@@ -185,6 +226,7 @@ export function TableRosterView({ assignments, teamMembers }: TableRosterViewPro
                 <th className="p-1 text-center font-medium bg-shift-afternoon min-w-[28px]">A</th>
                 <th className="p-1 text-center font-medium bg-shift-night min-w-[28px]">N</th>
                 <th className="p-1 text-center font-medium bg-shift-general min-w-[28px]">G</th>
+                <th className="p-1 text-center font-medium bg-red-100 min-w-[28px]">L</th>
                 <th className="p-1 text-center font-medium bg-muted min-w-[32px]">Off</th>
                 <th className="p-1 text-center font-medium min-w-[40px]">Total</th>
               </tr>
@@ -205,7 +247,7 @@ export function TableRosterView({ assignments, teamMembers }: TableRosterViewPro
                     {format(day, 'd')}
                   </th>
                 ))}
-                <th colSpan={6}></th>
+                <th colSpan={7}></th>
               </tr>
             </thead>
             <tbody>
@@ -224,7 +266,7 @@ export function TableRosterView({ assignments, teamMembers }: TableRosterViewPro
                     >
                       {/* Manager/TL column */}
                       <td className="sticky left-0 z-10 bg-card p-2 font-medium text-muted-foreground truncate">
-                        {member.role === 'TL' ? member.name : (reportingTL?.name || '-')}
+                        {member.role === 'TL' || member.role === 'HR' ? member.name : (reportingTL?.name || '-')}
                       </td>
                       {/* Member name */}
                       <td className="sticky left-[120px] z-10 bg-card p-2 font-medium">
@@ -237,7 +279,8 @@ export function TableRosterView({ assignments, teamMembers }: TableRosterViewPro
                           "px-1.5 py-0.5 rounded text-[10px] font-medium",
                           member.role === 'TL' && "bg-primary/10 text-primary",
                           member.role === 'L2' && "bg-shift-afternoon-light text-sky-700",
-                          member.role === 'L1' && "bg-shift-general-light text-emerald-700"
+                          member.role === 'L1' && "bg-shift-general-light text-emerald-700",
+                          member.role === 'HR' && "bg-pink-100 text-pink-700"
                         )}>
                           {member.role}
                         </span>
@@ -254,8 +297,10 @@ export function TableRosterView({ assignments, teamMembers }: TableRosterViewPro
                             className={cn(
                               "p-0.5 text-center",
                               weekend && !shift && "bg-muted/30",
-                              today && "ring-1 ring-primary ring-inset"
+                              today && "ring-1 ring-primary ring-inset",
+                              canEditShifts && "cursor-pointer hover:bg-primary/10"
                             )}
+                            onClick={() => canEditShifts && handleCellClick(member, day)}
                           >
                             {shift ? (
                               <span className={cn(
@@ -280,6 +325,7 @@ export function TableRosterView({ assignments, teamMembers }: TableRosterViewPro
                       <td className="p-1 text-center font-medium bg-shift-afternoon/30">{stats.afternoon || '-'}</td>
                       <td className="p-1 text-center font-medium bg-shift-night/30">{stats.night || '-'}</td>
                       <td className="p-1 text-center font-medium bg-shift-general/30">{stats.general || '-'}</td>
+                      <td className="p-1 text-center font-medium bg-red-100/30">{stats.leave || '-'}</td>
                       <td className="p-1 text-center font-medium bg-muted/50">{stats.off}</td>
                       <td className="p-1 text-center font-bold">{stats.total}</td>
                     </tr>
@@ -295,25 +341,43 @@ export function TableRosterView({ assignments, teamMembers }: TableRosterViewPro
       <div className="flex flex-wrap items-center justify-center gap-4 text-xs">
         <div className="flex items-center gap-1.5">
           <span className={cn("w-5 h-4 rounded flex items-center justify-center font-bold", shiftCellColors.morning)}>M</span>
-          <span className="text-muted-foreground">Morning (07:00-16:00)</span>
+          <span className="text-muted-foreground">Morning</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className={cn("w-5 h-4 rounded flex items-center justify-center font-bold", shiftCellColors.afternoon)}>A</span>
-          <span className="text-muted-foreground">Afternoon (13:00-22:00)</span>
+          <span className="text-muted-foreground">Afternoon</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className={cn("w-5 h-4 rounded flex items-center justify-center font-bold", shiftCellColors.night)}>N</span>
-          <span className="text-muted-foreground">Night (21:00-07:00)</span>
+          <span className="text-muted-foreground">Night</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className={cn("w-5 h-4 rounded flex items-center justify-center font-bold", shiftCellColors.general)}>G</span>
-          <span className="text-muted-foreground">General (10:00-19:00)</span>
+          <span className="text-muted-foreground">General</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className={cn("w-5 h-4 rounded flex items-center justify-center font-bold", shiftCellColors.leave)}>L</span>
+          <span className="text-muted-foreground">Leave</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className={cn("w-5 h-4 rounded flex items-center justify-center font-bold", shiftCellColors['comp-off'])}>CO</span>
+          <span className="text-muted-foreground">Comp Off</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className={cn("w-5 h-4 rounded flex items-center justify-center", shiftCellColors.off)}>-</span>
           <span className="text-muted-foreground">Weekly Off</span>
         </div>
       </div>
+
+      {/* Edit Dialog */}
+      <ShiftEditDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        member={editingMember}
+        date={editingDate}
+        currentShift={editingShift}
+        onSave={handleShiftSave}
+      />
     </div>
   );
 }
