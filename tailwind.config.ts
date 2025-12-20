@@ -13,6 +13,9 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -57,6 +60,26 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        shift: {
+          morning: "hsl(var(--shift-morning))",
+          "morning-light": "hsl(var(--shift-morning-light))",
+          afternoon: "hsl(var(--shift-afternoon))",
+          "afternoon-light": "hsl(var(--shift-afternoon-light))",
+          night: "hsl(var(--shift-night))",
+          "night-light": "hsl(var(--shift-night-light))",
+          general: "hsl(var(--shift-general))",
+          "general-light": "hsl(var(--shift-general-light))",
+        },
+        status: {
+          available: "hsl(var(--status-available))",
+          unavailable: "hsl(var(--status-unavailable))",
+          leave: "hsl(var(--status-leave))",
+        },
+        role: {
+          tl: "hsl(var(--role-tl))",
+          l2: "hsl(var(--role-l2))",
+          l1: "hsl(var(--role-l1))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -65,25 +88,26 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        "pulse-soft": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.7" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "pulse-soft": "pulse-soft 2s ease-in-out infinite",
+      },
+      boxShadow: {
+        "soft": "0 2px 8px -2px rgba(0, 0, 0, 0.08), 0 4px 16px -4px rgba(0, 0, 0, 0.04)",
+        "medium": "0 4px 16px -4px rgba(0, 0, 0, 0.12), 0 8px 32px -8px rgba(0, 0, 0, 0.08)",
       },
     },
   },
