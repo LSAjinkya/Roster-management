@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Shield, UserCog, LogIn, History, Upload, Clock } from 'lucide-react';
+import { Loader2, Shield, UserCog, LogIn, Upload, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
@@ -24,15 +24,6 @@ interface UserWithRoles {
   department: string | null;
   status: UserStatus;
   roles: AppRole[];
-}
-
-interface ImpersonationLog {
-  id: string;
-  admin_email: string;
-  target_email: string;
-  action: string;
-  ip_address: string | null;
-  created_at: string;
 }
 
 interface StatusHistoryLog {
@@ -78,8 +69,6 @@ export default function RoleManagement() {
   const [impersonateDialogOpen, setImpersonateDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserWithRoles | null>(null);
   const [impersonating, setImpersonating] = useState(false);
-  const [auditLogs, setAuditLogs] = useState<ImpersonationLog[]>([]);
-  const [logsLoading, setLogsLoading] = useState(true);
   const [statusHistory, setStatusHistory] = useState<StatusHistoryLog[]>([]);
   const [statusHistoryLoading, setStatusHistoryLoading] = useState(true);
   const [csvImportOpen, setCsvImportOpen] = useState(false);
@@ -102,7 +91,6 @@ export default function RoleManagement() {
   useEffect(() => {
     if (canAccess) {
       fetchUsers();
-      fetchAuditLogs();
       fetchStatusHistory();
     }
   }, [canAccess]);
@@ -139,23 +127,6 @@ export default function RoleManagement() {
       toast.error('Failed to load users');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchAuditLogs = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('impersonation_logs')
-        .select('id, admin_email, target_email, action, ip_address, created_at')
-        .order('created_at', { ascending: false })
-        .limit(50);
-
-      if (error) throw error;
-      setAuditLogs(data || []);
-    } catch (error) {
-      console.error('Error fetching audit logs:', error);
-    } finally {
-      setLogsLoading(false);
     }
   };
 
@@ -492,59 +463,6 @@ export default function RoleManagement() {
               ))}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
-
-      {/* Impersonation Audit Log */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" />
-            Impersonation Audit Log
-          </CardTitle>
-          <CardDescription>
-            Track when admins login as other users
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {logsLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : auditLogs.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">No impersonation logs yet</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Timestamp</TableHead>
-                  <TableHead>Admin</TableHead>
-                  <TableHead>Target User</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>IP Address</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {auditLogs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="text-muted-foreground">
-                      {format(new Date(log.created_at), 'MMM d, yyyy HH:mm:ss')}
-                    </TableCell>
-                    <TableCell className="font-medium">{log.admin_email}</TableCell>
-                    <TableCell>{log.target_email}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {log.action}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground font-mono text-xs">
-                      {log.ip_address || 'N/A'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
         </CardContent>
       </Card>
 
