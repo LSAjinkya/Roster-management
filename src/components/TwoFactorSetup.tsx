@@ -3,12 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
-import { Loader2, Shield, Smartphone, Mail, Copy, Check } from 'lucide-react';
+import { Loader2, Smartphone, Mail, Copy, Check } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface TwoFactorSettings {
   totp_enabled: boolean;
@@ -204,13 +204,12 @@ export function TwoFactorSetup() {
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="flex justify-center p-4 bg-white rounded-lg">
-                    {/* QR Code placeholder - in production use a QR library */}
-                    <div className="w-48 h-48 bg-muted flex items-center justify-center rounded-lg border">
-                      <div className="text-center text-sm text-muted-foreground p-4">
-                        <p className="font-medium mb-2">QR Code</p>
-                        <p className="text-xs">Scan with your authenticator app</p>
-                      </div>
-                    </div>
+                    <QRCodeSVG 
+                      value={otpAuthUrl} 
+                      size={192}
+                      level="M"
+                      includeMargin={true}
+                    />
                   </div>
                   
                   <div className="space-y-2">
