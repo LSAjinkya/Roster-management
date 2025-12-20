@@ -50,6 +50,42 @@ export type Database = {
         }
         Relationships: []
       }
+      leave_balances: {
+        Row: {
+          casual_leave_total: number
+          casual_leave_used: number
+          created_at: string
+          id: string
+          sick_leave_total: number
+          sick_leave_used: number
+          updated_at: string
+          user_id: string
+          year: number
+        }
+        Insert: {
+          casual_leave_total?: number
+          casual_leave_used?: number
+          created_at?: string
+          id?: string
+          sick_leave_total?: number
+          sick_leave_used?: number
+          updated_at?: string
+          user_id: string
+          year?: number
+        }
+        Update: {
+          casual_leave_total?: number
+          casual_leave_used?: number
+          created_at?: string
+          id?: string
+          sick_leave_total?: number
+          sick_leave_used?: number
+          updated_at?: string
+          user_id?: string
+          year?: number
+        }
+        Relationships: []
+      }
       leave_requests: {
         Row: {
           created_at: string
