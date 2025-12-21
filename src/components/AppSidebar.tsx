@@ -59,7 +59,7 @@ export function AppSidebar() {
             <img 
               src={leapswitchLogo} 
               alt="Leapswitch Networks" 
-              className="h-8 object-contain dark:brightness-0 dark:invert"
+              className="h-12 object-contain dark:brightness-0 dark:invert"
             />
           </div>
         )}
