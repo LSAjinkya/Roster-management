@@ -12,12 +12,28 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ title, subtitle, children }: DashboardHeaderProps) {
-  const { user } = useAuth();
+  const { user, profile, roles } = useAuth();
   
-  const getInitials = (email: string | undefined) => {
+  const getInitials = (name: string | undefined, email: string | undefined) => {
+    if (name && name.trim()) {
+      const parts = name.trim().split(' ');
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      }
+      return name.slice(0, 2).toUpperCase();
+    }
     if (!email) return 'U';
-    const name = email.split('@')[0];
-    return name.slice(0, 2).toUpperCase();
+    const emailName = email.split('@')[0];
+    return emailName.slice(0, 2).toUpperCase();
+  };
+
+  const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
+  const primaryRole = roles[0] || 'member';
+  const roleLabels: Record<string, string> = {
+    admin: 'Administrator',
+    hr: 'HR Manager',
+    tl: 'Team Lead',
+    member: 'Team Member',
   };
 
   return (
@@ -42,14 +58,14 @@ export function DashboardHeader({ title, subtitle, children }: DashboardHeaderPr
         <NotificationBell />
         
         <div className="flex items-center gap-3 pl-4 border-l border-border">
-          <Avatar className="h-9 w-9">
-            <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-              {getInitials(user?.email)}
+          <Avatar className="h-10 w-10">
+            <AvatarFallback className="bg-primary text-primary-foreground text-sm font-semibold">
+              {getInitials(profile?.full_name, user?.email)}
             </AvatarFallback>
           </Avatar>
           <div className="hidden md:block">
-            <p className="text-sm font-medium">{user?.email?.split('@')[0] || 'User'}</p>
-            <p className="text-xs text-muted-foreground">{user?.email?.split('@')[1] || ''}</p>
+            <p className="text-sm font-semibold text-foreground">{displayName}</p>
+            <p className="text-xs text-muted-foreground">{roleLabels[primaryRole]}</p>
           </div>
         </div>
       </div>
