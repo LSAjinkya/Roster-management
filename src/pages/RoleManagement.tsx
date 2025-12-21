@@ -24,6 +24,7 @@ interface UserWithRoles {
   department: string | null;
   status: UserStatus;
   roles: AppRole[];
+  is_active: boolean;
 }
 
 interface StatusHistoryLog {
@@ -99,7 +100,7 @@ export default function RoleManagement() {
     try {
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('user_id, email, full_name, department, status')
+        .select('user_id, email, full_name, department, status, is_active')
         .order('full_name');
 
       if (profilesError) throw profilesError;
@@ -116,6 +117,7 @@ export default function RoleManagement() {
         full_name: profile.full_name,
         department: profile.department,
         status: (profile.status as UserStatus) || 'available',
+        is_active: profile.is_active ?? true,
         roles: (allRoles || [])
           .filter(r => r.user_id === profile.user_id)
           .map(r => r.role as AppRole),
@@ -127,6 +129,23 @@ export default function RoleManagement() {
       toast.error('Failed to load users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAccessToggle = async (userId: string, isActive: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ is_active: isActive })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      toast.success(isActive ? 'User access enabled' : 'User access disabled');
+      fetchUsers();
+    } catch (error) {
+      console.error('Error updating user access:', error);
+      toast.error('Failed to update user access');
     }
   };
 
@@ -400,13 +419,19 @@ export default function RoleManagement() {
                 <TableHead>Department</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Access</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.full_name}</TableCell>
+                <TableRow key={u.id} className={!u.is_active ? 'opacity-60' : ''}>
+                  <TableCell className="font-medium">
+                    {u.full_name}
+                    {!u.is_active && (
+                      <Badge variant="destructive" className="ml-2 text-xs">Disabled</Badge>
+                    )}
+                  </TableCell>
                   <TableCell className="text-muted-foreground text-sm">{u.email}</TableCell>
                   <TableCell>
                     <Select
@@ -465,10 +490,21 @@ export default function RoleManagement() {
                   </TableCell>
                   <TableCell>
                     <Button
+                      variant={u.is_active ? 'outline' : 'default'}
+                      size="sm"
+                      onClick={() => handleAccessToggle(u.id, !u.is_active)}
+                      disabled={u.id === user?.id}
+                      className={u.is_active ? 'text-destructive hover:bg-destructive hover:text-destructive-foreground' : 'bg-green-600 hover:bg-green-700'}
+                    >
+                      {u.is_active ? 'Disable' : 'Enable'}
+                    </Button>
+                  </TableCell>
+                  <TableCell>
+                    <Button
                       variant="outline"
                       size="sm"
                       onClick={() => handleImpersonateClick(u)}
-                      disabled={u.id === user?.id}
+                      disabled={u.id === user?.id || !u.is_active}
                     >
                       <LogIn className="h-4 w-4 mr-1" />
                       Login As
