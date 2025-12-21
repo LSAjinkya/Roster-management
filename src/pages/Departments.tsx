@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DashboardHeader } from '@/components/DashboardHeader';
-import { DEPARTMENTS, ROLES, type Department, type Role } from '@/types/roster';
-import { Building2, Users, UserCheck, Loader2, ChevronRight, Crown, Edit2, UserPlus } from 'lucide-react';
+import { ROLES } from '@/types/roster';
+import { Building2, Users, UserCheck, Loader2, ChevronRight, Crown, Edit2, UserPlus, Plus, Trash2, Save, X } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -10,11 +10,15 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   DropdownMenu,
@@ -24,6 +28,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface TeamMember {
   id: string;
@@ -33,6 +47,14 @@ interface TeamMember {
   department: string;
   status: string;
   reporting_tl_id: string | null;
+}
+
+interface Department {
+  id: string;
+  name: string;
+  description: string | null;
+  head_member_id: string | null;
+  is_active: boolean;
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -50,12 +72,32 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function Departments() {
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
-  const [editingMember, setEditingMember] = useState<string | null>(null);
-  const [assignDeptDialogOpen, setAssignDeptDialogOpen] = useState(false);
-  const [selectedMemberForDept, setSelectedMemberForDept] = useState<TeamMember | null>(null);
+  const [addDeptDialogOpen, setAddDeptDialogOpen] = useState(false);
+  const [editMemberDialogOpen, setEditMemberDialogOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+  const [deleteDeptDialogOpen, setDeleteDeptDialogOpen] = useState(false);
+  const [deptToDelete, setDeptToDelete] = useState<Department | null>(null);
+  const [newDept, setNewDept] = useState({ name: '', description: '' });
+  const [editedMember, setEditedMember] = useState({ name: '', email: '' });
+  const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: teamMembers = [], isLoading, refetch } = useQuery({
+  // Fetch departments from database
+  const { data: departments = [], isLoading: deptsLoading, refetch: refetchDepts } = useQuery({
+    queryKey: ['departments'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+      
+      if (error) throw error;
+      return data as Department[];
+    },
+  });
+
+  const { data: teamMembers = [], isLoading: membersLoading, refetch: refetchMembers } = useQuery({
     queryKey: ['team-members-departments'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -68,18 +110,19 @@ export default function Departments() {
     },
   });
 
-  const departmentData = DEPARTMENTS.map(dept => {
-    const members = teamMembers.filter(m => m.department === dept);
+  const isLoading = deptsLoading || membersLoading;
+
+  const departmentData = departments.map(dept => {
+    const members = teamMembers.filter(m => m.department === dept.name);
     const roleBreakdown = ROLES.reduce((acc, role) => {
       acc[role] = members.filter(m => m.role === role).length;
       return acc;
     }, {} as Record<string, number>);
     
-    // Find department head (TL)
     const departmentHead = members.find(m => m.role === 'TL');
     
     return {
-      name: dept,
+      ...dept,
       total: members.length,
       available: members.filter(m => m.status === 'available').length,
       onLeave: members.filter(m => m.status === 'on-leave').length,
@@ -87,12 +130,114 @@ export default function Departments() {
       members,
       departmentHead,
     };
-  }).filter(dept => dept.total > 0);
-
-  // Get all members without department or for reassignment
-  const allMembers = teamMembers;
+  });
 
   const selectedDeptData = departmentData.find(d => d.name === selectedDepartment);
+
+  const handleAddDepartment = async () => {
+    if (!newDept.name.trim()) {
+      toast.error('Department name is required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('departments')
+        .insert({
+          name: newDept.name.trim(),
+          description: newDept.description.trim() || null,
+        });
+
+      if (error) {
+        if (error.code === '23505') {
+          toast.error('Department already exists');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      toast.success('Department created successfully');
+      setAddDeptDialogOpen(false);
+      setNewDept({ name: '', description: '' });
+      refetchDepts();
+    } catch (error) {
+      console.error('Error creating department:', error);
+      toast.error('Failed to create department');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteDepartment = async () => {
+    if (!deptToDelete) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('departments')
+        .update({ is_active: false })
+        .eq('id', deptToDelete.id);
+
+      if (error) throw error;
+
+      toast.success('Department deleted successfully');
+      setDeleteDeptDialogOpen(false);
+      setDeptToDelete(null);
+      refetchDepts();
+    } catch (error) {
+      console.error('Error deleting department:', error);
+      toast.error('Failed to delete department');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditMember = (member: TeamMember) => {
+    setSelectedMember(member);
+    setEditedMember({ name: member.name, email: member.email });
+    setEditMemberDialogOpen(true);
+  };
+
+  const handleSaveMemberDetails = async () => {
+    if (!selectedMember) return;
+    
+    if (!editedMember.name.trim() || !editedMember.email.trim()) {
+      toast.error('Name and email are required');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(editedMember.email)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('team_members')
+        .update({
+          name: editedMember.name.trim(),
+          email: editedMember.email.trim().toLowerCase(),
+        })
+        .eq('id', selectedMember.id);
+
+      if (error) throw error;
+
+      toast.success('Member details updated successfully');
+      setEditMemberDialogOpen(false);
+      setSelectedMember(null);
+      refetchMembers();
+      queryClient.invalidateQueries({ queryKey: ['team-members'] });
+    } catch (error) {
+      console.error('Error updating member:', error);
+      toast.error('Failed to update member details');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleRoleChange = async (memberId: string, newRole: string) => {
     try {
@@ -104,7 +249,7 @@ export default function Departments() {
       if (error) throw error;
 
       toast.success('Role updated successfully');
-      refetch();
+      refetchMembers();
       queryClient.invalidateQueries({ queryKey: ['team-members'] });
     } catch (error) {
       console.error('Error updating role:', error);
@@ -122,10 +267,8 @@ export default function Departments() {
       if (error) throw error;
 
       toast.success('Department updated successfully');
-      refetch();
+      refetchMembers();
       queryClient.invalidateQueries({ queryKey: ['team-members'] });
-      setAssignDeptDialogOpen(false);
-      setSelectedMemberForDept(null);
     } catch (error) {
       console.error('Error updating department:', error);
       toast.error('Failed to update department');
@@ -142,16 +285,15 @@ export default function Departments() {
       if (error) throw error;
 
       toast.success('Status updated successfully');
-      refetch();
+      refetchMembers();
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update status');
     }
   };
 
-  const handleSetDepartmentHead = async (memberId: string, departmentName: string) => {
+  const handleSetDepartmentHead = async (memberId: string) => {
     try {
-      // First, update the selected member to TL role
       const { error } = await supabase
         .from('team_members')
         .update({ role: 'TL' })
@@ -160,7 +302,7 @@ export default function Departments() {
       if (error) throw error;
 
       toast.success('Department head assigned successfully');
-      refetch();
+      refetchMembers();
     } catch (error) {
       console.error('Error setting department head:', error);
       toast.error('Failed to assign department head');
@@ -185,20 +327,35 @@ export default function Departments() {
     <div className="flex flex-col h-full">
       <DashboardHeader 
         title="Departments" 
-        subtitle="Department overview and team distribution" 
+        subtitle="Department overview and team distribution"
       />
       
       <div className="flex-1 overflow-auto p-6 space-y-6">
+        {/* Add Department Button */}
+        <div className="flex justify-end">
+          <Button onClick={() => setAddDeptDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Department
+          </Button>
+        </div>
+
         {departmentData.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No team members found in any department</p>
+            <p>No departments found</p>
+            <Button 
+              variant="outline" 
+              className="mt-4"
+              onClick={() => setAddDeptDialogOpen(true)}
+            >
+              Create your first department
+            </Button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {departmentData.map((dept, index) => (
               <div 
-                key={dept.name}
+                key={dept.id}
                 className="bg-card rounded-xl border border-border/50 overflow-hidden animate-fade-in hover:shadow-soft transition-all cursor-pointer group"
                 style={{ animationDelay: `${index * 50}ms` }}
                 onClick={() => setSelectedDepartment(dept.name)}
@@ -214,10 +371,23 @@ export default function Departments() {
                         <p className="text-sm text-muted-foreground">{dept.total} members</p>
                       </div>
                     </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeptToDelete(dept);
+                          setDeleteDeptDialogOpen(true);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </div>
                   </div>
                   
-                  {/* Department Head */}
                   {dept.departmentHead && (
                     <div className="mt-3 flex items-center gap-2 text-sm">
                       <Crown size={14} className="text-amber-500" />
@@ -228,7 +398,6 @@ export default function Departments() {
                 </div>
                 
                 <div className="p-5 space-y-4">
-                  {/* Status */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <UserCheck size={16} className="text-green-500" />
@@ -244,7 +413,6 @@ export default function Departments() {
                     <span className="font-medium">{dept.onLeave}</span>
                   </div>
                   
-                  {/* Role breakdown */}
                   <div className="pt-4 border-t border-border/50">
                     <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Role Distribution</p>
                     <div className="space-y-2">
@@ -288,7 +456,6 @@ export default function Departments() {
             </DialogTitle>
           </DialogHeader>
           
-          {/* Department Head Section */}
           {selectedDeptData && (
             <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
               <div className="flex items-center justify-between">
@@ -321,7 +488,7 @@ export default function Departments() {
                           key={member.id}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleSetDepartmentHead(member.id, selectedDepartment!);
+                            handleSetDepartmentHead(member.id);
                           }}
                         >
                           {member.name}
@@ -356,12 +523,19 @@ export default function Departments() {
                         {member.role === 'TL' && (
                           <Crown className="h-4 w-4 text-amber-500" />
                         )}
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-6 w-6"
+                          onClick={() => handleEditMember(member)}
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </Button>
                       </div>
                       <p className="text-sm text-muted-foreground">{member.email}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {/* Role Select */}
                     <Select
                       value={member.role}
                       onValueChange={(value) => handleRoleChange(member.id, value)}
@@ -380,7 +554,6 @@ export default function Departments() {
                       </SelectContent>
                     </Select>
                     
-                    {/* Status Select */}
                     <Select
                       value={member.status}
                       onValueChange={(value) => handleStatusChange(member.id, value)}
@@ -399,7 +572,6 @@ export default function Departments() {
                       </SelectContent>
                     </Select>
                     
-                    {/* Change Department */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm">
@@ -409,15 +581,15 @@ export default function Departments() {
                       <DropdownMenuContent align="end" className="w-48">
                         <DropdownMenuLabel>Move to Department</DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        {DEPARTMENTS.filter(d => d !== member.department).map(dept => (
+                        {departments.filter(d => d.name !== member.department).map(dept => (
                           <DropdownMenuItem 
-                            key={dept}
+                            key={dept.id}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDepartmentChange(member.id, dept);
+                              handleDepartmentChange(member.id, dept.name);
                             }}
                           >
-                            {dept}
+                            {dept.name}
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuContent>
@@ -435,6 +607,109 @@ export default function Departments() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      {/* Add Department Dialog */}
+      <Dialog open={addDeptDialogOpen} onOpenChange={setAddDeptDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Department</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="dept-name">Department Name *</Label>
+              <Input
+                id="dept-name"
+                placeholder="e.g., Engineering"
+                value={newDept.name}
+                onChange={(e) => setNewDept(prev => ({ ...prev, name: e.target.value }))}
+                maxLength={50}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dept-desc">Description</Label>
+              <Textarea
+                id="dept-desc"
+                placeholder="Optional description..."
+                value={newDept.description}
+                onChange={(e) => setNewDept(prev => ({ ...prev, description: e.target.value }))}
+                maxLength={200}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDeptDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddDepartment} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+              Create Department
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={editMemberDialogOpen} onOpenChange={setEditMemberDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Member Details</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="member-name">Name *</Label>
+              <Input
+                id="member-name"
+                value={editedMember.name}
+                onChange={(e) => setEditedMember(prev => ({ ...prev, name: e.target.value }))}
+                maxLength={100}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="member-email">Email *</Label>
+              <Input
+                id="member-email"
+                type="email"
+                value={editedMember.email}
+                onChange={(e) => setEditedMember(prev => ({ ...prev, email: e.target.value }))}
+                maxLength={255}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditMemberDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveMemberDetails} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Department Confirmation */}
+      <AlertDialog open={deleteDeptDialogOpen} onOpenChange={setDeleteDeptDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Department</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deptToDelete?.name}"? This action cannot be undone.
+              Team members in this department will need to be reassigned.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteDepartment}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={saving}
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
