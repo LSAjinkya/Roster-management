@@ -149,7 +149,7 @@ export default function Departments() {
                   <div className="pt-4 border-t border-border/50">
                     <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Role Distribution</p>
                     <div className="space-y-2">
-                      {ROLES.filter(role => dept.roleBreakdown[role] > 0).map(role => (
+                      {ROLES.map(role => (
                         <div key={role} className="flex items-center justify-between">
                           <span className="text-sm">{role}</span>
                           <div className="flex items-center gap-2">
@@ -157,7 +157,7 @@ export default function Departments() {
                               <div 
                                 className="h-full bg-primary rounded-full"
                                 style={{ 
-                                  width: `${(dept.roleBreakdown[role] / dept.total) * 100}%` 
+                                  width: dept.total > 0 ? `${(dept.roleBreakdown[role] / dept.total) * 100}%` : '0%'
                                 }}
                               />
                             </div>
