@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Shield, UserCog, LogIn, Upload, Clock } from 'lucide-react';
+import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
@@ -75,6 +75,7 @@ export default function RoleManagement() {
   const [csvImportOpen, setCsvImportOpen] = useState(false);
   const [csvData, setCsvData] = useState('');
   const [importing, setImporting] = useState(false);
+  const [accessFilter, setAccessFilter] = useState<'all' | 'active' | 'disabled'>('all');
 
   // Check if user can access - admin or HR
   const canAccess = isAdmin || isHR;
@@ -402,13 +403,30 @@ export default function RoleManagement() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserCog className="h-5 w-5" />
-            Users & Roles
-          </CardTitle>
-          <CardDescription>
-            Assign roles to control what users can access and modify
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <UserCog className="h-5 w-5" />
+                Users & Roles
+              </CardTitle>
+              <CardDescription>
+                Assign roles to control what users can access and modify
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Select value={accessFilter} onValueChange={(value: 'all' | 'active' | 'disabled') => setAccessFilter(value)}>
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Users</SelectItem>
+                  <SelectItem value="active">Active Only</SelectItem>
+                  <SelectItem value="disabled">Disabled Only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -424,7 +442,14 @@ export default function RoleManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((u) => (
+              {users
+                .filter(u => {
+                  if (accessFilter === 'all') return true;
+                  if (accessFilter === 'active') return u.is_active;
+                  if (accessFilter === 'disabled') return !u.is_active;
+                  return true;
+                })
+                .map((u) => (
                 <TableRow key={u.id} className={!u.is_active ? 'opacity-60' : ''}>
                   <TableCell className="font-medium">
                     {u.full_name}
