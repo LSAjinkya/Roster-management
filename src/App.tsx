@@ -15,6 +15,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import RoleManagement from "./pages/RoleManagement";
 import LeaveRequests from "./pages/LeaveRequests";
+import OrgChartPage from "./pages/OrgChartPage";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ const App = () => (
               <Route path="/departments" element={<Departments />} />
               <Route path="/leave" element={<LeaveRequests />} />
               <Route path="/admin/roles" element={<RoleManagement />} />
+              <Route path="/org-chart" element={<OrgChartPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
