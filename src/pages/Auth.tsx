@@ -91,7 +91,7 @@ export default function Auth() {
           </div>
           <CardTitle className="text-2xl font-bold">Roster Management</CardTitle>
           <CardDescription>
-            Sign in with your @leapswitch.com email
+            Sign in with your Organisation email id
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -110,7 +110,7 @@ export default function Auth() {
                     <Input
                       id="login-email"
                       type="email"
-                      placeholder="you@leapswitch.com"
+                      placeholder="you@company.com"
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
                       className="pl-10"
@@ -211,7 +211,7 @@ export default function Auth() {
                     <Input
                       id="signup-email"
                       type="email"
-                      placeholder="you@leapswitch.com"
+                      placeholder="you@company.com"
                       value={signupEmail}
                       onChange={(e) => setSignupEmail(e.target.value)}
                       className="pl-10"
