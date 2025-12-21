@@ -5,9 +5,15 @@ import { toast } from 'sonner';
 
 type AppRole = 'admin' | 'hr' | 'tl' | 'member';
 
+interface UserProfile {
+  full_name: string;
+  department: string | null;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
+  profile: UserProfile | null;
   loading: boolean;
   roles: AppRole[];
   allowedDomains: string[];
@@ -30,6 +36,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [allowedDomains, setAllowedDomains] = useState<string[]>(['leapswitch.com']);
@@ -96,14 +103,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
               
               fetchUserRoles(session.user.id);
+              fetchUserProfile(session.user.id);
             }, 0);
           } else {
             setTimeout(() => {
               fetchUserRoles(session.user.id);
+              fetchUserProfile(session.user.id);
             }, 0);
           }
         } else {
           setRoles([]);
+          setProfile(null);
         }
       }
     );
@@ -114,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchUserRoles(session.user.id);
+        fetchUserProfile(session.user.id);
       }
       setLoading(false);
     });
@@ -135,6 +146,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Error fetching user roles:', error);
       setRoles(['member']);
+    }
+  };
+
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name, department')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) throw error;
+      
+      setProfile(data);
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      setProfile(null);
     }
   };
 
@@ -341,6 +369,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setSession(null);
     setRoles([]);
+    setProfile(null);
   };
 
   const isAdmin = roles.includes('admin');
@@ -351,6 +380,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = {
     user,
     session,
+    profile,
     loading,
     roles,
     allowedDomains,
