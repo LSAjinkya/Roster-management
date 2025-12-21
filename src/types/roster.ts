@@ -10,7 +10,13 @@ export type Department =
   | 'AW' 
   | 'Infra' 
   | 'Vendor Coordinator'
-  | 'HR';
+  | 'HR'
+  | 'Sales'
+  | 'Admin'
+  | 'Marketing'
+  | 'Billing'
+  | 'CO'
+  | 'Development';
 
 export type UserRole = 'admin' | 'hr' | 'tl' | 'member';
 
@@ -69,6 +75,12 @@ export const DEPARTMENTS: Department[] = [
   'Infra',
   'Vendor Coordinator',
   'HR',
+  'Sales',
+  'Admin',
+  'Marketing',
+  'Billing',
+  'CO',
+  'Development',
 ];
 
 export const ROLES: Role[] = ['TL', 'L2', 'L1', 'HR'];
