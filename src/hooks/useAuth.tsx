@@ -30,28 +30,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [allowedDomains, setAllowedDomains] = useState<string[]>(['leapswitch.com']);
 
-  // Fetch allowed domains on mount
+  // Fetch allowed domains on mount using secure function
   useEffect(() => {
     const fetchAllowedDomains = async () => {
       try {
-        const { data, error } = await supabase
-          .from('app_settings')
-          .select('value')
-          .eq('key', 'allowed_google_domains')
-          .maybeSingle();
+        const { data, error } = await supabase.rpc('get_allowed_google_domains');
 
         if (error) throw error;
         
-        if (data?.value) {
-          const parsedValue = typeof data.value === 'string' 
-            ? JSON.parse(data.value) 
-            : data.value;
-          if (Array.isArray(parsedValue)) {
-            setAllowedDomains(parsedValue);
-          }
+        if (data && Array.isArray(data)) {
+          setAllowedDomains(data);
         }
       } catch (error) {
         console.error('Error fetching allowed domains:', error);
+        // Fall back to default
+        setAllowedDomains(['leapswitch.com']);
       }
     };
 
