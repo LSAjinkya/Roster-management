@@ -14,6 +14,10 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<{ error: Error | null }>;
+  signInWithOtp: (email: string) => Promise<{ error: Error | null }>;
+  verifyOtp: (email: string, token: string) => Promise<{ error: Error | null }>;
+  resetPassword: (email: string) => Promise<{ error: Error | null }>;
+  updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   canEditShifts: boolean;
   isHR: boolean;
@@ -203,6 +207,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
+  const signInWithOtp = async (email: string) => {
+    if (!validateEmail(email)) {
+      return { error: new Error('Please enter a valid email address') };
+    }
+    
+    if (!isEmailDomainAllowed(email)) {
+      return { error: new Error(`Only emails from allowed domains (${allowedDomains.join(', ')}) are permitted`) };
+    }
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/`,
+      },
+    });
+
+    if (error) {
+      return { error };
+    }
+
+    return { error: null };
+  };
+
+  const verifyOtp = async (email: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email',
+    });
+
+    if (error) {
+      return { error };
+    }
+
+    return { error: null };
+  };
+
+  const resetPassword = async (email: string) => {
+    if (!validateEmail(email)) {
+      return { error: new Error('Please enter a valid email address') };
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth?reset=true`,
+    });
+
+    if (error) {
+      return { error };
+    }
+
+    return { error: null };
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    if (newPassword.length < 6) {
+      return { error: new Error('Password must be at least 6 characters') };
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      return { error };
+    }
+
+    return { error: null };
+  };
+
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -227,6 +300,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn,
     signUp,
     signInWithGoogle,
+    signInWithOtp,
+    verifyOtp,
+    resetPassword,
+    updatePassword,
     signOut,
     canEditShifts,
     isHR,
