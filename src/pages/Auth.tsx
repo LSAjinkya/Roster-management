@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { Loader2, Lock, Mail, User } from 'lucide-react';
+import leapswitchLogo from '@/assets/leapswitch-logo-alt.png';
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -87,13 +88,11 @@ export default function Auth() {
       <Card className="w-full max-w-md shadow-xl border-border/50">
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto flex flex-col items-center mb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-xl">L</span>
-              </div>
-              <span className="text-2xl font-bold text-foreground">Leapswitch</span>
-            </div>
-            <span className="text-sm text-muted-foreground tracking-wide">NETWORKS</span>
+            <img 
+              src={leapswitchLogo} 
+              alt="Leapswitch Networks" 
+              className="h-12 object-contain"
+            />
           </div>
           <CardTitle className="text-xl font-semibold">Roster Management</CardTitle>
           <CardDescription>
