@@ -8,6 +8,7 @@ type AppRole = 'admin' | 'hr' | 'tl' | 'member';
 interface UserProfile {
   full_name: string;
   department: string | null;
+  avatar_url: string | null;
 }
 
 interface AuthContextType {
@@ -24,6 +25,8 @@ interface AuthContextType {
   verifyOtp: (email: string, token: string) => Promise<{ error: Error | null }>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
+  updateAvatar: (file: File) => Promise<{ error: Error | null; url?: string }>;
+  refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
   canEditShifts: boolean;
   isHR: boolean;
@@ -153,7 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('full_name, department')
+        .select('full_name, department, avatar_url')
         .eq('user_id', userId)
         .single();
 
@@ -361,6 +364,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
+  const updateAvatar = async (file: File) => {
+    if (!user) {
+      return { error: new Error('No user logged in') };
+    }
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/avatar.${fileExt}`;
+
+      // Upload to storage
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      // Update profile with avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
+
+      // Refresh profile
+      await fetchUserProfile(user.id);
+
+      return { error: null, url: publicUrl };
+    } catch (error: any) {
+      console.error('Error updating avatar:', error);
+      return { error };
+    }
+  };
+
+  const refreshProfile = async () => {
+    if (user) {
+      await fetchUserProfile(user.id);
+    }
+  };
+
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
@@ -391,6 +439,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     verifyOtp,
     resetPassword,
     updatePassword,
+    updateAvatar,
+    refreshProfile,
     signOut,
     canEditShifts,
     isHR,

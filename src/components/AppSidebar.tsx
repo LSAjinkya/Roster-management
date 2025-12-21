@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from './ThemeToggle';
 import leapswitchLogo from '@/assets/leapswitch-logo-alt.png';
@@ -35,7 +35,7 @@ const navItems = [
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const { user, signOut, roles, isHR, isTL, isAdmin } = useAuth();
+  const { user, signOut, roles, isHR, isTL, isAdmin, profile } = useAuth();
 
   const getRoleBadge = () => {
     if (isAdmin) return 'Admin';
@@ -43,6 +43,20 @@ export function AppSidebar() {
     if (isTL) return 'TL';
     return 'Member';
   };
+
+  const getInitials = (name: string | undefined, email: string | undefined) => {
+    if (name && name.trim()) {
+      const parts = name.trim().split(' ');
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      }
+      return name.slice(0, 2).toUpperCase();
+    }
+    if (!email) return 'U';
+    return email.slice(0, 2).toUpperCase();
+  };
+
+  const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
 
   return (
     <aside className={cn(
@@ -103,14 +117,15 @@ export function AppSidebar() {
             collapsed && 'justify-center'
           )}>
             <Avatar className="h-8 w-8">
+              <AvatarImage src={profile?.avatar_url || undefined} alt={displayName} />
               <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs">
-                {user.email?.slice(0, 2).toUpperCase()}
+                {getInitials(profile?.full_name, user.email)}
               </AvatarFallback>
             </Avatar>
             {!collapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-sidebar-foreground truncate">
-                  {user.email?.split('@')[0]}
+                  {displayName}
                 </p>
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                   {getRoleBadge()}
