@@ -86,10 +86,16 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
       <Card className="w-full max-w-md shadow-xl border-border/50">
         <CardHeader className="text-center space-y-2">
-          <div className="mx-auto w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-2">
-            <Lock className="h-6 w-6 text-primary" />
+          <div className="mx-auto flex flex-col items-center mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                <span className="text-primary-foreground font-bold text-xl">L</span>
+              </div>
+              <span className="text-2xl font-bold text-foreground">Leapswitch</span>
+            </div>
+            <span className="text-sm text-muted-foreground tracking-wide">NETWORKS</span>
           </div>
-          <CardTitle className="text-2xl font-bold">Roster Management</CardTitle>
+          <CardTitle className="text-xl font-semibold">Roster Management</CardTitle>
           <CardDescription>
             Sign in with your Organisation email id
           </CardDescription>
