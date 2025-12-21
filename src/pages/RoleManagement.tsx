@@ -8,7 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter } from 'lucide-react';
+import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
@@ -76,6 +78,9 @@ export default function RoleManagement() {
   const [csvData, setCsvData] = useState('');
   const [importing, setImporting] = useState(false);
   const [accessFilter, setAccessFilter] = useState<'all' | 'active' | 'disabled'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
   // Check if user can access - admin or HR
   const canAccess = isAdmin || isHR;
@@ -180,6 +185,68 @@ export default function RoleManagement() {
       console.error('Error fetching status history:', error);
     } finally {
       setStatusHistoryLoading(false);
+    }
+  };
+
+  // Filter users based on search query and access filter
+  const filteredUsers = users.filter(u => {
+    const matchesSearch = searchQuery === '' || 
+      u.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesAccess = 
+      accessFilter === 'all' || 
+      (accessFilter === 'active' && u.is_active) || 
+      (accessFilter === 'disabled' && !u.is_active);
+    
+    return matchesSearch && matchesAccess;
+  });
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const selectableUsers = filteredUsers.filter(u => u.id !== user?.id);
+      setSelectedUsers(new Set(selectableUsers.map(u => u.id)));
+    } else {
+      setSelectedUsers(new Set());
+    }
+  };
+
+  const handleSelectUser = (userId: string, checked: boolean) => {
+    const newSelected = new Set(selectedUsers);
+    if (checked) {
+      newSelected.add(userId);
+    } else {
+      newSelected.delete(userId);
+    }
+    setSelectedUsers(newSelected);
+  };
+
+  const handleBulkAction = async (action: 'enable' | 'disable') => {
+    if (selectedUsers.size === 0) {
+      toast.error('No users selected');
+      return;
+    }
+
+    setBulkActionLoading(true);
+    try {
+      const isActive = action === 'enable';
+      const userIds = Array.from(selectedUsers);
+
+      for (const userId of userIds) {
+        await supabase
+          .from('profiles')
+          .update({ is_active: isActive })
+          .eq('user_id', userId);
+      }
+
+      toast.success(`${userIds.length} user(s) ${action}d successfully`);
+      setSelectedUsers(new Set());
+      fetchUsers();
+    } catch (error) {
+      console.error('Bulk action error:', error);
+      toast.error(`Failed to ${action} users`);
+    } finally {
+      setBulkActionLoading(false);
     }
   };
 
@@ -428,10 +495,62 @@ export default function RoleManagement() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Search and Bulk Actions */}
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            {selectedUsers.size > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {selectedUsers.size} selected
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleBulkAction('enable')}
+                  disabled={bulkActionLoading}
+                  className="bg-green-600 text-white hover:bg-green-700"
+                >
+                  Enable All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleBulkAction('disable')}
+                  disabled={bulkActionLoading}
+                  className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                >
+                  Disable All
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedUsers(new Set())}
+                >
+                  Clear
+                </Button>
+              </div>
+            )}
+          </div>
+
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={filteredUsers.filter(u => u.id !== user?.id).length > 0 && 
+                             filteredUsers.filter(u => u.id !== user?.id).every(u => selectedUsers.has(u.id))}
+                    onCheckedChange={handleSelectAll}
+                  />
+                </TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Department</TableHead>
@@ -442,15 +561,15 @@ export default function RoleManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users
-                .filter(u => {
-                  if (accessFilter === 'all') return true;
-                  if (accessFilter === 'active') return u.is_active;
-                  if (accessFilter === 'disabled') return !u.is_active;
-                  return true;
-                })
-                .map((u) => (
+              {filteredUsers.map((u) => (
                 <TableRow key={u.id} className={!u.is_active ? 'opacity-60' : ''}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedUsers.has(u.id)}
+                      onCheckedChange={(checked) => handleSelectUser(u.id, !!checked)}
+                      disabled={u.id === user?.id}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium">
                     {u.full_name}
                     {!u.is_active && (
@@ -537,6 +656,13 @@ export default function RoleManagement() {
                   </TableCell>
                 </TableRow>
               ))}
+              {filteredUsers.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    No users found matching your search
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
