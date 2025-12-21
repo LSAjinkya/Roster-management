@@ -91,10 +91,10 @@ export default function Auth() {
             <img 
               src={leapswitchLogo} 
               alt="Leapswitch Networks" 
-              className="h-12 object-contain"
+              className="h-16 object-contain dark:brightness-0 dark:invert"
             />
           </div>
-          <CardTitle className="text-xl font-semibold">Roster Management</CardTitle>
+          <CardTitle className="text-xl font-semibold text-[#e74c3c]">Roster Management</CardTitle>
           <CardDescription>
             Sign in with your Organisation email id
           </CardDescription>

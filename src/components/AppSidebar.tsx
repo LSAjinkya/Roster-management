@@ -19,6 +19,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from './ThemeToggle';
+import leapswitchLogo from '@/assets/leapswitch-logo-alt.png';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/', adminOnly: false },
@@ -55,15 +56,16 @@ export function AppSidebar() {
       )}>
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-              <Calendar size={18} className="text-sidebar-primary-foreground" />
-            </div>
-            <span className="font-bold text-sidebar-foreground">ShiftBoard</span>
+            <img 
+              src={leapswitchLogo} 
+              alt="Leapswitch Networks" 
+              className="h-8 object-contain dark:brightness-0 dark:invert"
+            />
           </div>
         )}
         {collapsed && (
-          <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-            <Calendar size={18} className="text-sidebar-primary-foreground" />
+          <div className="w-8 h-8 rounded-lg bg-[#e74c3c] flex items-center justify-center">
+            <span className="text-white font-bold text-sm">L</span>
           </div>
         )}
       </div>
