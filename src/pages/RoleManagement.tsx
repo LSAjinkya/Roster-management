@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search } from 'lucide-react';
+import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search, FileUp } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -759,10 +760,48 @@ export default function RoleManagement() {
           <DialogHeader>
             <DialogTitle>Bulk Import Users</DialogTitle>
             <DialogDescription>
-              Paste CSV data to update user departments. Format: name,email,department
+              Upload a CSV file or paste data to update user departments. Format: name,email,department
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* File Upload */}
+            <div className="space-y-2">
+              <Label htmlFor="csv-file" className="text-sm font-medium">Upload CSV File</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="csv-file"
+                  type="file"
+                  accept=".csv,.txt"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        const text = event.target?.result as string;
+                        setCsvData(text);
+                        toast.success(`File "${file.name}" loaded`);
+                      };
+                      reader.onerror = () => {
+                        toast.error('Failed to read file');
+                      };
+                      reader.readAsText(file);
+                    }
+                  }}
+                  className="flex-1"
+                />
+                <FileUp className="h-5 w-5 text-muted-foreground" />
+              </div>
+            </div>
+            
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or paste data</span>
+              </div>
+            </div>
+
             <Textarea
               placeholder={`name,email,department\nJohn Doe,john@leapswitch.com,Support\nJane Smith,jane@leapswitch.com,Monitoring`}
               value={csvData}
@@ -778,7 +817,7 @@ export default function RoleManagement() {
             <Button variant="outline" onClick={() => setCsvImportOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCsvImport} disabled={importing}>
+            <Button onClick={handleCsvImport} disabled={importing || !csvData.trim()}>
               {importing ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
