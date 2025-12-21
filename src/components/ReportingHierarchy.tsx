@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, DragEvent } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, ChevronRight, UserCog, Users, ArrowRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, UserCog, Users, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,14 +23,17 @@ interface TeamMember {
 interface ReportingHierarchyProps {
   members: TeamMember[];
   onUpdate: () => void;
+  canManage?: boolean;
 }
 
-export function ReportingHierarchy({ members, onUpdate }: ReportingHierarchyProps) {
+export function ReportingHierarchy({ members, onUpdate, canManage = false }: ReportingHierarchyProps) {
   const [expandedTLs, setExpandedTLs] = useState<Set<string>>(new Set());
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
   const [bulkTL, setBulkTL] = useState<string>('');
   const [reassigning, setReassigning] = useState(false);
   const [individualReassign, setIndividualReassign] = useState<string | null>(null);
+  const [draggedMember, setDraggedMember] = useState<TeamMember | null>(null);
+  const [dragOverTL, setDragOverTL] = useState<string | null>(null);
 
   // Get all TLs
   const teamLeads = members.filter(m => m.role === 'TL');
@@ -119,19 +122,152 @@ export function ReportingHierarchy({ members, onUpdate }: ReportingHierarchyProp
     }
   };
 
+  // Drag and Drop handlers
+  const handleDragStart = (e: DragEvent<HTMLDivElement>, member: TeamMember) => {
+    if (!canManage) return;
+    setDraggedMember(member);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', member.id);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedMember(null);
+    setDragOverTL(null);
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>, tlId: string) => {
+    if (!canManage || !draggedMember) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverTL(tlId);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverTL(null);
+  };
+
+  const handleDrop = async (e: DragEvent<HTMLDivElement>, tlId: string) => {
+    e.preventDefault();
+    if (!canManage || !draggedMember) return;
+    
+    // Don't do anything if dropping on the same TL
+    if (draggedMember.reporting_tl_id === tlId || 
+        (!draggedMember.reporting_tl_id && tlId === 'unassigned')) {
+      setDraggedMember(null);
+      setDragOverTL(null);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('team_members')
+        .update({ reporting_tl_id: tlId === 'unassigned' ? null : tlId })
+        .eq('id', draggedMember.id);
+
+      if (error) throw error;
+
+      const tlName = tlId === 'unassigned' ? 'Unassigned' : teamLeads.find(t => t.id === tlId)?.name;
+      toast.success(`${draggedMember.name} moved to ${tlName}`);
+      onUpdate();
+    } catch (error) {
+      console.error('Drop reassign error:', error);
+      toast.error('Failed to reassign member');
+    } finally {
+      setDraggedMember(null);
+      setDragOverTL(null);
+    }
+  };
+
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  const getTLName = (tlId: string) => {
-    const tl = teamLeads.find(t => t.id === tlId);
-    return tl?.name || 'Unassigned';
-  };
+  const renderMemberRow = (member: TeamMember) => (
+    <div
+      key={member.id}
+      draggable={canManage}
+      onDragStart={(e) => handleDragStart(e, member)}
+      onDragEnd={handleDragEnd}
+      className={cn(
+        "flex items-center justify-between py-2 px-2 hover:bg-muted/30 rounded-md transition-all",
+        canManage && "cursor-grab active:cursor-grabbing",
+        draggedMember?.id === member.id && "opacity-50 bg-muted"
+      )}
+    >
+      <div className="flex items-center gap-3">
+        {canManage && (
+          <GripVertical className="h-4 w-4 text-muted-foreground/50" />
+        )}
+        <Checkbox
+          checked={selectedMembers.has(member.id)}
+          onCheckedChange={() => toggleMemberSelection(member.id)}
+        />
+        <Avatar className="h-8 w-8">
+          <AvatarFallback className="text-xs">
+            {getInitials(member.name)}
+          </AvatarFallback>
+        </Avatar>
+        <div>
+          <p className="text-sm font-medium">{member.name}</p>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{member.role}</span>
+            <span className="text-xs text-muted-foreground">•</span>
+            <span className="text-xs text-muted-foreground">{member.department}</span>
+          </div>
+        </div>
+      </div>
+      
+      {canManage && (
+        individualReassign === member.id ? (
+          <div className="flex items-center gap-2">
+            <Select onValueChange={(value) => handleIndividualReassign(member.id, value)}>
+              <SelectTrigger className="w-40 h-8 text-xs">
+                <SelectValue placeholder="Select TL" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Unassigned</SelectItem>
+                {teamLeads.map(t => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setIndividualReassign(null)}
+            >
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs"
+            onClick={() => setIndividualReassign(member.id)}
+          >
+            <UserCog className="h-3 w-3 mr-1" />
+            Reassign
+          </Button>
+        )
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-4">
+      {/* Drag hint */}
+      {canManage && (
+        <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg flex items-center gap-2">
+          <GripVertical className="h-4 w-4" />
+          <span>Drag and drop team members between Team Leads to reassign them</span>
+        </div>
+      )}
+
       {/* Bulk Actions */}
-      {selectedMembers.size > 0 && (
+      {selectedMembers.size > 0 && canManage && (
         <Card className="border-primary/50 bg-primary/5">
           <CardContent className="p-4">
             <div className="flex items-center gap-4 flex-wrap">
@@ -178,10 +314,19 @@ export function ReportingHierarchy({ members, onUpdate }: ReportingHierarchyProp
         {teamLeads.map(tl => {
           const reportingMembers = membersByTL[tl.id] || [];
           const isExpanded = expandedTLs.has(tl.id);
+          const isDropTarget = dragOverTL === tl.id;
 
           return (
             <Collapsible key={tl.id} open={isExpanded} onOpenChange={() => toggleTL(tl.id)}>
-              <Card>
+              <Card 
+                className={cn(
+                  "transition-all",
+                  isDropTarget && "ring-2 ring-primary border-primary bg-primary/5"
+                )}
+                onDragOver={(e) => handleDragOver(e, tl.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, tl.id)}
+              >
                 <CollapsibleTrigger asChild>
                   <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
                     <div className="flex items-center justify-between">
@@ -209,7 +354,7 @@ export function ReportingHierarchy({ members, onUpdate }: ReportingHierarchyProp
                           <Users className="h-3 w-3" />
                           {reportingMembers.length} reports
                         </Badge>
-                        {reportingMembers.length > 0 && (
+                        {reportingMembers.length > 0 && canManage && (
                           <Button 
                             variant="ghost" 
                             size="sm"
@@ -229,72 +374,14 @@ export function ReportingHierarchy({ members, onUpdate }: ReportingHierarchyProp
                 <CollapsibleContent>
                   <CardContent className="pt-0">
                     {reportingMembers.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-2">No direct reports</p>
+                      <p className="text-sm text-muted-foreground py-4 text-center border-2 border-dashed rounded-lg">
+                        {isDropTarget ? 'Drop here to assign' : 'No direct reports - drag members here'}
+                      </p>
                     ) : (
                       <div className="divide-y">
                         {reportingMembers
                           .sort((a, b) => a.department.localeCompare(b.department))
-                          .map(member => (
-                          <div
-                            key={member.id}
-                            className="flex items-center justify-between py-2 px-2 hover:bg-muted/30 rounded-md"
-                          >
-                            <div className="flex items-center gap-3">
-                              <Checkbox
-                                checked={selectedMembers.has(member.id)}
-                                onCheckedChange={() => toggleMemberSelection(member.id)}
-                              />
-                              <Avatar className="h-8 w-8">
-                                <AvatarFallback className="text-xs">
-                                  {getInitials(member.name)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <p className="text-sm font-medium">{member.name}</p>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-muted-foreground">{member.role}</span>
-                                  <span className="text-xs text-muted-foreground">•</span>
-                                  <span className="text-xs text-muted-foreground">{member.department}</span>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {individualReassign === member.id ? (
-                              <div className="flex items-center gap-2">
-                                <Select onValueChange={(value) => handleIndividualReassign(member.id, value)}>
-                                  <SelectTrigger className="w-40 h-8 text-xs">
-                                    <SelectValue placeholder="Select TL" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">Unassigned</SelectItem>
-                                    {teamLeads.map(t => (
-                                      <SelectItem key={t.id} value={t.id}>
-                                        {t.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm"
-                                  onClick={() => setIndividualReassign(null)}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs"
-                                onClick={() => setIndividualReassign(member.id)}
-                              >
-                                <UserCog className="h-3 w-3 mr-1" />
-                                Reassign
-                              </Button>
-                            )}
-                          </div>
-                        ))}
+                          .map(member => renderMemberRow(member))}
                       </div>
                     )}
                   </CardContent>
@@ -305,96 +392,53 @@ export function ReportingHierarchy({ members, onUpdate }: ReportingHierarchyProp
         })}
 
         {/* Unassigned Members */}
-        {membersByTL['unassigned']?.length > 0 && (
-          <Collapsible open={expandedTLs.has('unassigned')} onOpenChange={() => toggleTL('unassigned')}>
-            <Card className="border-dashed">
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      {expandedTLs.has('unassigned') ? (
-                        <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                      )}
-                      <Avatar className="h-10 w-10">
-                        <AvatarFallback className="bg-muted">?</AvatarFallback>
-                      </Avatar>
-                      <CardTitle className="text-base text-muted-foreground">Unassigned Members</CardTitle>
-                    </div>
-                    <Badge variant="outline" className="gap-1">
-                      <Users className="h-3 w-3" />
-                      {membersByTL['unassigned'].length}
-                    </Badge>
+        <Collapsible open={expandedTLs.has('unassigned')} onOpenChange={() => toggleTL('unassigned')}>
+          <Card 
+            className={cn(
+              "border-dashed transition-all",
+              dragOverTL === 'unassigned' && "ring-2 ring-amber-500 border-amber-500 bg-amber-500/5"
+            )}
+            onDragOver={(e) => handleDragOver(e, 'unassigned')}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, 'unassigned')}
+          >
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {expandedTLs.has('unassigned') ? (
+                      <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    <Avatar className="h-10 w-10">
+                      <AvatarFallback className="bg-muted">?</AvatarFallback>
+                    </Avatar>
+                    <CardTitle className="text-base text-muted-foreground">Unassigned Members</CardTitle>
                   </div>
-                </CardHeader>
-              </CollapsibleTrigger>
-              
-              <CollapsibleContent>
-                <CardContent className="pt-0">
+                  <Badge variant="outline" className="gap-1">
+                    <Users className="h-3 w-3" />
+                    {membersByTL['unassigned']?.length || 0}
+                  </Badge>
+                </div>
+              </CardHeader>
+            </CollapsibleTrigger>
+            
+            <CollapsibleContent>
+              <CardContent className="pt-0">
+                {!membersByTL['unassigned']?.length ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center border-2 border-dashed rounded-lg">
+                    No unassigned members
+                  </p>
+                ) : (
                   <div className="divide-y">
-                    {membersByTL['unassigned'].map(member => (
-                      <div
-                        key={member.id}
-                        className="flex items-center justify-between py-2 px-2 hover:bg-muted/30 rounded-md"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Checkbox
-                            checked={selectedMembers.has(member.id)}
-                            onCheckedChange={() => toggleMemberSelection(member.id)}
-                          />
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="text-xs">
-                              {getInitials(member.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="text-sm font-medium">{member.name}</p>
-                            <span className="text-xs text-muted-foreground">{member.department}</span>
-                          </div>
-                        </div>
-                        
-                        {individualReassign === member.id ? (
-                          <div className="flex items-center gap-2">
-                            <Select onValueChange={(value) => handleIndividualReassign(member.id, value)}>
-                              <SelectTrigger className="w-40 h-8 text-xs">
-                                <SelectValue placeholder="Select TL" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {teamLeads.map(t => (
-                                  <SelectItem key={t.id} value={t.id}>
-                                    {t.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => setIndividualReassign(null)}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-xs"
-                            onClick={() => setIndividualReassign(member.id)}
-                          >
-                            <UserCog className="h-3 w-3 mr-1" />
-                            Assign TL
-                          </Button>
-                        )}
-                      </div>
-                    ))}
+                    {membersByTL['unassigned'].map(member => renderMemberRow(member))}
                   </div>
-                </CardContent>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
-        )}
+                )}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       </div>
     </div>
   );
