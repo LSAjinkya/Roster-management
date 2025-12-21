@@ -80,9 +80,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           }
           
-          setTimeout(() => {
-            fetchUserRoles(session.user.id);
-          }, 0);
+          // Check if user is active for any sign-in event
+          if (event === 'SIGNED_IN') {
+            setTimeout(async () => {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('is_active')
+                .eq('user_id', session.user.id)
+                .single();
+              
+              if (profile && profile.is_active === false) {
+                await supabase.auth.signOut();
+                toast.error('Your account has been disabled. Please contact your administrator.');
+                return;
+              }
+              
+              fetchUserRoles(session.user.id);
+            }, 0);
+          } else {
+            setTimeout(() => {
+              fetchUserRoles(session.user.id);
+            }, 0);
+          }
         } else {
           setRoles([]);
         }
@@ -129,6 +148,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return allowedDomains.includes(domain);
   };
 
+  const checkUserAccess = async (userId: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('is_active')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error checking user access:', error);
+        return true; // Default to allowing access if check fails
+      }
+
+      return data?.is_active ?? true;
+    } catch (error) {
+      console.error('Error checking user access:', error);
+      return true;
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
     if (!validateEmail(email)) {
       return { error: new Error('Please enter a valid email address') };
@@ -138,13 +177,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: new Error(`Only emails from allowed domains (${allowedDomains.join(', ')}) are permitted`) };
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
       return { error };
+    }
+
+    // Check if user is active
+    if (data.user) {
+      const isActive = await checkUserAccess(data.user.id);
+      if (!isActive) {
+        await supabase.auth.signOut();
+        return { error: new Error('Your account has been disabled. Please contact your administrator.') };
+      }
     }
 
     return { error: null };
@@ -231,7 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const verifyOtp = async (email: string, token: string) => {
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       email,
       token,
       type: 'email',
@@ -239,6 +287,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) {
       return { error };
+    }
+
+    // Check if user is active
+    if (data.user) {
+      const isActive = await checkUserAccess(data.user.id);
+      if (!isActive) {
+        await supabase.auth.signOut();
+        return { error: new Error('Your account has been disabled. Please contact your administrator.') };
+      }
     }
 
     return { error: null };
