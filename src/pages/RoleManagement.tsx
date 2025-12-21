@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search, FileUp, Users, UserCheck, Trash2 } from 'lucide-react';
+import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search, FileUp, Users, UserCheck, Trash2, Plus } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -110,6 +110,15 @@ export default function RoleManagement() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false);
+  const [newMember, setNewMember] = useState({
+    id: '',
+    name: '',
+    email: '',
+    department: DEPARTMENTS[0] as string,
+    role: 'L1' as string,
+  });
+  const [addingMember, setAddingMember] = useState(false);
 
   const canAccess = isAdmin || isHR;
 
@@ -281,6 +290,65 @@ export default function RoleManagement() {
       toast.error('Failed to delete team member');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleAddMember = async () => {
+    if (!newMember.id.trim() || !newMember.name.trim() || !newMember.email.trim()) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newMember.email)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    setAddingMember(true);
+    try {
+      // Check if ID already exists
+      const { data: existing } = await supabase
+        .from('team_members')
+        .select('id')
+        .eq('id', newMember.id)
+        .maybeSingle();
+
+      if (existing) {
+        toast.error('A team member with this ID already exists');
+        setAddingMember(false);
+        return;
+      }
+
+      const { error } = await supabase
+        .from('team_members')
+        .insert({
+          id: newMember.id.trim(),
+          name: newMember.name.trim(),
+          email: newMember.email.trim().toLowerCase(),
+          department: newMember.department,
+          role: newMember.role,
+          status: 'available',
+        });
+
+      if (error) throw error;
+
+      toast.success(`${newMember.name} has been added`);
+      setAddMemberDialogOpen(false);
+      setNewMember({
+        id: '',
+        name: '',
+        email: '',
+        department: DEPARTMENTS[0] as string,
+        role: 'L1',
+      });
+      fetchTeamMembers();
+    } catch (error) {
+      console.error('Error adding team member:', error);
+      toast.error('Failed to add team member');
+    } finally {
+      setAddingMember(false);
     }
   };
 
@@ -698,6 +766,10 @@ export default function RoleManagement() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <Button onClick={() => setAddMemberDialogOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Member
+                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -1217,6 +1289,97 @@ export default function RoleManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Add Team Member Dialog */}
+      <Dialog open={addMemberDialogOpen} onOpenChange={setAddMemberDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New Team Member</DialogTitle>
+            <DialogDescription>
+              Add a new team member to the system.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="member-id">Member ID *</Label>
+              <Input
+                id="member-id"
+                placeholder="e.g., EMP001"
+                value={newMember.id}
+                onChange={(e) => setNewMember({ ...newMember, id: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="member-name">Full Name *</Label>
+              <Input
+                id="member-name"
+                placeholder="Enter full name"
+                value={newMember.name}
+                onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="member-email">Email *</Label>
+              <Input
+                id="member-email"
+                type="email"
+                placeholder="name@leapswitch.com"
+                value={newMember.email}
+                onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Department</Label>
+                <Select
+                  value={newMember.department}
+                  onValueChange={(value) => setNewMember({ ...newMember, department: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEPARTMENTS.map((dept) => (
+                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Select
+                  value={newMember.role}
+                  onValueChange={(value) => setNewMember({ ...newMember, role: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLES.map((role) => (
+                      <SelectItem key={role} value={role}>{role}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddMemberDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddMember} disabled={addingMember}>
+              {addingMember ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                'Add Member'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
