@@ -5,17 +5,18 @@ import { SingleDayRosterView } from '@/components/SingleDayRosterView';
 import { MonthlyRosterView } from '@/components/MonthlyRosterView';
 import { MemberRosterView } from '@/components/MemberRosterView';
 import { TableRosterView } from '@/components/TableRosterView';
+import { DepartmentSheetView } from '@/components/DepartmentSheetView';
 import { ExportDropdown } from '@/components/ExportDropdown';
 import { SetupMonthlyRosterDialog } from '@/components/SetupMonthlyRosterDialog';
 import { teamMembers as mockTeamMembers, currentWeekAssignments } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarDays, Calendar, CalendarRange, User, Table2 } from 'lucide-react';
+import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2 } from 'lucide-react';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { TeamMember, Department, Role } from '@/types/roster';
 import { useAuth } from '@/hooks/useAuth';
 
-type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member';
+type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member' | 'department';
 
 export default function Roster() {
   const { canEditShifts } = useAuth();
@@ -100,6 +101,10 @@ export default function Roster() {
                 <User size={16} />
                 <span className="hidden sm:inline">Member</span>
               </TabsTrigger>
+              <TabsTrigger value="department" className="gap-2">
+                <Building2 size={16} />
+                <span className="hidden sm:inline">Department</span>
+              </TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -142,6 +147,12 @@ export default function Roster() {
         )}
         {viewMode === 'member' && (
           <MemberRosterView 
+            assignments={currentWeekAssignments} 
+            teamMembers={teamMembers} 
+          />
+        )}
+        {viewMode === 'department' && (
+          <DepartmentSheetView 
             assignments={currentWeekAssignments} 
             teamMembers={teamMembers} 
           />
