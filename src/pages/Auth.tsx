@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -7,12 +7,49 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { Loader2, Lock, Mail, User, ArrowLeft, KeyRound } from 'lucide-react';
+import { Loader2, Lock, Mail, User, ArrowLeft, KeyRound, AlertTriangle } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import leapswitchLogo from '@/assets/leapswitch-logo-alt.png';
 
 type AuthView = 'login' | 'forgot-password' | 'reset-password' | 'otp-login' | 'otp-verify';
+
+const MAX_OTP_ATTEMPTS = 5;
+const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
+
+interface RateLimitState {
+  attempts: number;
+  lockoutUntil: number | null;
+}
+
+const getOtpRateLimitKey = (email: string) => `otp_rate_limit_${email}`;
+
+const getRateLimitState = (email: string): RateLimitState => {
+  try {
+    const stored = localStorage.getItem(getOtpRateLimitKey(email));
+    if (stored) {
+      const state = JSON.parse(stored) as RateLimitState;
+      // Clear lockout if expired
+      if (state.lockoutUntil && Date.now() > state.lockoutUntil) {
+        localStorage.removeItem(getOtpRateLimitKey(email));
+        return { attempts: 0, lockoutUntil: null };
+      }
+      return state;
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return { attempts: 0, lockoutUntil: null };
+};
+
+const setRateLimitState = (email: string, state: RateLimitState) => {
+  localStorage.setItem(getOtpRateLimitKey(email), JSON.stringify(state));
+};
+
+const clearRateLimitState = (email: string) => {
+  localStorage.removeItem(getOtpRateLimitKey(email));
+};
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -33,6 +70,7 @@ export default function Auth() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupFullName, setSignupFullName] = useState('');
@@ -42,6 +80,48 @@ export default function Auth() {
   const [otpEmail, setOtpEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [authView, setAuthView] = useState<AuthView>('login');
+  
+  // Rate limiting state
+  const [otpAttempts, setOtpAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+  const [lockoutRemaining, setLockoutRemaining] = useState<string>('');
+
+  // Load rate limit state when OTP email changes
+  useEffect(() => {
+    if (otpEmail) {
+      const state = getRateLimitState(otpEmail);
+      setOtpAttempts(state.attempts);
+      setLockoutUntil(state.lockoutUntil);
+    }
+  }, [otpEmail]);
+
+  // Update lockout countdown timer
+  useEffect(() => {
+    if (!lockoutUntil) {
+      setLockoutRemaining('');
+      return;
+    }
+
+    const updateRemaining = () => {
+      const remaining = lockoutUntil - Date.now();
+      if (remaining <= 0) {
+        setLockoutUntil(null);
+        setOtpAttempts(0);
+        if (otpEmail) {
+          clearRateLimitState(otpEmail);
+        }
+        setLockoutRemaining('');
+      } else {
+        const minutes = Math.floor(remaining / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
+        setLockoutRemaining(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+      }
+    };
+
+    updateRemaining();
+    const interval = setInterval(updateRemaining, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutUntil, otpEmail]);
 
   useEffect(() => {
     // Check if this is a password reset redirect
@@ -56,9 +136,25 @@ export default function Auth() {
     }
   }, [user, authLoading, navigate, authView]);
 
+  // Load remember me preference
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('remembered_email');
+    if (savedEmail) {
+      setLoginEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+
+    // Handle remember me
+    if (rememberMe) {
+      localStorage.setItem('remembered_email', loginEmail);
+    } else {
+      localStorage.removeItem('remembered_email');
+    }
 
     const { error } = await signIn(loginEmail, loginPassword);
 
@@ -139,9 +235,14 @@ export default function Auth() {
     setIsLoading(false);
   };
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setIsLoading(true);
+
+    // Reset rate limit state when sending new OTP
+    setOtpAttempts(0);
+    setLockoutUntil(null);
+    clearRateLimitState(otpEmail);
 
     const { error } = await signInWithOtp(otpEmail);
 
@@ -157,19 +258,43 @@ export default function Auth() {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check if locked out
+    if (lockoutUntil && Date.now() < lockoutUntil) {
+      toast.error(`Too many attempts. Please wait ${lockoutRemaining} before trying again.`);
+      return;
+    }
+
     setIsLoading(true);
 
     const { error } = await verifyOtp(otpEmail, otpCode);
 
     if (error) {
-      toast.error(error.message || 'Invalid OTP');
+      const newAttempts = otpAttempts + 1;
+      setOtpAttempts(newAttempts);
+      
+      if (newAttempts >= MAX_OTP_ATTEMPTS) {
+        const lockoutTime = Date.now() + LOCKOUT_DURATION;
+        setLockoutUntil(lockoutTime);
+        setRateLimitState(otpEmail, { attempts: newAttempts, lockoutUntil: lockoutTime });
+        toast.error(`Too many failed attempts. Please wait 15 minutes before trying again.`);
+      } else {
+        setRateLimitState(otpEmail, { attempts: newAttempts, lockoutUntil: null });
+        const remaining = MAX_OTP_ATTEMPTS - newAttempts;
+        toast.error(`Invalid OTP. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`);
+      }
+      setOtpCode('');
     } else {
+      // Clear rate limit on success
+      clearRateLimitState(otpEmail);
       toast.success('Signed in successfully!');
       navigate('/');
     }
 
     setIsLoading(false);
   };
+
+  const isOtpLocked = lockoutUntil !== null && Date.now() < lockoutUntil;
 
   if (authLoading) {
     return (
@@ -390,11 +515,35 @@ export default function Auth() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleVerifyOtp} className="space-y-6">
+              {/* Rate limit warning */}
+              {isOtpLocked && (
+                <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                  <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0" />
+                  <div className="text-sm">
+                    <p className="font-medium text-destructive">Too many failed attempts</p>
+                    <p className="text-muted-foreground">
+                      Please wait <span className="font-mono font-medium">{lockoutRemaining}</span> before trying again
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Attempts warning */}
+              {!isOtpLocked && otpAttempts > 0 && (
+                <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                  <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" />
+                  <p className="text-sm text-muted-foreground">
+                    {MAX_OTP_ATTEMPTS - otpAttempts} attempt{MAX_OTP_ATTEMPTS - otpAttempts !== 1 ? 's' : ''} remaining
+                  </p>
+                </div>
+              )}
+
               <div className="flex justify-center">
                 <InputOTP
                   maxLength={6}
                   value={otpCode}
                   onChange={(value) => setOtpCode(value)}
+                  disabled={isOtpLocked}
                 >
                   <InputOTPGroup>
                     <InputOTPSlot index={0} />
@@ -406,7 +555,11 @@ export default function Auth() {
                   </InputOTPGroup>
                 </InputOTP>
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading || otpCode.length !== 6}>
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={isLoading || otpCode.length !== 6 || isOtpLocked}
+              >
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -421,7 +574,7 @@ export default function Auth() {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={handleSendOtp}
+                  onClick={() => handleSendOtp()}
                   disabled={isLoading}
                 >
                   Resend OTP
@@ -432,6 +585,8 @@ export default function Auth() {
                   className="w-full"
                   onClick={() => {
                     setOtpCode('');
+                    setOtpAttempts(0);
+                    setLockoutUntil(null);
                     setAuthView('otp-login');
                   }}
                 >
@@ -512,6 +667,22 @@ export default function Auth() {
                     />
                   </div>
                 </div>
+
+                {/* Remember Me */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="remember-me" 
+                    checked={rememberMe}
+                    onCheckedChange={(checked) => setRememberMe(checked === true)}
+                  />
+                  <Label 
+                    htmlFor="remember-me" 
+                    className="text-sm font-normal text-muted-foreground cursor-pointer"
+                  >
+                    Remember my email
+                  </Label>
+                </div>
+
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? (
                     <>
