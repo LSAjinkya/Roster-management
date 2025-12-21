@@ -459,8 +459,8 @@ export default function RoleManagement() {
             <Shield className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">Role Management</h1>
-            <p className="text-muted-foreground">Manage user roles and permissions</p>
+            <h1 className="text-2xl font-bold">Users & Roles</h1>
+            <p className="text-muted-foreground">Manage user access, departments, and roles</p>
           </div>
         </div>
         <Button onClick={() => setCsvImportOpen(true)} variant="outline">
