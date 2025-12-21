@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search, FileUp, Users, UserCheck } from 'lucide-react';
+import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search, FileUp, Users, UserCheck, Trash2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -103,8 +104,12 @@ export default function RoleManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [teamSearchQuery, setTeamSearchQuery] = useState('');
   const [teamDeptFilter, setTeamDeptFilter] = useState<string>('all');
+  const [teamRoleFilter, setTeamRoleFilter] = useState<string>('all');
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<TeamMember | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const canAccess = isAdmin || isHR;
 
@@ -245,9 +250,39 @@ export default function RoleManagement() {
       m.email.toLowerCase().includes(teamSearchQuery.toLowerCase());
     
     const matchesDept = teamDeptFilter === 'all' || m.department === teamDeptFilter;
+    const matchesRole = teamRoleFilter === 'all' || m.role === teamRoleFilter;
     
-    return matchesSearch && matchesDept;
+    return matchesSearch && matchesDept && matchesRole;
   });
+
+  const handleDeleteMemberClick = (member: TeamMember) => {
+    setMemberToDelete(member);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteMember = async () => {
+    if (!memberToDelete) return;
+    
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('team_members')
+        .delete()
+        .eq('id', memberToDelete.id);
+
+      if (error) throw error;
+
+      toast.success(`${memberToDelete.name} has been removed`);
+      setDeleteDialogOpen(false);
+      setMemberToDelete(null);
+      fetchTeamMembers();
+    } catch (error) {
+      console.error('Error deleting team member:', error);
+      toast.error('Failed to delete team member');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -652,6 +687,17 @@ export default function RoleManagement() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <Select value={teamRoleFilter} onValueChange={setTeamRoleFilter}>
+                    <SelectTrigger className="w-28">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Roles</SelectItem>
+                      {ROLES.map(role => (
+                        <SelectItem key={role} value={role}>{role}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardHeader>
@@ -679,6 +725,7 @@ export default function RoleManagement() {
                       <TableHead>Department</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="w-20">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -750,11 +797,21 @@ export default function RoleManagement() {
                             </SelectContent>
                           </Select>
                         </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteMemberClick(member)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                     {filteredTeamMembers.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                           No team members found
                         </TableCell>
                       </TableRow>
@@ -1131,6 +1188,35 @@ export default function RoleManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Team Member?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove <strong>{memberToDelete?.name}</strong> ({memberToDelete?.email}) from the system? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setMemberToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteMember}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
