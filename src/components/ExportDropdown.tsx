@@ -15,7 +15,7 @@ interface ExportDropdownProps {
   teamMembers: TeamMember[];
   startDate: Date;
   endDate: Date;
-  viewType: 'weekly' | 'monthly';
+  viewType: 'weekly' | 'monthly' | 'biweekly';
 }
 
 export function ExportDropdown({
