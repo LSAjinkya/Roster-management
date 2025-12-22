@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Settings, Bell, Shield, Clock, Save, User, Loader2, Link2, KeyRound } from 'lucide-react';
+import { Settings, Bell, Shield, Clock, Save, User, Loader2, Link2, KeyRound, CalendarCog } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
@@ -13,6 +13,8 @@ import { toast } from 'sonner';
 import { IntegrationCard, IntegrationConfig } from '@/components/IntegrationCard';
 import { TwoFactorSetup } from '@/components/TwoFactorSetup';
 import { GoogleDomainSettings } from '@/components/GoogleDomainSettings';
+import { ShiftCompositionRulesManager } from '@/components/ShiftCompositionRulesManager';
+import { RotationConfigManager } from '@/components/RotationConfigManager';
 type UserStatus = 'available' | 'on-leave' | 'unavailable';
 
 const STATUS_LABELS: Record<UserStatus, string> = {

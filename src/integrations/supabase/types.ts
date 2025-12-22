@@ -41,6 +41,33 @@ export type Database = {
         }
         Relationships: []
       }
+      datacenters: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       departments: {
         Row: {
           created_at: string
@@ -329,6 +356,42 @@ export type Database = {
         }
         Relationships: []
       }
+      rotation_config: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          max_consecutive_nights: number
+          min_rest_hours: number
+          off_days: number
+          rotation_cycle_days: number
+          updated_at: string
+          work_days: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_consecutive_nights?: number
+          min_rest_hours?: number
+          off_days?: number
+          rotation_cycle_days?: number
+          updated_at?: string
+          work_days?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_consecutive_nights?: number
+          min_rest_hours?: number
+          off_days?: number
+          rotation_cycle_days?: number
+          updated_at?: string
+          work_days?: number
+        }
+        Relationships: []
+      }
       shift_assignments: {
         Row: {
           created_at: string
@@ -361,6 +424,50 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      shift_composition_rules: {
+        Row: {
+          created_at: string
+          datacenter_id: string | null
+          department: string
+          id: string
+          is_active: boolean
+          min_count: number
+          role_filter: string[] | null
+          shift_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          datacenter_id?: string | null
+          department: string
+          id?: string
+          is_active?: boolean
+          min_count?: number
+          role_filter?: string[] | null
+          shift_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          datacenter_id?: string | null
+          department?: string
+          id?: string
+          is_active?: boolean
+          min_count?: number
+          role_filter?: string[] | null
+          shift_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shift_composition_rules_datacenter_id_fkey"
+            columns: ["datacenter_id"]
+            isOneToOne: false
+            referencedRelation: "datacenters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shift_history: {
         Row: {
@@ -479,6 +586,7 @@ export type Database = {
       team_members: {
         Row: {
           created_at: string
+          datacenter_id: string | null
           department: string
           email: string
           id: string
@@ -490,6 +598,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          datacenter_id?: string | null
           department: string
           email: string
           id: string
@@ -501,6 +610,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          datacenter_id?: string | null
           department?: string
           email?: string
           id?: string
@@ -510,7 +620,15 @@ export type Database = {
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "team_members_datacenter_id_fkey"
+            columns: ["datacenter_id"]
+            isOneToOne: false
+            referencedRelation: "datacenters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_2fa_settings: {
         Row: {
