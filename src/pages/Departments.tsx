@@ -79,6 +79,9 @@ export default function Departments() {
   const [deptToDelete, setDeptToDelete] = useState<Department | null>(null);
   const [newDept, setNewDept] = useState({ name: '', description: '' });
   const [editedMember, setEditedMember] = useState({ name: '', email: '' });
+  const [editDeptDialogOpen, setEditDeptDialogOpen] = useState(false);
+  const [deptToEdit, setDeptToEdit] = useState<Department | null>(null);
+  const [editedDept, setEditedDept] = useState({ name: '', description: '' });
   const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();
 
@@ -189,6 +192,67 @@ export default function Departments() {
     } catch (error) {
       console.error('Error deleting department:', error);
       toast.error('Failed to delete department');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditDepartment = (dept: Department) => {
+    setDeptToEdit(dept);
+    setEditedDept({ name: dept.name, description: dept.description || '' });
+    setEditDeptDialogOpen(true);
+  };
+
+  const handleSaveDepartment = async () => {
+    if (!deptToEdit) return;
+
+    if (!editedDept.name.trim()) {
+      toast.error('Department name is required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const oldName = deptToEdit.name;
+      const newName = editedDept.name.trim();
+
+      const { error } = await supabase
+        .from('departments')
+        .update({
+          name: newName,
+          description: editedDept.description.trim() || null,
+        })
+        .eq('id', deptToEdit.id);
+
+      if (error) {
+        if (error.code === '23505') {
+          toast.error('A department with this name already exists');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      // Update team members if department name changed
+      if (oldName !== newName) {
+        const { error: membersError } = await supabase
+          .from('team_members')
+          .update({ department: newName })
+          .eq('department', oldName);
+
+        if (membersError) {
+          console.error('Error updating team members department:', membersError);
+        }
+      }
+
+      toast.success('Department updated successfully');
+      setEditDeptDialogOpen(false);
+      setDeptToEdit(null);
+      refetchDepts();
+      refetchMembers();
+    } catch (error) {
+      console.error('Error updating department:', error);
+      toast.error('Failed to update department');
     } finally {
       setSaving(false);
     }
@@ -378,6 +442,17 @@ export default function Departments() {
                         className="opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
+                          handleEditDepartment(dept);
+                        }}
+                      >
+                        <Edit2 className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setDeptToDelete(dept);
                           setDeleteDeptDialogOpen(true);
                         }}
@@ -387,6 +462,10 @@ export default function Departments() {
                       <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
                     </div>
                   </div>
+                  
+                  {dept.description && (
+                    <p className="mt-2 text-sm text-muted-foreground line-clamp-2">{dept.description}</p>
+                  )}
                   
                   {dept.departmentHead && (
                     <div className="mt-3 flex items-center gap-2 text-sm">
@@ -680,6 +759,50 @@ export default function Departments() {
               Cancel
             </Button>
             <Button onClick={handleSaveMemberDetails} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Department Dialog */}
+      <Dialog open={editDeptDialogOpen} onOpenChange={setEditDeptDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit2 className="h-5 w-5 text-primary" />
+              Edit Department
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-dept-name">Department Name *</Label>
+              <Input
+                id="edit-dept-name"
+                placeholder="e.g., Engineering"
+                value={editedDept.name}
+                onChange={(e) => setEditedDept(prev => ({ ...prev, name: e.target.value }))}
+                maxLength={50}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-dept-desc">Description</Label>
+              <Textarea
+                id="edit-dept-desc"
+                placeholder="Optional description..."
+                value={editedDept.description}
+                onChange={(e) => setEditedDept(prev => ({ ...prev, description: e.target.value }))}
+                maxLength={200}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDeptDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveDepartment} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
               Save Changes
             </Button>
