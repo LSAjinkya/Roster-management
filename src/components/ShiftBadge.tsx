@@ -1,6 +1,6 @@
 import { ShiftType, SHIFT_DEFINITIONS } from '@/types/roster';
 import { cn } from '@/lib/utils';
-import { Sun, Sunset, Moon, Clock, Calendar, CalendarOff, LucideIcon } from 'lucide-react';
+import { Sun, Sunset, Moon, Clock, Calendar, CalendarOff, CalendarX, CalendarCheck, CalendarDays, LucideIcon } from 'lucide-react';
 
 interface ShiftBadgeProps {
   type: ShiftType;
@@ -16,6 +16,9 @@ const shiftIcons: Record<ShiftType, LucideIcon> = {
   general: Clock,
   leave: Calendar,
   'comp-off': CalendarOff,
+  'week-off': CalendarX,
+  'public-off': CalendarCheck,
+  'paid-leave': CalendarDays,
 };
 
 export function ShiftBadge({ type, showTime = false, size = 'md', className }: ShiftBadgeProps) {

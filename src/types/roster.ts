@@ -1,4 +1,4 @@
-export type ShiftType = 'morning' | 'afternoon' | 'night' | 'general' | 'leave' | 'comp-off';
+export type ShiftType = 'morning' | 'afternoon' | 'night' | 'general' | 'leave' | 'comp-off' | 'week-off' | 'public-off' | 'paid-leave';
 
 export type Role = 'TL' | 'L3' | 'L2' | 'L1' | 'HR' | 'Manager' | 'Trainee' | 'Admin';
 
@@ -63,7 +63,10 @@ export const SHIFT_DEFINITIONS: ShiftDefinition[] = [
   { id: 'night', name: 'Night', startTime: '21:00', endTime: '07:00', color: 'shift-night' },
   { id: 'general', name: 'General', startTime: '10:00', endTime: '19:00', color: 'shift-general' },
   { id: 'leave', name: 'Leave', startTime: '', endTime: '', color: 'shift-leave' },
-  { id: 'comp-off', name: 'Comp Off', startTime: '', endTime: '', color: 'shift-compoff' },
+  { id: 'comp-off', name: 'CO', startTime: '', endTime: '', color: 'shift-compoff' },
+  { id: 'week-off', name: 'OFF', startTime: '', endTime: '', color: 'shift-weekoff' },
+  { id: 'public-off', name: 'PO', startTime: '', endTime: '', color: 'shift-publicoff' },
+  { id: 'paid-leave', name: 'PL', startTime: '', endTime: '', color: 'shift-paidleave' },
 ];
 
 export const DEPARTMENTS: Department[] = [

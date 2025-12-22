@@ -28,6 +28,9 @@ const shiftColors: Record<ShiftType, string> = {
   general: 'bg-shift-general',
   leave: 'bg-red-100',
   'comp-off': 'bg-orange-100',
+  'week-off': 'bg-gray-200',
+  'public-off': 'bg-blue-100',
+  'paid-leave': 'bg-green-100',
 };
 
 export function MonthlyRosterView({ assignments, teamMembers }: MonthlyRosterViewProps) {
@@ -58,6 +61,9 @@ export function MonthlyRosterView({ assignments, teamMembers }: MonthlyRosterVie
       general: dayAssignments.filter(a => a.shiftType === 'general').length,
       leave: dayAssignments.filter(a => a.shiftType === 'leave').length,
       'comp-off': dayAssignments.filter(a => a.shiftType === 'comp-off').length,
+      'week-off': dayAssignments.filter(a => a.shiftType === 'week-off').length,
+      'public-off': dayAssignments.filter(a => a.shiftType === 'public-off').length,
+      'paid-leave': dayAssignments.filter(a => a.shiftType === 'paid-leave').length,
     };
 
     return { total: dayAssignments.length, shiftCounts };
