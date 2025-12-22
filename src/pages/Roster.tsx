@@ -8,15 +8,16 @@ import { TableRosterView } from '@/components/TableRosterView';
 import { DepartmentSheetView } from '@/components/DepartmentSheetView';
 import { ExportDropdown } from '@/components/ExportDropdown';
 import { SetupMonthlyRosterDialog } from '@/components/SetupMonthlyRosterDialog';
+import { RotationPreview } from '@/components/RotationPreview';
 import { teamMembers as mockTeamMembers, currentWeekAssignments } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2 } from 'lucide-react';
+import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye } from 'lucide-react';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { TeamMember, Department, Role } from '@/types/roster';
 import { useAuth } from '@/hooks/useAuth';
 
-type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member' | 'department';
+type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member' | 'department' | 'rotation';
 
 export default function Roster() {
   const { canEditShifts } = useAuth();
@@ -102,6 +103,10 @@ export default function Roster() {
                 <Table2 size={16} />
                 <span className="hidden sm:inline">Table</span>
               </TabsTrigger>
+              <TabsTrigger value="rotation" className="gap-2">
+                <Eye size={16} />
+                <span className="hidden sm:inline">Rotation</span>
+              </TabsTrigger>
               <TabsTrigger value="daily" className="gap-2">
                 <CalendarDays size={16} />
                 <span className="hidden sm:inline">Daily</span>
@@ -143,6 +148,9 @@ export default function Roster() {
             assignments={currentWeekAssignments} 
             teamMembers={teamMembers} 
           />
+        )}
+        {viewMode === 'rotation' && (
+          <RotationPreview teamMembers={teamMembers} />
         )}
         {viewMode === 'daily' && (
           <SingleDayRosterView 
