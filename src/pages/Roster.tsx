@@ -9,6 +9,7 @@ import { DepartmentSheetView } from '@/components/DepartmentSheetView';
 import { ExportDropdown } from '@/components/ExportDropdown';
 import { SetupMonthlyRosterDialog } from '@/components/SetupMonthlyRosterDialog';
 import { RotationPreview } from '@/components/RotationPreview';
+import { BulkTeamAssignment } from '@/components/BulkTeamAssignment';
 import { teamMembers as mockTeamMembers, currentWeekAssignments } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye } from 'lucide-react';
@@ -96,7 +97,22 @@ export default function Roster() {
         subtitle="View and manage shift assignments"
       >
         <div className="flex items-center gap-3">
-          {canEditShifts && <SetupMonthlyRosterDialog teamMembers={teamMembers} departments={departments} />}
+          {canEditShifts && (
+            <>
+              <BulkTeamAssignment 
+                teamMembers={teamMembers.map(m => ({ 
+                  id: m.id, 
+                  name: m.name, 
+                  email: m.email, 
+                  department: m.department, 
+                  role: m.role, 
+                  team: m.team || null 
+                }))} 
+                onComplete={fetchTeamMembers} 
+              />
+              <SetupMonthlyRosterDialog teamMembers={teamMembers} departments={departments} />
+            </>
+          )}
           
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
             <TabsList className="bg-muted/50">
