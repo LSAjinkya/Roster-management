@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { ShiftAssignment, TeamMember, ShiftType, Department, DEPARTMENTS, TeamGroup, TEAM_GROUPS, SHIFT_DEFINITIONS } from '@/types/roster';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Calendar, Edit2, ArrowLeftRight, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Edit2, ArrowLeftRight, Users, Download, FileText, FileSpreadsheet } from 'lucide-react';
 import { 
   format, 
   addDays, 
@@ -18,6 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ShiftEditDialog } from './ShiftEditDialog';
 import { ShiftSwapDialog } from './ShiftSwapDialog';
 import { useAuth } from '@/hooks/useAuth';
@@ -29,6 +35,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { exportToCSV, exportTeamWisePDF } from '@/utils/exportRoster';
 
 interface BiWeeklyRosterViewProps {
   assignments: ShiftAssignment[];
@@ -234,6 +241,50 @@ export function BiWeeklyRosterView({ assignments, teamMembers, onShiftChange, on
                 Today
               </Button>
             )}
+
+            {/* Export Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Download size={16} />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem 
+                  className="gap-2 cursor-pointer"
+                  onClick={() => {
+                    exportToCSV({ 
+                      assignments, 
+                      teamMembers: filteredMembers, 
+                      startDate, 
+                      endDate, 
+                      viewType: 'biweekly' 
+                    });
+                    toast.success('CSV downloaded successfully');
+                  }}
+                >
+                  <FileSpreadsheet size={16} />
+                  Export as CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  className="gap-2 cursor-pointer"
+                  onClick={() => {
+                    exportTeamWisePDF({ 
+                      assignments, 
+                      teamMembers: filteredMembers, 
+                      startDate, 
+                      endDate, 
+                      viewType: 'biweekly' 
+                    });
+                    toast.success('PDF generated - use Print dialog to save');
+                  }}
+                >
+                  <FileText size={16} />
+                  Export Team PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
