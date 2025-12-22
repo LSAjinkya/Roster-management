@@ -1,6 +1,6 @@
 export type ShiftType = 'morning' | 'afternoon' | 'night' | 'general' | 'leave' | 'comp-off';
 
-export type Role = 'TL' | 'L2' | 'L1' | 'HR';
+export type Role = 'TL' | 'L3' | 'L2' | 'L1' | 'HR' | 'Manager' | 'Trainee' | 'Admin';
 
 export type Department = 
   | 'Support' 
@@ -83,4 +83,4 @@ export const DEPARTMENTS: Department[] = [
   'Development',
 ];
 
-export const ROLES: Role[] = ['TL', 'L2', 'L1', 'HR'];
+export const ROLES: Role[] = ['Admin', 'Manager', 'TL', 'L3', 'L2', 'L1', 'HR', 'Trainee'];

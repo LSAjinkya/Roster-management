@@ -4,7 +4,7 @@ import { TeamMemberCard } from './TeamMemberCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Filter, Users, Grid, List, LayoutGrid } from 'lucide-react';
+import { Search, Users, Grid, List, LayoutGrid, Building2, ChevronDown, ChevronUp, Mail, Circle } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -13,30 +13,47 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface TeamOverviewProps {
   members: TeamMember[];
 }
 
 const ROLE_COLORS: Record<Role, string> = {
+  'Admin': 'bg-destructive/20 text-destructive border-destructive/30',
+  'Manager': 'bg-violet-500/20 text-violet-700 border-violet-500/30',
   'TL': 'bg-primary/20 text-primary border-primary/30',
+  'L3': 'bg-indigo-500/20 text-indigo-700 border-indigo-500/30',
   'L2': 'bg-blue-500/20 text-blue-700 border-blue-500/30',
   'L1': 'bg-green-500/20 text-green-700 border-green-500/30',
   'HR': 'bg-purple-500/20 text-purple-700 border-purple-500/30',
+  'Trainee': 'bg-amber-500/20 text-amber-700 border-amber-500/30',
 };
 
 const ROLE_LABELS: Record<Role, string> = {
+  'Admin': 'Administrators',
+  'Manager': 'Managers',
   'TL': 'Team Leads',
+  'L3': 'Level 3',
   'L2': 'Level 2',
   'L1': 'Level 1',
   'HR': 'HR Team',
+  'Trainee': 'Trainees',
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  'available': 'text-green-500',
+  'on-leave': 'text-amber-500',
+  'unavailable': 'text-red-500',
 };
 
 export function TeamOverview({ members }: TeamOverviewProps) {
   const [search, setSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'all'>('all');
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'roles'>('roles');
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'roles' | 'departments'>('roles');
+  const [expandedRoles, setExpandedRoles] = useState<Set<Role>>(new Set());
+  const [expandedDepts, setExpandedDepts] = useState<Set<Department>>(new Set());
 
   const filteredMembers = members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -56,14 +73,40 @@ export function TeamOverview({ members }: TeamOverviewProps) {
     return acc;
   }, {} as Record<Role, number>);
 
-  // Group members by role for roles view
+  // Group members by role
   const membersByRole = ROLES.reduce((acc, role) => {
     acc[role] = filteredMembers.filter(m => m.role === role);
     return acc;
   }, {} as Record<Role, TeamMember[]>);
 
+  // Group members by department
+  const membersByDepartment = DEPARTMENTS.reduce((acc, dept) => {
+    acc[dept] = filteredMembers.filter(m => m.department === dept);
+    return acc;
+  }, {} as Record<Department, TeamMember[]>);
+
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  const toggleRoleExpand = (role: Role) => {
+    const newExpanded = new Set(expandedRoles);
+    if (newExpanded.has(role)) {
+      newExpanded.delete(role);
+    } else {
+      newExpanded.add(role);
+    }
+    setExpandedRoles(newExpanded);
+  };
+
+  const toggleDeptExpand = (dept: Department) => {
+    const newExpanded = new Set(expandedDepts);
+    if (newExpanded.has(dept)) {
+      newExpanded.delete(dept);
+    } else {
+      newExpanded.add(dept);
+    }
+    setExpandedDepts(newExpanded);
   };
 
   return (
@@ -136,6 +179,15 @@ export function TeamOverview({ members }: TeamOverviewProps) {
               <LayoutGrid size={16} />
             </Button>
             <Button
+              variant={viewMode === 'departments' ? 'default' : 'ghost'}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setViewMode('departments')}
+              title="Group by Department"
+            >
+              <Building2 size={16} />
+            </Button>
+            <Button
               variant={viewMode === 'grid' ? 'default' : 'ghost'}
               size="icon"
               className="h-8 w-8"
@@ -163,10 +215,13 @@ export function TeamOverview({ members }: TeamOverviewProps) {
           {ROLES.map((role) => {
             const roleMembers = membersByRole[role];
             if (roleMembers.length === 0) return null;
+            const isExpanded = expandedRoles.has(role);
             
             return (
-              <div 
+              <Collapsible 
                 key={role}
+                open={isExpanded}
+                onOpenChange={() => toggleRoleExpand(role)}
                 className="bg-card rounded-xl border border-border/50 overflow-hidden"
               >
                 <div className={`px-4 py-3 border-b border-border/50 ${ROLE_COLORS[role].replace('text-', 'bg-').split(' ')[0]}`}>
@@ -177,32 +232,170 @@ export function TeamOverview({ members }: TeamOverviewProps) {
                       </Badge>
                       <span className="font-semibold">{ROLE_LABELS[role]}</span>
                     </div>
-                    <Badge variant="secondary" className="text-xs">
-                      {roleMembers.length} members
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-xs">
+                        {roleMembers.length} members
+                      </Badge>
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </Button>
+                      </CollapsibleTrigger>
+                    </div>
                   </div>
                 </div>
-                <div className="p-4">
-                  <div className="flex flex-wrap gap-3">
+                
+                {/* Compact View */}
+                {!isExpanded && (
+                  <div className="p-4">
+                    <div className="flex flex-wrap gap-2">
+                      {roleMembers.map((member) => (
+                        <div 
+                          key={member.id}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary transition-colors"
+                        >
+                          <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
+                          <span className="text-sm font-medium">{member.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Expanded View */}
+                <CollapsibleContent>
+                  <div className="p-4 space-y-2">
                     {roleMembers.map((member) => (
                       <div 
                         key={member.id}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
+                        className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
                       >
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className={`text-xs ${ROLE_COLORS[role]}`}>
-                            {getInitials(member.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{member.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">{member.department}</p>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarFallback className={`text-sm ${ROLE_COLORS[role]}`}>
+                              {getInitials(member.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{member.name}</p>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Mail size={12} />
+                              <span>{member.email}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Badge variant="outline" className="text-xs">
+                            {member.department}
+                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
+                            <span className={`text-xs capitalize ${STATUS_COLORS[member.status]}`}>
+                              {member.status.replace('-', ' ')}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Department-wise Groups View */}
+      {viewMode === 'departments' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {DEPARTMENTS.map((dept) => {
+            const deptMembers = membersByDepartment[dept];
+            if (deptMembers.length === 0) return null;
+            const isExpanded = expandedDepts.has(dept);
+            
+            return (
+              <Collapsible 
+                key={dept}
+                open={isExpanded}
+                onOpenChange={() => toggleDeptExpand(dept)}
+                className="bg-card rounded-xl border border-border/50 overflow-hidden"
+              >
+                <div className="px-4 py-3 border-b border-border/50 bg-primary/5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-primary" />
+                      <span className="font-semibold">{dept}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-xs">
+                        {deptMembers.length} members
+                      </Badge>
+                      <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </Button>
+                      </CollapsibleTrigger>
+                    </div>
+                  </div>
                 </div>
-              </div>
+                
+                {/* Compact View */}
+                {!isExpanded && (
+                  <div className="p-4">
+                    <div className="flex flex-wrap gap-2">
+                      {deptMembers.map((member) => (
+                        <div 
+                          key={member.id}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary transition-colors"
+                        >
+                          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${ROLE_COLORS[member.role]}`}>
+                            {member.role}
+                          </Badge>
+                          <span className="text-sm font-medium">{member.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Expanded View */}
+                <CollapsibleContent>
+                  <div className="p-4 space-y-2">
+                    {deptMembers.map((member) => (
+                      <div 
+                        key={member.id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarFallback className={`text-sm ${ROLE_COLORS[member.role]}`}>
+                              {getInitials(member.name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{member.name}</p>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Mail size={12} />
+                              <span>{member.email}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Badge variant="outline" className={ROLE_COLORS[member.role]}>
+                            {member.role}
+                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
+                            <span className={`text-xs capitalize ${STATUS_COLORS[member.status]}`}>
+                              {member.status.replace('-', ' ')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             );
           })}
         </div>
