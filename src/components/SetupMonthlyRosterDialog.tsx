@@ -23,6 +23,7 @@ import { RosterPreviewTable } from './RosterPreviewTable';
 
 interface SetupMonthlyRosterDialogProps {
   teamMembers: TeamMember[];
+  departments: { id: string; name: string }[];
   onComplete?: () => void;
 }
 
@@ -59,12 +60,13 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 type Step = 'config' | 'preview';
 
-export function SetupMonthlyRosterDialog({ teamMembers, onComplete }: SetupMonthlyRosterDialogProps) {
+export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete }: SetupMonthlyRosterDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<Step>('config');
   const [previewAssignments, setPreviewAssignments] = useState<PreviewAssignment[]>([]);
   const [publicHolidays, setPublicHolidays] = useState<string[]>([]);
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   
   // Week-off configuration - 5 days work + 2 days off pattern
   const [weekOffConfig, setWeekOffConfig] = useState<WeekOffConfig>({
@@ -74,6 +76,12 @@ export function SetupMonthlyRosterDialog({ teamMembers, onComplete }: SetupMonth
     rotationMonths: 3,
     startOffset: 0,
   });
+
+  // Filter team members by selected department
+  const filteredTeamMembers = useMemo(() => {
+    if (selectedDepartment === 'all') return teamMembers;
+    return teamMembers.filter(m => m.department === selectedDepartment);
+  }, [teamMembers, selectedDepartment]);
 
   // Department shift configuration - Rotation order: Afternoon → Morning → Night
   const [deptConfigs, setDeptConfigs] = useState<DepartmentShiftConfig[]>(() => 
@@ -134,7 +142,7 @@ export function SetupMonthlyRosterDialog({ teamMembers, onComplete }: SetupMonth
     const assignments: PreviewAssignment[] = [];
 
     const membersByDept: Record<string, TeamMember[]> = {};
-    teamMembers.forEach(member => {
+    filteredTeamMembers.forEach(member => {
       if (!membersByDept[member.department]) {
         membersByDept[member.department] = [];
       }
@@ -306,6 +314,39 @@ export function SetupMonthlyRosterDialog({ teamMembers, onComplete }: SetupMonth
 
         {step === 'config' ? (
           <>
+            {/* Department Selector */}
+            <div className="rounded-lg border p-4 mb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-base">Select Department</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Choose which department to set up roster for
+                  </p>
+                </div>
+                <Select
+                  value={selectedDepartment}
+                  onValueChange={setSelectedDepartment}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="All Departments" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {departments.map(dept => (
+                      <SelectItem key={dept.id} value={dept.name}>
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {selectedDepartment !== 'all' && (
+                <p className="text-sm text-primary mt-2">
+                  Roster will be generated for {filteredTeamMembers.length} member(s) in {selectedDepartment}
+                </p>
+              )}
+            </div>
+
             <Tabs defaultValue="weekoff" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="weekoff">Week-Off Rules</TabsTrigger>
@@ -551,8 +592,10 @@ export function SetupMonthlyRosterDialog({ teamMembers, onComplete }: SetupMonth
                     <span>{monthName}</span>
                     <span className="text-muted-foreground">Total Days:</span>
                     <span>{totalDays}</span>
+                    <span className="text-muted-foreground">Department:</span>
+                    <span>{selectedDepartment === 'all' ? 'All Departments' : selectedDepartment}</span>
                     <span className="text-muted-foreground">Team Members:</span>
-                    <span>{teamMembers.length}</span>
+                    <span>{filteredTeamMembers.length}</span>
                     <span className="text-muted-foreground">Week-Offs:</span>
                     <span>
                       {weekOffConfig.enabled 
@@ -566,7 +609,7 @@ export function SetupMonthlyRosterDialog({ teamMembers, onComplete }: SetupMonth
                   <h4 className="font-medium mb-3">Department Shifts</h4>
                   <div className="space-y-1 text-sm">
                     {deptConfigs.filter(c => 
-                      teamMembers.some(m => m.department === c.department)
+                      filteredTeamMembers.some(m => m.department === c.department)
                     ).map(config => (
                       <div key={config.department} className="flex justify-between">
                         <span className="text-muted-foreground">{config.department}:</span>
@@ -597,7 +640,7 @@ export function SetupMonthlyRosterDialog({ teamMembers, onComplete }: SetupMonth
             <ScrollArea className="h-[60vh]">
               <RosterPreviewTable
                 assignments={previewAssignments}
-                teamMembers={teamMembers}
+                teamMembers={filteredTeamMembers}
                 month={nextMonth}
                 editable={true}
                 onEditCell={handleEditPreviewCell}
