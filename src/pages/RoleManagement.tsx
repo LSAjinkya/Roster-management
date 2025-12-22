@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search, FileUp, Users, UserCheck, Trash2, Plus } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
@@ -400,22 +401,29 @@ export default function RoleManagement() {
     }
   };
 
-  const handleRoleChange = async (userId: string, newRole: AppRole) => {
+  const handleRoleToggle = async (userId: string, role: AppRole, isAdding: boolean) => {
     try {
-      const { error: deleteError } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userId);
+      if (isAdding) {
+        const { error } = await supabase
+          .from('user_roles')
+          .insert({ user_id: userId, role: role });
+        if (error) {
+          if (error.code === '23505') {
+            toast.error('User already has this role');
+            return;
+          }
+          throw error;
+        }
+      } else {
+        const { error } = await supabase
+          .from('user_roles')
+          .delete()
+          .eq('user_id', userId)
+          .eq('role', role);
+        if (error) throw error;
+      }
 
-      if (deleteError) throw deleteError;
-
-      const { error: insertError } = await supabase
-        .from('user_roles')
-        .insert({ user_id: userId, role: newRole });
-
-      if (insertError) throw insertError;
-
-      toast.success('Role updated successfully');
+      toast.success(isAdding ? 'Role added' : 'Role removed');
       fetchUsers();
     } catch (error) {
       console.error('Error updating role:', error);
@@ -1028,47 +1036,73 @@ export default function RoleManagement() {
                           value={u.status}
                           onValueChange={(value) => handleStatusChange(u.id, value as UserStatus)}
                         >
-                          <SelectTrigger className="w-32">
-                            <SelectValue />
+                          <SelectTrigger className="w-36">
+                            <Badge 
+                              variant="outline" 
+                              className={STATUS_COLORS[u.status]}
+                            >
+                              {STATUS_LABELS[u.status]}
+                            </Badge>
                           </SelectTrigger>
                           <SelectContent>
                             {(['available', 'on-leave', 'unavailable'] as UserStatus[]).map((status) => (
                               <SelectItem key={status} value={status}>
-                                <span className={`px-2 py-0.5 rounded text-xs border ${STATUS_COLORS[status]}`}>
+                                <Badge variant="outline" className={STATUS_COLORS[status]}>
                                   {STATUS_LABELS[status]}
-                                </span>
+                                </Badge>
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={u.roles.length > 0 ? u.roles[0] : 'no-role'}
-                          onValueChange={(value) => handleRoleChange(u.id, value as AppRole)}
-                          disabled={u.id === user?.id}
-                        >
-                          <SelectTrigger className="w-32">
-                            <SelectValue placeholder="Select role">
-                              {u.roles.length > 0 ? (
-                                <Badge className={ROLE_COLORS[u.roles[0]]}>
-                                  {ROLE_LABELS[u.roles[0]]}
-                                </Badge>
-                              ) : (
-                                <span className="text-muted-foreground">No role</span>
-                              )}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(['admin', 'hr', 'tl', 'member'] as AppRole[]).map((role) => (
-                              <SelectItem key={role} value={role}>
-                                <Badge className={ROLE_COLORS[role]}>
-                                  {ROLE_LABELS[role]}
-                                </Badge>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex flex-wrap gap-1 min-w-[140px]">
+                          {u.roles.length > 0 ? (
+                            u.roles.map((role) => (
+                              <Badge 
+                                key={role} 
+                                className={`${ROLE_COLORS[role]} cursor-pointer hover:opacity-80`}
+                                onClick={() => {
+                                  if (u.id !== user?.id) {
+                                    handleRoleToggle(u.id, role, false);
+                                  }
+                                }}
+                              >
+                                {ROLE_LABELS[role]} ×
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-muted-foreground text-sm">No roles</span>
+                          )}
+                          {u.id !== user?.id && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start">
+                                <DropdownMenuLabel>Add Role</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {(['admin', 'hr', 'tl', 'member'] as AppRole[])
+                                  .filter((role) => !u.roles.includes(role))
+                                  .map((role) => (
+                                    <DropdownMenuItem
+                                      key={role}
+                                      onClick={() => handleRoleToggle(u.id, role, true)}
+                                    >
+                                      <Badge className={ROLE_COLORS[role]}>
+                                        {ROLE_LABELS[role]}
+                                      </Badge>
+                                    </DropdownMenuItem>
+                                  ))}
+                                {u.roles.length === 4 && (
+                                  <DropdownMenuItem disabled>All roles assigned</DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Button
