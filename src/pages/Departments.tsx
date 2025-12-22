@@ -73,15 +73,13 @@ const STATUS_COLORS: Record<string, string> = {
 export default function Departments() {
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const [addDeptDialogOpen, setAddDeptDialogOpen] = useState(false);
-  const [editMemberDialogOpen, setEditMemberDialogOpen] = useState(false);
-  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [deleteDeptDialogOpen, setDeleteDeptDialogOpen] = useState(false);
   const [deptToDelete, setDeptToDelete] = useState<Department | null>(null);
   const [newDept, setNewDept] = useState({ name: '', description: '' });
-  const [editedMember, setEditedMember] = useState({ name: '', email: '' });
   const [editDeptDialogOpen, setEditDeptDialogOpen] = useState(false);
   const [deptToEdit, setDeptToEdit] = useState<Department | null>(null);
   const [editedDept, setEditedDept] = useState({ name: '', description: '' });
+  const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();
 
@@ -258,50 +256,30 @@ export default function Departments() {
     }
   };
 
-  const handleEditMember = (member: TeamMember) => {
-    setSelectedMember(member);
-    setEditedMember({ name: member.name, email: member.email });
-    setEditMemberDialogOpen(true);
-  };
-
-  const handleSaveMemberDetails = async () => {
-    if (!selectedMember) return;
+  const handleAddUserToDepartment = async (memberId: string) => {
+    if (!selectedDepartment) return;
     
-    if (!editedMember.name.trim() || !editedMember.email.trim()) {
-      toast.error('Name and email are required');
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(editedMember.email)) {
-      toast.error('Please enter a valid email address');
-      return;
-    }
-
-    setSaving(true);
     try {
       const { error } = await supabase
         .from('team_members')
-        .update({
-          name: editedMember.name.trim(),
-          email: editedMember.email.trim().toLowerCase(),
-        })
-        .eq('id', selectedMember.id);
+        .update({ department: selectedDepartment })
+        .eq('id', memberId);
 
       if (error) throw error;
 
-      toast.success('Member details updated successfully');
-      setEditMemberDialogOpen(false);
-      setSelectedMember(null);
+      toast.success('User added to department');
+      setAddUserDialogOpen(false);
       refetchMembers();
       queryClient.invalidateQueries({ queryKey: ['team-members'] });
     } catch (error) {
-      console.error('Error updating member:', error);
-      toast.error('Failed to update member details');
-    } finally {
-      setSaving(false);
+      console.error('Error adding user to department:', error);
+      toast.error('Failed to add user to department');
     }
   };
+
+  const availableUsersForDepartment = teamMembers.filter(
+    m => m.department !== selectedDepartment
+  );
 
   const handleRoleChange = async (memberId: string, newRole: string) => {
     try {
@@ -526,13 +504,23 @@ export default function Departments() {
       <Dialog open={!!selectedDepartment} onOpenChange={(open) => !open && setSelectedDepartment(null)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-primary" />
-              {selectedDepartment} Team
-              <Badge variant="secondary" className="ml-2">
-                {selectedDeptData?.total || 0} members
-              </Badge>
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />
+                {selectedDepartment} Team
+                <Badge variant="secondary" className="ml-2">
+                  {selectedDeptData?.total || 0} members
+                </Badge>
+              </DialogTitle>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setAddUserDialogOpen(true)}
+              >
+                <UserPlus className="h-4 w-4 mr-2" />
+                Add User
+              </Button>
+            </div>
           </DialogHeader>
           
           {selectedDeptData && (
@@ -602,14 +590,6 @@ export default function Departments() {
                         {member.role === 'TL' && (
                           <Crown className="h-4 w-4 text-amber-500" />
                         )}
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-6 w-6"
-                          onClick={() => handleEditMember(member)}
-                        >
-                          <Edit2 className="h-3 w-3" />
-                        </Button>
                       </div>
                       <p className="text-sm text-muted-foreground">{member.email}</p>
                     </div>
@@ -727,42 +707,50 @@ export default function Departments() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Member Dialog */}
-      <Dialog open={editMemberDialogOpen} onOpenChange={setEditMemberDialogOpen}>
-        <DialogContent>
+      {/* Add User to Department Dialog */}
+      <Dialog open={addUserDialogOpen} onOpenChange={setAddUserDialogOpen}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Member Details</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-primary" />
+              Add User to {selectedDepartment}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="member-name">Name *</Label>
-              <Input
-                id="member-name"
-                value={editedMember.name}
-                onChange={(e) => setEditedMember(prev => ({ ...prev, name: e.target.value }))}
-                maxLength={100}
-              />
+          <ScrollArea className="max-h-[400px]">
+            <div className="space-y-2 pr-4">
+              {availableUsersForDepartment.length > 0 ? (
+                availableUsersForDepartment.map((member) => (
+                  <div
+                    key={member.id}
+                    className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-secondary/40 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                          {member.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-medium text-sm">{member.name}</p>
+                        <p className="text-xs text-muted-foreground">{member.department}</p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => handleAddUserToDepartment(member.id)}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add
+                    </Button>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  All users are already in this department
+                </div>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="member-email">Email *</Label>
-              <Input
-                id="member-email"
-                type="email"
-                value={editedMember.email}
-                onChange={(e) => setEditedMember(prev => ({ ...prev, email: e.target.value }))}
-                maxLength={255}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditMemberDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveMemberDetails} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-              Save Changes
-            </Button>
-          </DialogFooter>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 
