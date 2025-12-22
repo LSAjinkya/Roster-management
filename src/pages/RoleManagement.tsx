@@ -965,19 +965,17 @@ export default function RoleManagement() {
                                 )}
                               </SelectValue>
                             </SelectTrigger>
-                            <SelectContent className="bg-popover">
-                              <SelectItem value="none">
-                                <span className="text-muted-foreground">No Team</span>
+                            <SelectContent className="bg-popover border shadow-md">
+                              <SelectItem value="none" className="text-muted-foreground">
+                                No Team
                               </SelectItem>
                               {TEAM_GROUPS.map((team) => (
-                                <SelectItem key={team} value={team}>
-                                  <Badge variant="outline" className={
-                                    team === 'Alpha' ? 'bg-blue-500/20 text-blue-700 border-blue-500/30' :
-                                    team === 'Gamma' ? 'bg-green-500/20 text-green-700 border-green-500/30' :
-                                    'bg-orange-500/20 text-orange-700 border-orange-500/30'
-                                  }>
-                                    {team}
-                                  </Badge>
+                                <SelectItem key={team} value={team} className={
+                                  team === 'Alpha' ? 'text-blue-700 dark:text-blue-400' :
+                                  team === 'Gamma' ? 'text-green-700 dark:text-green-400' :
+                                  'text-orange-700 dark:text-orange-400'
+                                }>
+                                  {team}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -995,9 +993,9 @@ export default function RoleManagement() {
                                 </Badge>
                               </SelectValue>
                             </SelectTrigger>
-                            <SelectContent className="bg-popover">
+                            <SelectContent className="bg-popover border shadow-md">
                               {ROLES.map((role) => (
-                                <SelectItem key={role} value={role}>
+                                <SelectItem key={role} value={role} className="text-foreground">
                                   {role}
                                 </SelectItem>
                               ))}
