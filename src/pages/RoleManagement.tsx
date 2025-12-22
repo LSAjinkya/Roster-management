@@ -1044,17 +1044,27 @@ export default function RoleManagement() {
                       </TableCell>
                       <TableCell>
                         <Select
-                          value={u.roles[0] || 'member'}
+                          value={u.roles.length > 0 ? u.roles[0] : 'no-role'}
                           onValueChange={(value) => handleRoleChange(u.id, value as AppRole)}
                           disabled={u.id === user?.id}
                         >
-                          <SelectTrigger className="w-28">
-                            <SelectValue />
+                          <SelectTrigger className="w-32">
+                            <SelectValue placeholder="Select role">
+                              {u.roles.length > 0 ? (
+                                <Badge className={ROLE_COLORS[u.roles[0]]}>
+                                  {ROLE_LABELS[u.roles[0]]}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground">No role</span>
+                              )}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {(['admin', 'hr', 'tl', 'member'] as AppRole[]).map((role) => (
                               <SelectItem key={role} value={role}>
-                                {ROLE_LABELS[role]}
+                                <Badge className={ROLE_COLORS[role]}>
+                                  {ROLE_LABELS[role]}
+                                </Badge>
                               </SelectItem>
                             ))}
                           </SelectContent>
