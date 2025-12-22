@@ -494,6 +494,7 @@ export default function OrgChartPage() {
           <OrgTreeView 
             members={filteredMembers} 
             onMemberClick={(member) => toast.info(`${member.name} - ${member.email}`)}
+            onMemberUpdate={fetchMembers}
           />
         </TabsContent>
 
