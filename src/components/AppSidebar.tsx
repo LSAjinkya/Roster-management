@@ -11,7 +11,8 @@ import {
   LogOut,
   Shield,
   CalendarDays,
-  Network
+  Network,
+  Grid3X3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ const navItems: NavItem[] = [
   { icon: Building2, label: 'Departments', path: '/departments', requiredRoles: ['admin', 'hr', 'tl'] },
   { icon: Network, label: 'Org Chart', path: '/org-chart' },
   { icon: Shield, label: 'Users & Roles', path: '/admin/roles', requiredRoles: ['admin', 'hr'] },
+  { icon: Grid3X3, label: 'Permissions', path: '/admin/permissions', requiredRoles: ['admin', 'hr'] },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
