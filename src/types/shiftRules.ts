@@ -103,31 +103,28 @@ export function getMemberShiftTypeForDate(
   return shiftSequence[newIndex];
 }
 
-// Get week-off days within a 15-day cycle (2+2 pattern = 4 days off)
+// Get week-off days within a 14-day cycle (2 days off per week = 4 days total)
 export function getWeekOffDaysInCycle(
   cycleStartDate: Date,
   memberOffset: number,
   rotationCycleDays: number
 ): number[] {
-  // 2+2 pattern: 2 offs in first week, 2 offs in second week
-  // For 15-day cycle: offs on days ~3,4 and ~10,11 (staggered by member)
-  const weekLength = 7;
-  const offsPerWeek = 2;
-  
+  // For a 14-day cycle: 2 days off each week (days 5-6 in week 1, days 12-13 in week 2)
+  // Stagger based on memberOffset to avoid everyone having the same days off
   const offDays: number[] = [];
   
-  // First week offs (days 5-6 of week 1, staggered)
-  const week1Start = (5 + memberOffset) % weekLength;
-  for (let i = 0; i < offsPerWeek; i++) {
-    offDays.push((week1Start + i) % rotationCycleDays);
-  }
+  // Week 1 offs: staggered starting from day 5
+  const week1OffStart = (5 + (memberOffset % 3)) % 7;
+  offDays.push(week1OffStart);
+  offDays.push((week1OffStart + 1) % 7);
   
-  // Second week offs (days 5-6 of week 2, staggered)
-  const week2Start = (weekLength + 5 + memberOffset) % rotationCycleDays;
-  for (let i = 0; i < offsPerWeek; i++) {
-    const day = (week2Start + i) % rotationCycleDays;
-    if (!offDays.includes(day)) {
-      offDays.push(day);
+  // Week 2 offs: staggered starting from day 12 (7 + 5)
+  const week2OffStart = 7 + ((5 + (memberOffset % 3)) % 7);
+  if (week2OffStart < rotationCycleDays) {
+    offDays.push(week2OffStart);
+    const secondOff = week2OffStart + 1;
+    if (secondOff < rotationCycleDays) {
+      offDays.push(secondOff);
     }
   }
   

@@ -98,6 +98,7 @@ export function RosterPreviewTable({
 
   const getMemberStats = (memberId: string) => {
     const memberAssignments = assignments.filter(a => a.member_id === memberId);
+    const weekOffs = memberAssignments.filter(a => a.shift_type === 'week-off').length;
     return {
       morning: memberAssignments.filter(a => a.shift_type === 'morning').length,
       afternoon: memberAssignments.filter(a => a.shift_type === 'afternoon').length,
@@ -105,9 +106,38 @@ export function RosterPreviewTable({
       general: memberAssignments.filter(a => a.shift_type === 'general').length,
       leave: memberAssignments.filter(a => a.shift_type === 'leave').length,
       compOff: memberAssignments.filter(a => a.shift_type === 'comp-off').length,
+      weekOff: weekOffs,
       off: monthDays.length - memberAssignments.length,
       total: memberAssignments.length,
     };
+  };
+
+  // Calculate team shift summary for today
+  const getTeamShiftSummary = (team: TeamGroup) => {
+    const members = membersByTeam[team] || [];
+    const memberIds = new Set(members.map(m => m.id));
+    
+    const summary = {
+      morning: 0,
+      afternoon: 0,
+      night: 0,
+      general: 0,
+      off: 0,
+      total: members.length,
+    };
+
+    // Get all assignments for all days and aggregate
+    assignments.forEach(a => {
+      if (memberIds.has(a.member_id)) {
+        if (a.shift_type === 'morning') summary.morning++;
+        else if (a.shift_type === 'afternoon') summary.afternoon++;
+        else if (a.shift_type === 'night') summary.night++;
+        else if (a.shift_type === 'general') summary.general++;
+        else if (a.shift_type === 'week-off' || a.shift_type === 'public-off' || a.shift_type === 'comp-off') summary.off++;
+      }
+    });
+
+    return summary;
   };
 
   // Helper to render member row
@@ -172,15 +202,62 @@ export function RosterPreviewTable({
         <td className="p-1 text-center font-medium bg-shift-morning/20">{stats.morning || '-'}</td>
         <td className="p-1 text-center font-medium bg-shift-afternoon/20">{stats.afternoon || '-'}</td>
         <td className="p-1 text-center font-medium bg-shift-night/20">{stats.night || '-'}</td>
-        <td className="p-1 text-center font-medium bg-muted/30">{stats.off + stats.compOff}</td>
+        <td className="p-1 text-center font-medium bg-muted/30">{stats.weekOff + stats.compOff}</td>
       </tr>
     );
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      {/* Team Shift Summary Cards */}
+      <div className="grid grid-cols-3 gap-3">
+        {TEAM_GROUPS.map(team => {
+          const summary = getTeamShiftSummary(team);
+          const members = membersByTeam[team] || [];
+          return (
+            <div 
+              key={team}
+              className={cn(
+                "rounded-lg border p-3",
+                team === 'Alpha' && "bg-blue-50 dark:bg-blue-950/30 border-blue-300",
+                team === 'Gamma' && "bg-green-50 dark:bg-green-950/30 border-green-300",
+                team === 'Beta' && "bg-orange-50 dark:bg-orange-950/30 border-orange-300"
+              )}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className={cn(
+                  "px-2 py-0.5 rounded border font-bold text-sm",
+                  TEAM_COLORS[team]
+                )}>
+                  Team {team}
+                </span>
+                <span className="text-xs text-muted-foreground">{members.length} members</span>
+              </div>
+              <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                <div className="rounded bg-shift-morning p-1.5">
+                  <div className="font-bold text-amber-900">{summary.morning}</div>
+                  <div className="text-amber-700 text-[10px]">Morning</div>
+                </div>
+                <div className="rounded bg-shift-afternoon p-1.5">
+                  <div className="font-bold text-sky-900">{summary.afternoon}</div>
+                  <div className="text-sky-700 text-[10px]">Afternoon</div>
+                </div>
+                <div className="rounded bg-shift-night p-1.5">
+                  <div className="font-bold text-violet-900">{summary.night}</div>
+                  <div className="text-violet-700 text-[10px]">Night</div>
+                </div>
+                <div className="rounded bg-gray-200 p-1.5">
+                  <div className="font-bold text-gray-700">{summary.off}</div>
+                  <div className="text-gray-600 text-[10px]">Offs</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       {/* View Mode Toggle */}
-      <div className="flex justify-end mb-2">
+      <div className="flex justify-end">
         <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'team' | 'department')}>
           <TabsList className="h-8">
             <TabsTrigger value="team" className="text-xs gap-1 h-7">
