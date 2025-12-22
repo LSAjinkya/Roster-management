@@ -104,31 +104,40 @@ export function getMemberShiftTypeForDate(
 }
 
 // Get week-off days within a 14-day cycle (2 days off per week = 4 days total)
+// Week-offs can be on ANY day, staggered by member offset to distribute evenly
 export function getWeekOffDaysInCycle(
   cycleStartDate: Date,
   memberOffset: number,
   rotationCycleDays: number
 ): number[] {
-  // For a 14-day cycle: 2 days off each week (days 5-6 in week 1, days 12-13 in week 2)
-  // Stagger based on memberOffset to avoid everyone having the same days off
+  // For a 14-day cycle: 2 days off each week (4 days total)
+  // Distribute off days evenly across all 7 days of the week using member offset
   const offDays: number[] = [];
   
-  // Week 1 offs: staggered starting from day 5
-  const week1OffStart = (5 + (memberOffset % 3)) % 7;
-  offDays.push(week1OffStart);
-  offDays.push((week1OffStart + 1) % 7);
+  // Calculate off days for week 1 (days 0-6)
+  // Use member offset to stagger across all days of the week
+  const week1FirstOff = memberOffset % 7;
+  const week1SecondOff = (week1FirstOff + 3) % 7; // Space them ~3 days apart within the week
+  offDays.push(week1FirstOff);
+  offDays.push(week1SecondOff);
   
-  // Week 2 offs: staggered starting from day 12 (7 + 5)
-  const week2OffStart = 7 + ((5 + (memberOffset % 3)) % 7);
-  if (week2OffStart < rotationCycleDays) {
-    offDays.push(week2OffStart);
-    const secondOff = week2OffStart + 1;
-    if (secondOff < rotationCycleDays) {
-      offDays.push(secondOff);
-    }
+  // Calculate off days for week 2 (days 7-13)
+  // Offset by 1 from week 1 pattern to create variety
+  const week2FirstOff = 7 + ((week1FirstOff + 1) % 7);
+  const week2SecondOff = 7 + ((week1SecondOff + 1) % 7);
+  
+  if (week2FirstOff < rotationCycleDays) {
+    offDays.push(week2FirstOff);
+  }
+  if (week2SecondOff < rotationCycleDays && week2SecondOff !== week2FirstOff) {
+    offDays.push(week2SecondOff);
   }
   
-  return offDays.sort((a, b) => a - b);
+  // Ensure we always have exactly 4 offs for 14-day cycle (2 per week)
+  // If we have duplicates or missing days, adjust
+  const uniqueOffs = [...new Set(offDays)].sort((a, b) => a - b);
+  
+  return uniqueOffs;
 }
 
 // Shift eligibility by role

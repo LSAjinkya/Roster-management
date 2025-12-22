@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { WeeklyRosterView } from '@/components/WeeklyRosterView';
+import { BiWeeklyRosterView } from '@/components/BiWeeklyRosterView';
 import { SingleDayRosterView } from '@/components/SingleDayRosterView';
 import { MonthlyRosterView } from '@/components/MonthlyRosterView';
 import { MemberRosterView } from '@/components/MemberRosterView';
@@ -12,13 +13,13 @@ import { RotationPreview } from '@/components/RotationPreview';
 import { BulkTeamAssignment } from '@/components/BulkTeamAssignment';
 import { teamMembers as mockTeamMembers, currentWeekAssignments } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye } from 'lucide-react';
+import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, CalendarClock } from 'lucide-react';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { TeamMember, Department, Role, TeamGroup } from '@/types/roster';
 import { useAuth } from '@/hooks/useAuth';
 
-type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member' | 'department' | 'rotation';
+type ViewMode = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'table' | 'member' | 'department' | 'rotation';
 
 export default function Roster() {
   const { canEditShifts } = useAuth();
@@ -128,6 +129,10 @@ export default function Roster() {
                 <CalendarDays size={16} />
                 <span className="hidden sm:inline">Daily</span>
               </TabsTrigger>
+              <TabsTrigger value="biweekly" className="gap-2">
+                <CalendarClock size={16} />
+                <span className="hidden sm:inline">14-Day</span>
+              </TabsTrigger>
               <TabsTrigger value="weekly" className="gap-2">
                 <CalendarRange size={16} />
                 <span className="hidden sm:inline">Weekly</span>
@@ -171,6 +176,12 @@ export default function Roster() {
         )}
         {viewMode === 'daily' && (
           <SingleDayRosterView 
+            assignments={currentWeekAssignments} 
+            teamMembers={teamMembers} 
+          />
+        )}
+        {viewMode === 'biweekly' && (
+          <BiWeeklyRosterView 
             assignments={currentWeekAssignments} 
             teamMembers={teamMembers} 
           />
