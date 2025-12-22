@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ShiftAssignment, TeamMember, ShiftType, Department, DEPARTMENTS } from '@/types/roster';
+import { ShiftAssignment, TeamMember, ShiftType, Department, DEPARTMENTS, TeamGroup, TEAM_GROUPS } from '@/types/roster';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Calendar, Edit2, ArrowLeftRight } from 'lucide-react';
 import { 
@@ -63,6 +63,7 @@ const shiftLetters: Record<ShiftType, string> = {
 export function TableRosterView({ assignments, teamMembers, onShiftChange, onRefresh }: TableRosterViewProps) {
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'all'>('all');
+  const [teamFilter, setTeamFilter] = useState<TeamGroup | 'all'>('all');
   const [tlFilter, setTlFilter] = useState<string>('all');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
@@ -95,17 +96,20 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
     return null;
   }, [teamMembers, tlFilter]);
 
-  // Filter members by department and TL (show only members reporting to selected TL)
+  // Filter members by department, team and TL (show only members reporting to selected TL)
   const filteredMembers = useMemo(() => {
     let members = teamMembers;
     if (departmentFilter !== 'all') {
       members = members.filter(m => m.department === departmentFilter);
     }
+    if (teamFilter !== 'all') {
+      members = members.filter(m => m.team === teamFilter);
+    }
     if (tlFilter !== 'all') {
       members = members.filter(m => m.reportingTLId === tlFilter);
     }
     return members;
-  }, [teamMembers, departmentFilter, tlFilter]);
+  }, [teamMembers, departmentFilter, teamFilter, tlFilter]);
 
   // Group members by department for display
   const membersByDepartment = useMemo(() => {
@@ -214,6 +218,26 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
               <SelectItem value="all">All Departments</SelectItem>
               {DEPARTMENTS.map(dept => (
                 <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={teamFilter} onValueChange={(v) => setTeamFilter(v as TeamGroup | 'all')}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="All Teams" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Teams</SelectItem>
+              {TEAM_GROUPS.map(team => (
+                <SelectItem key={team} value={team}>
+                  <Badge variant="outline" className={
+                    team === 'Alpha' ? 'bg-blue-500/20 text-blue-700 border-blue-500/30' :
+                    team === 'Gamma' ? 'bg-green-500/20 text-green-700 border-green-500/30' :
+                    'bg-orange-500/20 text-orange-700 border-orange-500/30'
+                  }>
+                    {team}
+                  </Badge>
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
