@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./hooks/useAuth";
 import { DashboardLayout } from "./layouts/DashboardLayout";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
 import Roster from "./pages/Roster";
 import Team from "./pages/Team";
@@ -32,10 +33,22 @@ const App = () => (
               <Route path="/" element={<Dashboard />} />
               <Route path="/roster" element={<Roster />} />
               <Route path="/team" element={<Team />} />
-              <Route path="/shifts" element={<Shifts />} />
-              <Route path="/departments" element={<Departments />} />
+              <Route path="/shifts" element={
+                <ProtectedRoute requiredRoles={['admin', 'hr', 'tl']}>
+                  <Shifts />
+                </ProtectedRoute>
+              } />
+              <Route path="/departments" element={
+                <ProtectedRoute requiredRoles={['admin', 'hr', 'tl']}>
+                  <Departments />
+                </ProtectedRoute>
+              } />
               <Route path="/leave" element={<LeaveRequests />} />
-              <Route path="/admin/roles" element={<RoleManagement />} />
+              <Route path="/admin/roles" element={
+                <ProtectedRoute requiredRoles={['admin', 'hr']}>
+                  <RoleManagement />
+                </ProtectedRoute>
+              } />
               <Route path="/org-chart" element={<OrgChartPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
