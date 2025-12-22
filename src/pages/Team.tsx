@@ -28,6 +28,7 @@ export default function Team() {
         email: member.email,
         role: member.role as Role,
         department: member.department as Department,
+        team: member.team as TeamMember['team'],
         status: (member.status as 'available' | 'on-leave' | 'unavailable') || 'available',
         reportingTLId: member.reporting_tl_id || undefined,
       }));

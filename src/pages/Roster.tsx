@@ -14,7 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye } from 'lucide-react';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
-import { TeamMember, Department, Role } from '@/types/roster';
+import { TeamMember, Department, Role, TeamGroup } from '@/types/roster';
 import { useAuth } from '@/hooks/useAuth';
 
 type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member' | 'department' | 'rotation';
@@ -47,6 +47,7 @@ export default function Roster() {
           email: member.email,
           role: member.role as Role,
           department: member.department as Department,
+          team: member.team as TeamGroup | undefined,
           status: (member.status as 'available' | 'on-leave' | 'unavailable') || 'available',
           reportingTLId: member.reporting_tl_id || undefined,
         }));

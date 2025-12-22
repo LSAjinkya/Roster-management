@@ -19,7 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { format } from 'date-fns';
-import { DEPARTMENTS, Department, ROLES, Role } from '@/types/roster';
+import { DEPARTMENTS, Department, ROLES, Role, TEAM_GROUPS, TeamGroup } from '@/types/roster';
 
 type AppRole = 'admin' | 'hr' | 'tl' | 'member';
 type UserStatus = 'available' | 'on-leave' | 'unavailable';
@@ -40,6 +40,7 @@ interface TeamMember {
   email: string;
   role: string;
   department: string;
+  team: string | null;
   status: string;
   reporting_tl_id: string | null;
 }
@@ -186,7 +187,7 @@ export default function RoleManagement() {
     try {
       const { data, error } = await supabase
         .from('team_members')
-        .select('id, name, email, role, department, status, reporting_tl_id')
+        .select('id, name, email, role, department, team, status, reporting_tl_id')
         .order('name');
 
       if (error) throw error;
@@ -521,6 +522,23 @@ export default function RoleManagement() {
     } catch (error) {
       console.error('Error updating team member status:', error);
       toast.error('Failed to update status');
+    }
+  };
+
+  const handleTeamMemberTeamChange = async (memberId: string, team: string | null) => {
+    try {
+      const { error } = await supabase
+        .from('team_members')
+        .update({ team: team === 'none' ? null : team })
+        .eq('id', memberId);
+
+      if (error) throw error;
+
+      toast.success('Team assignment updated');
+      fetchTeamMembers();
+    } catch (error) {
+      console.error('Error updating team:', error);
+      toast.error('Failed to update team');
     }
   };
 
@@ -890,6 +908,7 @@ export default function RoleManagement() {
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Department</TableHead>
+                      <TableHead>Team</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="w-20">Actions</TableHead>
@@ -921,6 +940,44 @@ export default function RoleManagement() {
                               {DEPARTMENTS.map((dept) => (
                                 <SelectItem key={dept} value={dept}>
                                   {dept}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={member.team || 'none'}
+                            onValueChange={(value) => handleTeamMemberTeamChange(member.id, value === 'none' ? null : value)}
+                          >
+                            <SelectTrigger className="w-28">
+                              <SelectValue>
+                                {member.team ? (
+                                  <Badge variant="outline" className={
+                                    member.team === 'Alpha' ? 'bg-blue-500/20 text-blue-700 border-blue-500/30' :
+                                    member.team === 'Gamma' ? 'bg-green-500/20 text-green-700 border-green-500/30' :
+                                    'bg-orange-500/20 text-orange-700 border-orange-500/30'
+                                  }>
+                                    {member.team}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground">None</span>
+                                )}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover">
+                              <SelectItem value="none">
+                                <span className="text-muted-foreground">No Team</span>
+                              </SelectItem>
+                              {TEAM_GROUPS.map((team) => (
+                                <SelectItem key={team} value={team}>
+                                  <Badge variant="outline" className={
+                                    team === 'Alpha' ? 'bg-blue-500/20 text-blue-700 border-blue-500/30' :
+                                    team === 'Gamma' ? 'bg-green-500/20 text-green-700 border-green-500/30' :
+                                    'bg-orange-500/20 text-orange-700 border-orange-500/30'
+                                  }>
+                                    {team}
+                                  </Badge>
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -982,7 +1039,7 @@ export default function RoleManagement() {
                     ))}
                     {filteredTeamMembers.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                           No team members found
                         </TableCell>
                       </TableRow>
