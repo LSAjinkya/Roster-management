@@ -632,6 +632,7 @@ export type Database = {
           reporting_tl_id: string | null
           role: string
           status: string
+          team: string | null
           updated_at: string
         }
         Insert: {
@@ -644,6 +645,7 @@ export type Database = {
           reporting_tl_id?: string | null
           role: string
           status?: string
+          team?: string | null
           updated_at?: string
         }
         Update: {
@@ -656,6 +658,7 @@ export type Database = {
           reporting_tl_id?: string | null
           role?: string
           status?: string
+          team?: string | null
           updated_at?: string
         }
         Relationships: [

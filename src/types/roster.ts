@@ -20,6 +20,18 @@ export type Department =
 
 export type UserRole = 'admin' | 'hr' | 'tl' | 'member';
 
+// Team groups for synchronized shift rotation (Alpha, Gamma, Beta)
+export type TeamGroup = 'Alpha' | 'Gamma' | 'Beta';
+
+export const TEAM_GROUPS: TeamGroup[] = ['Alpha', 'Gamma', 'Beta'];
+
+// Team shift mapping - when Alpha is on one shift, what shift are others on
+export const TEAM_SHIFT_ROTATION: Record<TeamGroup, Record<ShiftType, ShiftType>> = {
+  'Alpha': { 'afternoon': 'afternoon', 'morning': 'morning', 'night': 'night', 'general': 'general', 'leave': 'leave', 'comp-off': 'comp-off', 'week-off': 'week-off', 'public-off': 'public-off', 'paid-leave': 'paid-leave' },
+  'Gamma': { 'afternoon': 'morning', 'morning': 'night', 'night': 'afternoon', 'general': 'general', 'leave': 'leave', 'comp-off': 'comp-off', 'week-off': 'week-off', 'public-off': 'public-off', 'paid-leave': 'paid-leave' },
+  'Beta': { 'afternoon': 'night', 'morning': 'afternoon', 'night': 'morning', 'general': 'general', 'leave': 'leave', 'comp-off': 'comp-off', 'week-off': 'week-off', 'public-off': 'public-off', 'paid-leave': 'paid-leave' },
+};
+
 export interface ShiftDefinition {
   id: ShiftType;
   name: string;
@@ -34,6 +46,7 @@ export interface TeamMember {
   email: string;
   role: Role;
   department: Department;
+  team?: TeamGroup; // Alpha, Gamma, or Beta
   avatar?: string;
   status: 'available' | 'on-leave' | 'unavailable';
   reportingTLId?: string; // Assigned based on department

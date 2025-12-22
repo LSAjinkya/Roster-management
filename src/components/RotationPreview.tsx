@@ -8,9 +8,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { Eye, RefreshCw, Play, Users, Calendar } from 'lucide-react';
-import { TeamMember, Department, Role, ShiftType } from '@/types/roster';
+import { TeamMember, Department, Role, ShiftType, TeamGroup, TEAM_SHIFT_ROTATION, TEAM_GROUPS } from '@/types/roster';
 import { MemberRotationState, getMemberShiftTypeForDate, getWeekOffDaysInCycle, RotationConfig, ROTATING_DEPARTMENTS } from '@/types/shiftRules';
 import { cn } from '@/lib/utils';
+
+const TEAM_COLORS: Record<TeamGroup, string> = {
+  'Alpha': 'bg-blue-500/20 text-blue-700 border-blue-500/30',
+  'Gamma': 'bg-green-500/20 text-green-700 border-green-500/30',
+  'Beta': 'bg-orange-500/20 text-orange-700 border-orange-500/30',
+};
 
 interface RotationPreviewProps {
   teamMembers: TeamMember[];
@@ -140,33 +146,54 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
     const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
     const shiftSequence = rotationConfig.shift_sequence || ['afternoon', 'morning', 'night'];
 
-    return rotatingMembers.map((member, memberIndex) => {
-      const state = rotationStates.find(s => s.member_id === member.id);
-      const cycleStartDate = state 
-        ? new Date(state.cycle_start_date) 
-        : monthStart;
-      const currentShiftType = state?.current_shift_type || shiftSequence[0];
+    // Get Alpha team reference state for team-based rotation
+    const alphaRefState = rotationStates.find(s => {
+      const member = rotatingMembers.find(m => m.id === s.member_id);
+      return member && member.team === 'Alpha';
+    });
+    
+    const alphaStartDate = alphaRefState 
+      ? new Date(alphaRefState.cycle_start_date) 
+      : monthStart;
+    const alphaCurrentShift = alphaRefState?.current_shift_type || shiftSequence[0];
 
-      const memberOffset = memberIndex % 7;
+    // Group members by team
+    const membersByTeam = rotatingMembers.reduce((acc, m) => {
+      const team = (m.team as TeamGroup) || 'Alpha';
+      if (!acc[team]) acc[team] = [];
+      acc[team].push(m);
+      return acc;
+    }, {} as Record<TeamGroup, TeamMember[]>);
+
+    return rotatingMembers.map((member, memberIndex) => {
+      const memberTeam = (member.team as TeamGroup) || 'Alpha';
+      
+      // Get team-specific offset for week-offs (within their team)
+      const teamMembers = membersByTeam[memberTeam] || [];
+      const memberOffsetInTeam = teamMembers.findIndex(m => m.id === member.id) % 7;
 
       const shifts = days.map(day => {
-        const shiftType = getMemberShiftTypeForDate(
-          cycleStartDate,
+        // Calculate Alpha's shift for this day
+        const alphaShiftForDay = getMemberShiftTypeForDate(
+          alphaStartDate,
           day,
-          currentShiftType,
+          alphaCurrentShift,
           rotationConfig.rotation_cycle_days,
           shiftSequence
         );
 
+        // Get this member's shift based on their team
+        const shiftType = TEAM_SHIFT_ROTATION[memberTeam][alphaShiftForDay as ShiftType] || alphaShiftForDay;
+
         // Check for week-off
         const daysSinceCycleStart = Math.floor(
-          (day.getTime() - cycleStartDate.getTime()) / (1000 * 60 * 60 * 24)
+          (day.getTime() - alphaStartDate.getTime()) / (1000 * 60 * 60 * 24)
         );
         const dayInCycle = ((daysSinceCycleStart % rotationConfig.rotation_cycle_days) + rotationConfig.rotation_cycle_days) % rotationConfig.rotation_cycle_days;
         
         const weekOffDays = getWeekOffDaysInCycle(
-          cycleStartDate,
-          memberOffset,
+          alphaStartDate,
+          memberOffsetInTeam,
           rotationConfig.rotation_cycle_days
         );
 
@@ -182,8 +209,9 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
 
       return {
         member,
+        team: memberTeam,
         shifts,
-        currentCycleShift: currentShiftType,
+        currentCycleShift: alphaCurrentShift,
       };
     });
   }, [previewMonth, rotationStates, rotationConfig, rotatingMembers]);
@@ -282,7 +310,10 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
                       Member
                     </th>
                     <th className="p-2 text-left font-medium min-w-[60px]">
-                      Cycle
+                      Team
+                    </th>
+                    <th className="p-2 text-left font-medium min-w-[50px]">
+                      Shift
                     </th>
                     {previewData[0]?.shifts.map(s => (
                       <th key={s.date} className="p-1 text-center min-w-[28px]">
@@ -293,15 +324,20 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {previewData.map(({ member, shifts, currentCycleShift }) => (
+                  {previewData.map(({ member, team, shifts, currentCycleShift }) => (
                     <tr key={member.id} className="border-b border-border/20 hover:bg-muted/10">
                       <td className="sticky left-0 z-10 bg-card p-2 font-medium truncate">
                         <div>{member.name}</div>
                         <div className="text-[10px] text-muted-foreground">{member.department}</div>
                       </td>
                       <td className="p-1">
-                        <Badge className={cn("text-[10px]", SHIFT_COLORS[currentCycleShift])}>
-                          {currentCycleShift.charAt(0).toUpperCase()}
+                        <Badge variant="outline" className={cn("text-[10px]", TEAM_COLORS[team])}>
+                          {team}
+                        </Badge>
+                      </td>
+                      <td className="p-1">
+                        <Badge className={cn("text-[10px]", SHIFT_COLORS[TEAM_SHIFT_ROTATION[team][currentCycleShift as ShiftType]])}>
+                          {(TEAM_SHIFT_ROTATION[team][currentCycleShift as ShiftType] || currentCycleShift).charAt(0).toUpperCase()}
                         </Badge>
                       </td>
                       {shifts.map(s => (

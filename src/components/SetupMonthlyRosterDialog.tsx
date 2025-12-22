@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CalendarPlus, Loader2, Settings2, Eye, Save, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { TeamMember, ShiftType, Department, DEPARTMENTS } from '@/types/roster';
+import { TeamMember, ShiftType, Department, DEPARTMENTS, TeamGroup, TEAM_SHIFT_ROTATION, TEAM_GROUPS } from '@/types/roster';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RosterPreviewTable } from './RosterPreviewTable';
 import { 
@@ -174,20 +174,64 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
     const stateMap: Record<string, MemberRotationState> = {};
     rotationStates.forEach(s => { stateMap[s.member_id] = s; });
 
-    // Calculate member offsets for staggering
+    // Group members by team within each department
+    const membersByTeam: Record<string, Record<TeamGroup, TeamMember[]>> = {};
+    filteredTeamMembers.forEach(m => {
+      const dept = m.department;
+      if (!membersByTeam[dept]) {
+        membersByTeam[dept] = { 'Alpha': [], 'Gamma': [], 'Beta': [] };
+      }
+      const team = (m.team as TeamGroup) || 'Alpha';
+      membersByTeam[dept][team].push(m);
+    });
+
+    // Calculate member offsets for staggering week-offs within a team
     const rotatingMembers = filteredTeamMembers.filter(m => 
       ROTATING_DEPARTMENTS.includes(m.department) && m.role !== 'TL'
     );
     const memberOffsets: Record<string, number> = {};
-    rotatingMembers.forEach((m, i) => { memberOffsets[m.id] = i % 7; });
+    // Group by team, then assign offsets within team
+    const membersByTeamFlat: Record<string, TeamMember[]> = {};
+    rotatingMembers.forEach(m => {
+      const team = m.team || 'Alpha';
+      if (!membersByTeamFlat[team]) membersByTeamFlat[team] = [];
+      membersByTeamFlat[team].push(m);
+    });
+    Object.values(membersByTeamFlat).forEach(teamMembers => {
+      teamMembers.forEach((m, i) => { memberOffsets[m.id] = i % 7; });
+    });
 
     days.forEach((day) => {
       const dateStr = format(day, 'yyyy-MM-dd');
       const isPublicHoliday = publicHolidays.includes(dateStr);
 
+      // For team-based rotation, determine Alpha's shift first, then derive others
+      // Get a reference Alpha member's rotation state (first available)
+      const alphaRefState = Object.values(stateMap).find(s => {
+        const member = filteredTeamMembers.find(m => m.id === s.member_id);
+        return member && member.team === 'Alpha';
+      });
+      
+      const cycleStartDate = alphaRefState 
+        ? new Date(alphaRefState.cycle_start_date) 
+        : monthStart;
+      const alphaCurrentShift = alphaRefState?.current_shift_type || shiftSequence[0];
+      
+      // Calculate Alpha's shift for this day
+      const alphaShiftForDay = use15DayRotation && rotationConfig
+        ? getMemberShiftTypeForDate(
+            cycleStartDate,
+            day,
+            alphaCurrentShift,
+            cycleDays,
+            shiftSequence
+          ) as ShiftType
+        : 'afternoon';
+
       filteredTeamMembers.forEach((member) => {
         const isRotating = ROTATING_DEPARTMENTS.includes(member.department) && member.role !== 'TL';
         const isGeneralOnly = GENERAL_SHIFT_DEPARTMENTS.includes(member.department) || member.role === 'TL';
+        const memberTeam = (member.team as TeamGroup) || 'Alpha';
 
         // Public holiday
         if (isPublicHoliday) {
@@ -211,24 +255,9 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
           return;
         }
 
-        // Rotating members with 15-day cycle logic
+        // Rotating members with team-based 15-day cycle logic
         if (isRotating && use15DayRotation && rotationConfig) {
-          const state = stateMap[member.id];
-          const cycleStartDate = state 
-            ? new Date(state.cycle_start_date) 
-            : monthStart;
-          const currentShiftType = state?.current_shift_type || shiftSequence[0];
-
-          // Get shift type for this day
-          const shiftType = getMemberShiftTypeForDate(
-            cycleStartDate,
-            day,
-            currentShiftType,
-            cycleDays,
-            shiftSequence
-          ) as ShiftType;
-
-          // Check for week-off (2+2 pattern)
+          // Check for week-off (2+2 pattern) - staggered within team
           const daysSinceCycleStart = Math.floor(
             (day.getTime() - cycleStartDate.getTime()) / (1000 * 60 * 60 * 24)
           );
@@ -247,9 +276,12 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
             return;
           }
 
+          // Get this team's shift based on Alpha's shift
+          const teamShift = TEAM_SHIFT_ROTATION[memberTeam][alphaShiftForDay];
+
           assignments.push({
             member_id: member.id,
-            shift_type: shiftType,
+            shift_type: teamShift,
             date: dateStr,
             department: member.department as Department,
           });
