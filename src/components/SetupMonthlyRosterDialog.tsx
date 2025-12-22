@@ -125,7 +125,38 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
           shift_sequence: config.shift_sequence || ['afternoon', 'morning', 'night']
         });
       }
-      setRotationStates(statesRes.data || []);
+      
+      const existingStates = statesRes.data || [];
+      setRotationStates(existingStates);
+      
+      // Auto-initialize uninitialized members
+      const initializedIds = new Set(existingStates.map((s: MemberRotationState) => s.member_id));
+      const membersToInit = teamMembers.filter(m => 
+        ROTATING_DEPARTMENTS.includes(m.department) && 
+        m.role !== 'TL' &&
+        !initializedIds.has(m.id)
+      );
+      
+      if (membersToInit.length > 0 && configRes.data) {
+        const shiftSequence = configRes.data.shift_sequence || ['afternoon', 'morning', 'night'];
+        const newStates = membersToInit.map(m => ({
+          member_id: m.id,
+          current_shift_type: shiftSequence[0],
+          cycle_start_date: format(startOfMonth(addMonths(new Date(), 1)), 'yyyy-MM-dd')
+        }));
+        
+        const { data: insertedStates, error: insertError } = await supabase
+          .from('member_rotation_state')
+          .insert(newStates)
+          .select();
+        
+        if (insertError) {
+          console.error('Error auto-initializing members:', insertError);
+        } else if (insertedStates) {
+          setRotationStates([...existingStates, ...insertedStates as MemberRotationState[]]);
+          toast.success(`Auto-initialized ${insertedStates.length} members`);
+        }
+      }
     } catch (error) {
       console.error('Error fetching rotation data:', error);
     } finally {
@@ -448,7 +479,7 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
 
             <Tabs defaultValue="rotation" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="rotation">15-Day Rotation</TabsTrigger>
+                <TabsTrigger value="rotation">{rotationConfig?.rotation_cycle_days || 14}-Day Rotation</TabsTrigger>
                 <TabsTrigger value="shifts">Department Shifts</TabsTrigger>
                 <TabsTrigger value="summary">Summary</TabsTrigger>
               </TabsList>
@@ -456,11 +487,11 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
               <TabsContent value="rotation" className="space-y-4 mt-4">
                 {/* 15-Day Rotation Toggle */}
                 <div className="rounded-lg border p-4 space-y-4">
-                  <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-base">Use 15-Day Rotation</Label>
+                      <Label className="text-base">Use {rotationConfig?.rotation_cycle_days || 14}-Day Rotation</Label>
                       <p className="text-sm text-muted-foreground">
-                        Each member works 15 days in one shift, then rotates
+                        Each member works {rotationConfig?.rotation_cycle_days || 14} days in one shift, then rotates
                       </p>
                     </div>
                     <Switch
@@ -484,7 +515,7 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
                         </div>
                         <div>
                           <span className="text-sm text-muted-foreground">Weekly Offs:</span>
-                          <span className="ml-2 font-medium">2+2 pattern</span>
+                          <span className="ml-2 font-medium">{rotationConfig.off_days} days off pattern</span>
                         </div>
                         <div>
                           <span className="text-sm text-muted-foreground">Initialized:</span>
