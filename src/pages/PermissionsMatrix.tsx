@@ -3,6 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/hooks/useAuth';
+import { PermissionRequestDialog } from '@/components/PermissionRequestDialog';
+import { PermissionRequestsManager } from '@/components/PermissionRequestsManager';
 import { 
   Shield, 
   Check, 
@@ -19,7 +21,8 @@ import {
   Eye,
   Edit,
   Plus,
-  Trash2
+  Trash2,
+  HandHelping
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -190,9 +193,13 @@ export default function PermissionsMatrix() {
       <DashboardHeader 
         title="Permissions Matrix" 
         subtitle="Overview of role-based access control"
-      />
+      >
+        <PermissionRequestDialog />
+      </DashboardHeader>
       
       <div className="flex-1 overflow-auto p-6 space-y-6">
+        {/* Permission Requests Section */}
+        <PermissionRequestsManager />
         {/* Role Legend */}
         <Card>
           <CardHeader>
