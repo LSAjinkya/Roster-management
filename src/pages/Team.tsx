@@ -62,7 +62,7 @@ export default function Team() {
       />
       
       <div className="flex-1 overflow-auto p-6">
-        <TeamOverview members={members} />
+        <TeamOverview members={members} onMemberUpdate={fetchTeamMembers} />
       </div>
     </div>
   );
