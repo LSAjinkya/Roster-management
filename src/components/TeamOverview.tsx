@@ -4,7 +4,7 @@ import { TeamMemberCard } from './TeamMemberCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Users, Grid, List, LayoutGrid, Building2, ChevronDown, ChevronUp, Mail, Circle } from 'lucide-react';
+import { Search, Users, Grid, List, LayoutGrid, Building2, ChevronDown, ChevronUp, Mail, Circle, GripVertical } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -14,9 +14,13 @@ import {
 } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface TeamOverviewProps {
   members: TeamMember[];
+  onMemberUpdate?: () => void;
 }
 
 const ROLE_COLORS: Record<Role, string> = {
@@ -47,7 +51,7 @@ const STATUS_COLORS: Record<string, string> = {
   'unavailable': 'text-red-500',
 };
 
-export function TeamOverview({ members }: TeamOverviewProps) {
+export function TeamOverview({ members, onMemberUpdate }: TeamOverviewProps) {
   const [search, setSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'all'>('all');
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
@@ -107,6 +111,56 @@ export function TeamOverview({ members }: TeamOverviewProps) {
       newExpanded.add(dept);
     }
     setExpandedDepts(newExpanded);
+  };
+
+  const handleDragEnd = async (result: DropResult) => {
+    const { destination, source, draggableId } = result;
+
+    if (!destination) return;
+    if (destination.droppableId === source.droppableId) return;
+
+    const memberId = draggableId;
+    const member = members.find(m => m.id === memberId);
+    if (!member) return;
+
+    // Determine if we're in roles or departments view
+    if (viewMode === 'roles') {
+      const newRole = destination.droppableId.replace('role-', '') as Role;
+      if (!ROLES.includes(newRole)) return;
+
+      try {
+        const { error } = await supabase
+          .from('team_members')
+          .update({ role: newRole })
+          .eq('id', memberId);
+
+        if (error) throw error;
+
+        toast.success(`${member.name} moved to ${ROLE_LABELS[newRole]}`);
+        onMemberUpdate?.();
+      } catch (error) {
+        console.error('Error updating role:', error);
+        toast.error('Failed to update role');
+      }
+    } else if (viewMode === 'departments') {
+      const newDept = destination.droppableId.replace('dept-', '') as Department;
+      if (!DEPARTMENTS.includes(newDept)) return;
+
+      try {
+        const { error } = await supabase
+          .from('team_members')
+          .update({ department: newDept })
+          .eq('id', memberId);
+
+        if (error) throw error;
+
+        toast.success(`${member.name} moved to ${newDept}`);
+        onMemberUpdate?.();
+      } catch (error) {
+        console.error('Error updating department:', error);
+        toast.error('Failed to update department');
+      }
+    }
   };
 
   return (
@@ -174,7 +228,7 @@ export function TeamOverview({ members }: TeamOverviewProps) {
               size="icon"
               className="h-8 w-8"
               onClick={() => setViewMode('roles')}
-              title="Group by Role"
+              title="Group by Role (Drag & Drop)"
             >
               <LayoutGrid size={16} />
             </Button>
@@ -183,7 +237,7 @@ export function TeamOverview({ members }: TeamOverviewProps) {
               size="icon"
               className="h-8 w-8"
               onClick={() => setViewMode('departments')}
-              title="Group by Department"
+              title="Group by Department (Drag & Drop)"
             >
               <Building2 size={16} />
             </Button>
@@ -209,196 +263,270 @@ export function TeamOverview({ members }: TeamOverviewProps) {
         </div>
       </div>
 
-      {/* Role-wise Groups View */}
-      {viewMode === 'roles' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {ROLES.map((role) => {
-            const roleMembers = membersByRole[role];
-            if (roleMembers.length === 0) return null;
-            const isExpanded = expandedRoles.has(role);
-            
-            return (
-              <Collapsible 
-                key={role}
-                open={isExpanded}
-                onOpenChange={() => toggleRoleExpand(role)}
-                className="bg-card rounded-xl border border-border/50 overflow-hidden"
-              >
-                <div className={`px-4 py-3 border-b border-border/50 ${ROLE_COLORS[role].replace('text-', 'bg-').split(' ')[0]}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className={ROLE_COLORS[role]}>
-                        {role}
-                      </Badge>
-                      <span className="font-semibold">{ROLE_LABELS[role]}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-xs">
-                        {roleMembers.length} members
-                      </Badge>
-                      <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7">
-                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        </Button>
-                      </CollapsibleTrigger>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Compact View */}
-                {!isExpanded && (
-                  <div className="p-4">
-                    <div className="flex flex-wrap gap-2">
-                      {roleMembers.map((member) => (
-                        <div 
-                          key={member.id}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary transition-colors"
-                        >
-                          <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
-                          <span className="text-sm font-medium">{member.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Expanded View */}
-                <CollapsibleContent>
-                  <div className="p-4 space-y-2">
-                    {roleMembers.map((member) => (
-                      <div 
-                        key={member.id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
-                            <AvatarFallback className={`text-sm ${ROLE_COLORS[role]}`}>
-                              {getInitials(member.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium">{member.name}</p>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Mail size={12} />
-                              <span>{member.email}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Badge variant="outline" className="text-xs">
-                            {member.department}
-                          </Badge>
-                          <div className="flex items-center gap-1.5">
-                            <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
-                            <span className={`text-xs capitalize ${STATUS_COLORS[member.status]}`}>
-                              {member.status.replace('-', ' ')}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            );
-          })}
+      {/* Drag & Drop hint */}
+      {(viewMode === 'roles' || viewMode === 'departments') && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 px-4 py-2 rounded-lg">
+          <GripVertical size={16} />
+          <span>Drag members between groups to change their {viewMode === 'roles' ? 'role' : 'department'}</span>
         </div>
       )}
 
-      {/* Department-wise Groups View */}
-      {viewMode === 'departments' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {DEPARTMENTS.map((dept) => {
-            const deptMembers = membersByDepartment[dept];
-            if (deptMembers.length === 0) return null;
-            const isExpanded = expandedDepts.has(dept);
-            
-            return (
-              <Collapsible 
-                key={dept}
-                open={isExpanded}
-                onOpenChange={() => toggleDeptExpand(dept)}
-                className="bg-card rounded-xl border border-border/50 overflow-hidden"
-              >
-                <div className="px-4 py-3 border-b border-border/50 bg-primary/5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-primary" />
-                      <span className="font-semibold">{dept}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-xs">
-                        {deptMembers.length} members
-                      </Badge>
-                      <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7">
-                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        </Button>
-                      </CollapsibleTrigger>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Compact View */}
-                {!isExpanded && (
-                  <div className="p-4">
-                    <div className="flex flex-wrap gap-2">
-                      {deptMembers.map((member) => (
-                        <div 
-                          key={member.id}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary transition-colors"
-                        >
-                          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${ROLE_COLORS[member.role]}`}>
-                            {member.role}
-                          </Badge>
-                          <span className="text-sm font-medium">{member.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Expanded View */}
-                <CollapsibleContent>
-                  <div className="p-4 space-y-2">
-                    {deptMembers.map((member) => (
-                      <div 
-                        key={member.id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
-                            <AvatarFallback className={`text-sm ${ROLE_COLORS[member.role]}`}>
-                              {getInitials(member.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium">{member.name}</p>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Mail size={12} />
-                              <span>{member.email}</span>
-                            </div>
+      {/* Role-wise Groups View with Drag & Drop */}
+      {viewMode === 'roles' && (
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {ROLES.map((role) => {
+              const roleMembers = membersByRole[role];
+              const isExpanded = expandedRoles.has(role);
+              
+              return (
+                <Droppable key={role} droppableId={`role-${role}`}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={`bg-card rounded-xl border overflow-hidden transition-all ${
+                        snapshot.isDraggingOver 
+                          ? 'border-primary ring-2 ring-primary/20' 
+                          : 'border-border/50'
+                      }`}
+                    >
+                      <div className={`px-4 py-3 border-b border-border/50 ${ROLE_COLORS[role].replace('text-', 'bg-').split(' ')[0]}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className={ROLE_COLORS[role]}>
+                              {role}
+                            </Badge>
+                            <span className="font-semibold">{ROLE_LABELS[role]}</span>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Badge variant="outline" className={ROLE_COLORS[member.role]}>
-                            {member.role}
-                          </Badge>
-                          <div className="flex items-center gap-1.5">
-                            <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
-                            <span className={`text-xs capitalize ${STATUS_COLORS[member.status]}`}>
-                              {member.status.replace('-', ' ')}
-                            </span>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {roleMembers.length} members
+                            </Badge>
+                            {roleMembers.length > 0 && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-7 w-7"
+                                onClick={() => toggleRoleExpand(role)}
+                              >
+                                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            );
-          })}
-        </div>
+                      
+                      <div className="p-4 min-h-[60px]">
+                        {roleMembers.length === 0 ? (
+                          <div className="text-center text-sm text-muted-foreground py-4">
+                            Drop members here
+                          </div>
+                        ) : !isExpanded ? (
+                          <div className="flex flex-wrap gap-2">
+                            {roleMembers.map((member, index) => (
+                              <Draggable key={member.id} draggableId={member.id} index={index}>
+                                {(provided, snapshot) => (
+                                  <div
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    {...provided.dragHandleProps}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary transition-colors cursor-grab ${
+                                      snapshot.isDragging ? 'shadow-lg ring-2 ring-primary' : ''
+                                    }`}
+                                  >
+                                    <GripVertical size={12} className="text-muted-foreground" />
+                                    <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
+                                    <span className="text-sm font-medium">{member.name}</span>
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {roleMembers.map((member, index) => (
+                              <Draggable key={member.id} draggableId={member.id} index={index}>
+                                {(provided, snapshot) => (
+                                  <div
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    className={`flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors ${
+                                      snapshot.isDragging ? 'shadow-lg ring-2 ring-primary' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div {...provided.dragHandleProps} className="cursor-grab">
+                                        <GripVertical size={16} className="text-muted-foreground" />
+                                      </div>
+                                      <Avatar className="h-10 w-10">
+                                        <AvatarFallback className={`text-sm ${ROLE_COLORS[role]}`}>
+                                          {getInitials(member.name)}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <div>
+                                        <p className="font-medium">{member.name}</p>
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                          <Mail size={12} />
+                                          <span>{member.email}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <Badge variant="outline" className="text-xs">
+                                        {member.department}
+                                      </Badge>
+                                      <div className="flex items-center gap-1.5">
+                                        <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
+                                        <span className={`text-xs capitalize ${STATUS_COLORS[member.status]}`}>
+                                          {member.status.replace('-', ' ')}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                          </div>
+                        )}
+                        {provided.placeholder}
+                      </div>
+                    </div>
+                  )}
+                </Droppable>
+              );
+            })}
+          </div>
+        </DragDropContext>
+      )}
+
+      {/* Department-wise Groups View with Drag & Drop */}
+      {viewMode === 'departments' && (
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {DEPARTMENTS.map((dept) => {
+              const deptMembers = membersByDepartment[dept];
+              const isExpanded = expandedDepts.has(dept);
+              
+              return (
+                <Droppable key={dept} droppableId={`dept-${dept}`}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={`bg-card rounded-xl border overflow-hidden transition-all ${
+                        snapshot.isDraggingOver 
+                          ? 'border-primary ring-2 ring-primary/20' 
+                          : 'border-border/50'
+                      }`}
+                    >
+                      <div className="px-4 py-3 border-b border-border/50 bg-primary/5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-primary" />
+                            <span className="font-semibold">{dept}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {deptMembers.length} members
+                            </Badge>
+                            {deptMembers.length > 0 && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-7 w-7"
+                                onClick={() => toggleDeptExpand(dept)}
+                              >
+                                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="p-4 min-h-[60px]">
+                        {deptMembers.length === 0 ? (
+                          <div className="text-center text-sm text-muted-foreground py-4">
+                            Drop members here
+                          </div>
+                        ) : !isExpanded ? (
+                          <div className="flex flex-wrap gap-2">
+                            {deptMembers.map((member, index) => (
+                              <Draggable key={member.id} draggableId={member.id} index={index}>
+                                {(provided, snapshot) => (
+                                  <div
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    {...provided.dragHandleProps}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary transition-colors cursor-grab ${
+                                      snapshot.isDragging ? 'shadow-lg ring-2 ring-primary' : ''
+                                    }`}
+                                  >
+                                    <GripVertical size={12} className="text-muted-foreground" />
+                                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${ROLE_COLORS[member.role]}`}>
+                                      {member.role}
+                                    </Badge>
+                                    <span className="text-sm font-medium">{member.name}</span>
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {deptMembers.map((member, index) => (
+                              <Draggable key={member.id} draggableId={member.id} index={index}>
+                                {(provided, snapshot) => (
+                                  <div
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    className={`flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors ${
+                                      snapshot.isDragging ? 'shadow-lg ring-2 ring-primary' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div {...provided.dragHandleProps} className="cursor-grab">
+                                        <GripVertical size={16} className="text-muted-foreground" />
+                                      </div>
+                                      <Avatar className="h-10 w-10">
+                                        <AvatarFallback className={`text-sm ${ROLE_COLORS[member.role]}`}>
+                                          {getInitials(member.name)}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <div>
+                                        <p className="font-medium">{member.name}</p>
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                          <Mail size={12} />
+                                          <span>{member.email}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                      <Badge variant="outline" className={ROLE_COLORS[member.role]}>
+                                        {member.role}
+                                      </Badge>
+                                      <div className="flex items-center gap-1.5">
+                                        <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
+                                        <span className={`text-xs capitalize ${STATUS_COLORS[member.status]}`}>
+                                          {member.status.replace('-', ' ')}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                          </div>
+                        )}
+                        {provided.placeholder}
+                      </div>
+                    </div>
+                  )}
+                </Droppable>
+              );
+            })}
+          </div>
+        </DragDropContext>
       )}
 
       {/* Team Grid */}
