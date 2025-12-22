@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { format, isWeekend, isToday, eachDayOfInterval, startOfMonth, endOfMonth } from 'date-fns';
-import { TeamMember, ShiftType, Department } from '@/types/roster';
+import { TeamMember, ShiftType, Department, TeamGroup, TEAM_GROUPS } from '@/types/roster';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { Edit2 } from 'lucide-react';
+import { Edit2, Users, Building2 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface PreviewAssignment {
   member_id: string;
@@ -46,6 +47,12 @@ const shiftLetters: Record<ShiftType, string> = {
   'paid-leave': 'PL',
 };
 
+const TEAM_COLORS: Record<TeamGroup, string> = {
+  'Alpha': 'bg-blue-500/20 text-blue-700 border-blue-500/30',
+  'Gamma': 'bg-green-500/20 text-green-700 border-green-500/30',
+  'Beta': 'bg-orange-500/20 text-orange-700 border-orange-500/30',
+};
+
 export function RosterPreviewTable({ 
   assignments, 
   teamMembers, 
@@ -53,9 +60,24 @@ export function RosterPreviewTable({
   onEditCell,
   editable = false 
 }: RosterPreviewTableProps) {
+  const [viewMode, setViewMode] = useState<'team' | 'department'>('team');
   const monthStart = startOfMonth(month);
   const monthEnd = endOfMonth(month);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+
+  // Group members by team
+  const membersByTeam = useMemo(() => {
+    const grouped: Record<string, TeamMember[]> = {};
+    TEAM_GROUPS.forEach(team => {
+      grouped[team] = teamMembers.filter(m => (m.team || 'Alpha') === team);
+    });
+    // Add "No Team" for members without team assignment
+    const noTeam = teamMembers.filter(m => !m.team);
+    if (noTeam.length > 0 && !grouped['Alpha']?.some(m => noTeam.includes(m))) {
+      // Members without team are already in Alpha
+    }
+    return grouped;
+  }, [teamMembers]);
 
   // Group members by department
   const membersByDepartment = useMemo(() => {
@@ -88,8 +110,91 @@ export function RosterPreviewTable({
     };
   };
 
+  // Helper to render member row
+  const renderMemberRow = (member: TeamMember) => {
+    const stats = getMemberStats(member.id);
+    return (
+      <tr key={member.id} className="border-b border-border/20 hover:bg-muted/10">
+        <td className="sticky left-0 z-10 bg-card p-1.5 font-medium truncate">
+          <div className="flex items-center gap-1">
+            <span>{member.name}</span>
+            {viewMode === 'department' && member.team && (
+              <span className={cn(
+                "px-1 py-0.5 rounded text-[8px] font-medium border",
+                TEAM_COLORS[member.team as TeamGroup] || TEAM_COLORS['Alpha']
+              )}>
+                {member.team?.charAt(0)}
+              </span>
+            )}
+          </div>
+        </td>
+        <td className="sticky left-[140px] z-10 bg-card p-1.5">
+          <span className={cn(
+            "px-1.5 py-0.5 rounded text-[10px] font-medium",
+            member.role === 'TL' && "bg-primary/10 text-primary",
+            member.role === 'L2' && "bg-sky-100 text-sky-700",
+            member.role === 'L1' && "bg-emerald-100 text-emerald-700",
+            member.role === 'HR' && "bg-pink-100 text-pink-700"
+          )}>
+            {member.role}
+          </span>
+        </td>
+        {monthDays.map(day => {
+          const dateStr = format(day, 'yyyy-MM-dd');
+          const shift = getAssignment(member.id, dateStr);
+          const weekend = isWeekend(day);
+          
+          return (
+            <td 
+              key={dateStr}
+              className={cn(
+                "p-0.5 text-center",
+                weekend && !shift && "bg-muted/30",
+                editable && "cursor-pointer hover:bg-primary/10"
+              )}
+              onClick={() => editable && onEditCell?.(member.id, dateStr, shift)}
+            >
+              {shift ? (
+                <span className={cn(
+                  "inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold",
+                  shiftCellColors[shift]
+                )}>
+                  {shiftLetters[shift]}
+                </span>
+              ) : (
+                <span className="inline-flex items-center justify-center w-5 h-4 text-[9px] text-muted-foreground">
+                  -
+                </span>
+              )}
+            </td>
+          );
+        })}
+        <td className="p-1 text-center font-medium bg-shift-morning/20">{stats.morning || '-'}</td>
+        <td className="p-1 text-center font-medium bg-shift-afternoon/20">{stats.afternoon || '-'}</td>
+        <td className="p-1 text-center font-medium bg-shift-night/20">{stats.night || '-'}</td>
+        <td className="p-1 text-center font-medium bg-muted/30">{stats.off + stats.compOff}</td>
+      </tr>
+    );
+  };
+
   return (
     <div className="space-y-2">
+      {/* View Mode Toggle */}
+      <div className="flex justify-end mb-2">
+        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'team' | 'department')}>
+          <TabsList className="h-8">
+            <TabsTrigger value="team" className="text-xs gap-1 h-7">
+              <Users size={12} />
+              Team View
+            </TabsTrigger>
+            <TabsTrigger value="department" className="text-xs gap-1 h-7">
+              <Building2 size={12} />
+              Department View
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-xs">
           <thead>
@@ -116,70 +221,53 @@ export function RosterPreviewTable({
             </tr>
           </thead>
           <tbody>
-            {Object.entries(membersByDepartment).map(([department, members]) => (
+            {viewMode === 'team' ? (
+              // Team-based view
               <>
-                <tr key={`dept-${department}`} className="bg-muted/20">
-                  <td colSpan={monthDays.length + 6} className="p-2 font-semibold text-xs">
-                    {department} ({members.length})
-                  </td>
-                </tr>
-                {members.map(member => {
-                  const stats = getMemberStats(member.id);
+                {TEAM_GROUPS.map(team => {
+                  const members = membersByTeam[team] || [];
+                  if (members.length === 0) return null;
+                  
                   return (
-                    <tr key={member.id} className="border-b border-border/20 hover:bg-muted/10">
-                      <td className="sticky left-0 z-10 bg-card p-1.5 font-medium truncate">
-                        {member.name}
-                      </td>
-                      <td className="sticky left-[140px] z-10 bg-card p-1.5">
-                        <span className={cn(
-                          "px-1.5 py-0.5 rounded text-[10px] font-medium",
-                          member.role === 'TL' && "bg-primary/10 text-primary",
-                          member.role === 'L2' && "bg-sky-100 text-sky-700",
-                          member.role === 'L1' && "bg-emerald-100 text-emerald-700",
-                          member.role === 'HR' && "bg-pink-100 text-pink-700"
-                        )}>
-                          {member.role}
-                        </span>
-                      </td>
-                      {monthDays.map(day => {
-                        const dateStr = format(day, 'yyyy-MM-dd');
-                        const shift = getAssignment(member.id, dateStr);
-                        const weekend = isWeekend(day);
-                        
-                        return (
-                          <td 
-                            key={dateStr}
-                            className={cn(
-                              "p-0.5 text-center",
-                              weekend && !shift && "bg-muted/30",
-                              editable && "cursor-pointer hover:bg-primary/10"
-                            )}
-                            onClick={() => editable && onEditCell?.(member.id, dateStr, shift)}
-                          >
-                            {shift ? (
-                              <span className={cn(
-                                "inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold",
-                                shiftCellColors[shift]
-                              )}>
-                                {shiftLetters[shift]}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center justify-center w-5 h-4 text-[9px] text-muted-foreground">
-                                -
-                              </span>
-                            )}
-                          </td>
-                        );
-                      })}
-                      <td className="p-1 text-center font-medium bg-shift-morning/20">{stats.morning || '-'}</td>
-                      <td className="p-1 text-center font-medium bg-shift-afternoon/20">{stats.afternoon || '-'}</td>
-                      <td className="p-1 text-center font-medium bg-shift-night/20">{stats.night || '-'}</td>
-                      <td className="p-1 text-center font-medium bg-muted/30">{stats.off + stats.compOff}</td>
-                    </tr>
+                    <>
+                      <tr key={`team-${team}`} className={cn(
+                        "border-t-2",
+                        team === 'Alpha' && "bg-blue-50 dark:bg-blue-950/30 border-blue-300",
+                        team === 'Gamma' && "bg-green-50 dark:bg-green-950/30 border-green-300",
+                        team === 'Beta' && "bg-orange-50 dark:bg-orange-950/30 border-orange-300"
+                      )}>
+                        <td colSpan={monthDays.length + 6} className="p-2 font-semibold text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className={cn(
+                              "px-2 py-0.5 rounded border font-bold",
+                              TEAM_COLORS[team]
+                            )}>
+                              Team {team}
+                            </span>
+                            <span className="text-muted-foreground">({members.length} members)</span>
+                          </div>
+                        </td>
+                      </tr>
+                      {members.map(member => renderMemberRow(member))}
+                    </>
                   );
                 })}
               </>
-            ))}
+            ) : (
+              // Department-based view
+              <>
+                {Object.entries(membersByDepartment).map(([department, members]) => (
+                  <>
+                    <tr key={`dept-${department}`} className="bg-muted/20">
+                      <td colSpan={monthDays.length + 6} className="p-2 font-semibold text-xs">
+                        {department} ({members.length})
+                      </td>
+                    </tr>
+                    {members.map(member => renderMemberRow(member))}
+                  </>
+                ))}
+              </>
+            )}
           </tbody>
         </table>
       </div>
