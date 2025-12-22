@@ -41,6 +41,9 @@ export default function Shifts() {
     general: { TL: 5, 'Vendor Coordinator': 1 },
     leave: {},
     'comp-off': {},
+    'week-off': {},
+    'public-off': {},
+    'paid-leave': {},
   };
 
   return (
