@@ -78,7 +78,7 @@ export default function Departments() {
   const [newDept, setNewDept] = useState({ name: '', description: '' });
   const [editDeptDialogOpen, setEditDeptDialogOpen] = useState(false);
   const [deptToEdit, setDeptToEdit] = useState<Department | null>(null);
-  const [editedDept, setEditedDept] = useState({ name: '', description: '' });
+  const [editedDept, setEditedDept] = useState({ name: '', description: '', headMemberId: '' });
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();
@@ -197,7 +197,13 @@ export default function Departments() {
 
   const handleEditDepartment = (dept: Department) => {
     setDeptToEdit(dept);
-    setEditedDept({ name: dept.name, description: dept.description || '' });
+    // Find the current TL in this department
+    const currentHead = teamMembers.find(m => m.department === dept.name && m.role === 'TL');
+    setEditedDept({ 
+      name: dept.name, 
+      description: dept.description || '',
+      headMemberId: currentHead?.id || ''
+    });
     setEditDeptDialogOpen(true);
   };
 
@@ -219,6 +225,7 @@ export default function Departments() {
         .update({
           name: newName,
           description: editedDept.description.trim() || null,
+          head_member_id: editedDept.headMemberId || null,
         })
         .eq('id', deptToEdit.id);
 
@@ -241,6 +248,26 @@ export default function Departments() {
         if (membersError) {
           console.error('Error updating team members department:', membersError);
         }
+      }
+
+      // Update TL role for the new department head
+      if (editedDept.headMemberId) {
+        // First, remove TL from previous head in this department
+        const currentMembers = teamMembers.filter(m => m.department === deptToEdit.name);
+        const previousHead = currentMembers.find(m => m.role === 'TL' && m.id !== editedDept.headMemberId);
+        
+        if (previousHead) {
+          await supabase
+            .from('team_members')
+            .update({ role: 'L2' })
+            .eq('id', previousHead.id);
+        }
+
+        // Set the new head as TL
+        await supabase
+          .from('team_members')
+          .update({ role: 'TL' })
+          .eq('id', editedDept.headMemberId);
       }
 
       toast.success('Department updated successfully');
@@ -784,6 +811,38 @@ export default function Departments() {
                 maxLength={200}
                 rows={3}
               />
+            </div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Crown className="h-4 w-4 text-amber-500" />
+                Department Head (TL)
+              </Label>
+              <Select
+                value={editedDept.headMemberId || 'none'}
+                onValueChange={(value) => setEditedDept(prev => ({ ...prev, headMemberId: value === 'none' ? '' : value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department head" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No department head</SelectItem>
+                  {teamMembers
+                    .filter(m => m.department === deptToEdit?.name)
+                    .map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{member.name}</span>
+                          {member.role === 'TL' && (
+                            <Badge variant="outline" className="text-xs">Current TL</Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Selecting a department head will assign them the TL role
+              </p>
             </div>
           </div>
           <DialogFooter>
