@@ -3,7 +3,8 @@ import { TeamMember, Department, Role, DEPARTMENTS, ROLES } from '@/types/roster
 import { TeamMemberCard } from './TeamMemberCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Filter, Users, Grid, List } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Search, Filter, Users, Grid, List, LayoutGrid } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -11,16 +12,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 interface TeamOverviewProps {
   members: TeamMember[];
 }
 
+const ROLE_COLORS: Record<Role, string> = {
+  'TL': 'bg-primary/20 text-primary border-primary/30',
+  'L2': 'bg-blue-500/20 text-blue-700 border-blue-500/30',
+  'L1': 'bg-green-500/20 text-green-700 border-green-500/30',
+  'HR': 'bg-purple-500/20 text-purple-700 border-purple-500/30',
+};
+
+const ROLE_LABELS: Record<Role, string> = {
+  'TL': 'Team Leads',
+  'L2': 'Level 2',
+  'L1': 'Level 1',
+  'HR': 'HR Team',
+};
+
 export function TeamOverview({ members }: TeamOverviewProps) {
   const [search, setSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'all'>('all');
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'roles'>('roles');
 
   const filteredMembers = members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -39,6 +55,16 @@ export function TeamOverview({ members }: TeamOverviewProps) {
     acc[role] = members.filter(m => m.role === role).length;
     return acc;
   }, {} as Record<Role, number>);
+
+  // Group members by role for roles view
+  const membersByRole = ROLES.reduce((acc, role) => {
+    acc[role] = filteredMembers.filter(m => m.role === role);
+    return acc;
+  }, {} as Record<Role, TeamMember[]>);
+
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
 
   return (
     <div className="space-y-6">
@@ -76,7 +102,7 @@ export function TeamOverview({ members }: TeamOverviewProps) {
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Department" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-popover">
               <SelectItem value="all">All Departments</SelectItem>
               {DEPARTMENTS.map(dept => (
                 <SelectItem key={dept} value={dept}>{dept}</SelectItem>
@@ -87,7 +113,7 @@ export function TeamOverview({ members }: TeamOverviewProps) {
             <SelectTrigger className="w-[120px]">
               <SelectValue placeholder="Role" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-popover">
               <SelectItem value="all">All Roles</SelectItem>
               {ROLES.map(role => (
                 <SelectItem key={role} value={role}>{role} ({roleCounts[role]})</SelectItem>
@@ -101,10 +127,20 @@ export function TeamOverview({ members }: TeamOverviewProps) {
           </span>
           <div className="flex items-center border rounded-lg p-1 bg-secondary">
             <Button
+              variant={viewMode === 'roles' ? 'default' : 'ghost'}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setViewMode('roles')}
+              title="Group by Role"
+            >
+              <LayoutGrid size={16} />
+            </Button>
+            <Button
               variant={viewMode === 'grid' ? 'default' : 'ghost'}
               size="icon"
               className="h-8 w-8"
               onClick={() => setViewMode('grid')}
+              title="Grid View"
             >
               <Grid size={16} />
             </Button>
@@ -113,6 +149,7 @@ export function TeamOverview({ members }: TeamOverviewProps) {
               size="icon"
               className="h-8 w-8"
               onClick={() => setViewMode('list')}
+              title="List View"
             >
               <List size={16} />
             </Button>
@@ -120,8 +157,59 @@ export function TeamOverview({ members }: TeamOverviewProps) {
         </div>
       </div>
 
-      {/* Team Grid/List */}
-      {viewMode === 'grid' ? (
+      {/* Role-wise Groups View */}
+      {viewMode === 'roles' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {ROLES.map((role) => {
+            const roleMembers = membersByRole[role];
+            if (roleMembers.length === 0) return null;
+            
+            return (
+              <div 
+                key={role}
+                className="bg-card rounded-xl border border-border/50 overflow-hidden"
+              >
+                <div className={`px-4 py-3 border-b border-border/50 ${ROLE_COLORS[role].replace('text-', 'bg-').split(' ')[0]}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={ROLE_COLORS[role]}>
+                        {role}
+                      </Badge>
+                      <span className="font-semibold">{ROLE_LABELS[role]}</span>
+                    </div>
+                    <Badge variant="secondary" className="text-xs">
+                      {roleMembers.length} members
+                    </Badge>
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="flex flex-wrap gap-3">
+                    {roleMembers.map((member) => (
+                      <div 
+                        key={member.id}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
+                      >
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className={`text-xs ${ROLE_COLORS[role]}`}>
+                            {getInitials(member.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{member.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{member.department}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Team Grid */}
+      {viewMode === 'grid' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredMembers.map((member, index) => {
             const reportingTL = member.reportingTLId 
@@ -138,7 +226,10 @@ export function TeamOverview({ members }: TeamOverviewProps) {
             );
           })}
         </div>
-      ) : (
+      )}
+
+      {/* Team List */}
+      {viewMode === 'list' && (
         <div className="bg-card rounded-xl border border-border/50 divide-y divide-border">
           {filteredMembers.map((member) => {
             const reportingTL = member.reportingTLId 
