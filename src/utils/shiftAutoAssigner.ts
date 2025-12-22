@@ -14,6 +14,9 @@ import {
   GENERAL_SHIFT_DEPARTMENTS,
   Datacenter,
   ShiftViolation,
+  MemberRotationState,
+  getMemberShiftTypeForDate,
+  getWeekOffDaysInCycle,
 } from '@/types/shiftRules';
 import { format, eachDayOfInterval, differenceInDays } from 'date-fns';
 
@@ -33,11 +36,13 @@ interface AssignmentContext {
   leaveRequests: { memberId: string; startDate: string; endDate: string }[];
   existingAssignments: ShiftAssignment[];
   config: AutoAssignmentConfig;
+  memberRotationStates: MemberRotationState[];
 }
 
 /**
- * Auto-assigns shifts based on rules, eligibility, and history
- * Returns assignments and any shortages that couldn't be filled
+ * Auto-assigns shifts based on 15-day rotation cycles
+ * Each member stays on ONE shift type for the full 15 days, then rotates
+ * Week-offs follow 2+2 pattern (2 offs per week)
  */
 export function autoAssignShifts(
   startDate: Date,
@@ -50,43 +55,74 @@ export function autoAssignShifts(
     datacenters, 
     publicHolidays, 
     leaveRequests,
-    existingAssignments,
-    config 
+    config,
+    memberRotationStates,
   } = context;
   
   const assignments: ShiftAssignment[] = [];
   const shortages: ShiftViolation[] = [];
   const days = eachDayOfInterval({ start: startDate, end: endDate });
   
-  // Track member history for rotation
-  const memberHistory: Record<string, MemberHistory> = {};
-  teamMembers.forEach(m => {
-    memberHistory[m.id] = {
-      lastShiftType: null,
-      consecutiveNights: 0,
-      lastShiftDate: null,
-      totalShifts: 0,
-      shiftCounts: {} as Record<ShiftType, number>,
-    };
+  // Build rotation state lookup
+  const rotationStateMap: Record<string, MemberRotationState> = {};
+  memberRotationStates.forEach(state => {
+    rotationStateMap[state.member_id] = state;
   });
   
-  // Pre-compute member availability
-  const memberAvailability = computeMemberAvailability(
-    teamMembers,
-    days,
-    publicHolidays,
-    leaveRequests,
-    config
+  // Filter to only rotating department members (non-TL)
+  const rotatingMembers = teamMembers.filter(m => 
+    ROTATING_DEPARTMENTS.includes(m.department) &&
+    m.role !== 'TL'
   );
   
+  // Calculate member offsets for staggering week-offs
+  const memberOffsets: Record<string, number> = {};
+  rotatingMembers.forEach((member, index) => {
+    memberOffsets[member.id] = index % 7; // Stagger across week
+  });
+  
   // Process each day
-  days.forEach((day, dayIndex) => {
+  days.forEach((day) => {
     const dateStr = format(day, 'yyyy-MM-dd');
     const isPublicHoliday = publicHolidays.includes(dateStr);
     
-    // Assign public holidays
-    if (isPublicHoliday && config.respectPublicHolidays) {
-      teamMembers.forEach(member => {
+    // Track who is available and who gets which shift
+    const dayAssignments: Record<string, TeamMember[]> = {
+      'morning': [],
+      'afternoon': [],
+      'night': [],
+      'general': [],
+      'week-off': [],
+      'public-off': [],
+      'paid-leave': [],
+      'comp-off': [],
+      'leave': [],
+    };
+    
+    // Process each team member
+    teamMembers.forEach(member => {
+      const isRotating = ROTATING_DEPARTMENTS.includes(member.department) && member.role !== 'TL';
+      
+      // Check if on leave
+      const onLeave = config.respectLeaves && leaveRequests.some(lr => 
+        lr.memberId === member.id &&
+        dateStr >= lr.startDate &&
+        dateStr <= lr.endDate
+      );
+      
+      if (onLeave) {
+        assignments.push({
+          id: `auto-${member.id}-${dateStr}`,
+          memberId: member.id,
+          shiftType: 'paid-leave',
+          date: dateStr,
+          department: member.department,
+        });
+        return;
+      }
+      
+      // Public holiday handling
+      if (isPublicHoliday && config.respectPublicHolidays) {
         assignments.push({
           id: `auto-${member.id}-${dateStr}`,
           memberId: member.id,
@@ -94,49 +130,79 @@ export function autoAssignShifts(
           date: dateStr,
           department: member.department,
         });
-      });
-      return;
-    }
-    
-    // Group members by department
-    const membersByDept = groupMembersByDepartment(teamMembers);
-    
-    // Get available members for this day
-    const availableMembers = new Set<string>();
-    teamMembers.forEach(m => {
-      const avail = memberAvailability.find(
-        a => a.memberId === m.id && a.date === dateStr
-      );
-      if (!avail || avail.isAvailable) {
-        availableMembers.add(m.id);
+        return;
       }
-    });
-    
-    // Assign week-offs first (5+2 pattern)
-    const weekOffMembers = assignWeekOffs(
-      teamMembers,
-      dayIndex,
-      config.work_days || 5,
-      config.off_days || 2
-    );
-    
-    weekOffMembers.forEach(memberId => {
-      if (availableMembers.has(memberId)) {
-        availableMembers.delete(memberId);
-        const member = teamMembers.find(m => m.id === memberId);
-        if (member) {
+      
+      // TLs and Vendor Coordinator get General shift
+      if (member.role === 'TL' || GENERAL_SHIFT_DEPARTMENTS.includes(member.department)) {
+        assignments.push({
+          id: `auto-${member.id}-${dateStr}`,
+          memberId: member.id,
+          shiftType: 'general',
+          date: dateStr,
+          department: member.department,
+        });
+        dayAssignments['general'].push(member);
+        return;
+      }
+      
+      // For rotating members, check week-off and determine shift
+      if (isRotating) {
+        const rotationState = rotationStateMap[member.id];
+        const cycleStartDate = rotationState 
+          ? new Date(rotationState.cycle_start_date)
+          : startDate;
+        const currentShiftType = rotationState?.current_shift_type || config.shiftSequence[0];
+        
+        // Calculate which shift type this member should be on
+        const memberShiftType = getMemberShiftTypeForDate(
+          cycleStartDate,
+          day,
+          currentShiftType,
+          config.rotationCycleDays,
+          config.shiftSequence
+        ) as ShiftType;
+        
+        // Calculate day within current cycle
+        const daysSinceCycleStart = Math.floor(
+          (day.getTime() - cycleStartDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        const dayInCycle = ((daysSinceCycleStart % config.rotationCycleDays) + config.rotationCycleDays) % config.rotationCycleDays;
+        
+        // Get this member's week-off days
+        const memberOffset = memberOffsets[member.id] || 0;
+        const weekOffDays = getWeekOffDaysInCycle(
+          cycleStartDate,
+          memberOffset,
+          config.rotationCycleDays
+        );
+        
+        // Check if today is a week-off day for this member
+        if (weekOffDays.includes(dayInCycle)) {
           assignments.push({
-            id: `auto-${memberId}-${dateStr}`,
-            memberId,
+            id: `auto-${member.id}-${dateStr}`,
+            memberId: member.id,
             shiftType: 'week-off',
             date: dateStr,
             department: member.department,
           });
+          dayAssignments['week-off'].push(member);
+          return;
         }
+        
+        // Assign the calculated shift type
+        assignments.push({
+          id: `auto-${member.id}-${dateStr}`,
+          memberId: member.id,
+          shiftType: memberShiftType,
+          date: dateStr,
+          department: member.department,
+        });
+        dayAssignments[memberShiftType].push(member);
       }
     });
     
-    // Assign shifts based on composition rules
+    // Validate staffing against composition rules
     const shiftTypes: ShiftType[] = ['morning', 'afternoon', 'night'];
     
     for (const shiftType of shiftTypes) {
@@ -147,68 +213,12 @@ export function autoAssignShifts(
       );
       
       for (const rule of shiftRules) {
-        const departmentMembers = membersByDept[rule.department] || [];
-        const eligibleMembers = departmentMembers.filter(m => {
-          // Check availability
-          if (!availableMembers.has(m.id)) return false;
-          
-          // Check role eligibility
-          if (!isEligibleForShift(m.role, shiftType)) return false;
-          
-          // Check role filter
+        // Count assigned members for this department and shift
+        const assignedCount = dayAssignments[shiftType].filter(m => {
+          if (m.department !== rule.department) return false;
           if (rule.role_filter && !rule.role_filter.includes(m.role)) return false;
-          
-          // Check datacenter match for Infra
-          if (rule.datacenter_id && rule.department === 'Infra') {
-            // Would need datacenter_id on member
-          }
-          
-          // Check consecutive nights constraint
-          if (shiftType === 'night') {
-            const history = memberHistory[m.id];
-            if (history.consecutiveNights >= config.maxConsecutiveNights) {
-              return false;
-            }
-          }
-          
           return true;
-        });
-        
-        // Sort by least shifts assigned (for fairness)
-        eligibleMembers.sort((a, b) => {
-          const aCount = memberHistory[a.id].totalShifts;
-          const bCount = memberHistory[b.id].totalShifts;
-          return aCount - bCount;
-        });
-        
-        // Assign up to min_count members
-        const assignedCount = Math.min(eligibleMembers.length, rule.min_count);
-        
-        for (let i = 0; i < assignedCount; i++) {
-          const member = eligibleMembers[i];
-          availableMembers.delete(member.id);
-          
-          assignments.push({
-            id: `auto-${member.id}-${dateStr}`,
-            memberId: member.id,
-            shiftType,
-            date: dateStr,
-            department: member.department,
-          });
-          
-          // Update history
-          const history = memberHistory[member.id];
-          history.lastShiftType = shiftType;
-          history.lastShiftDate = dateStr;
-          history.totalShifts++;
-          history.shiftCounts[shiftType] = (history.shiftCounts[shiftType] || 0) + 1;
-          
-          if (shiftType === 'night') {
-            history.consecutiveNights++;
-          } else {
-            history.consecutiveNights = 0;
-          }
-        }
+        }).length;
         
         // Flag shortage if not enough assigned
         if (assignedCount < rule.min_count && config.flagShortages) {
@@ -229,39 +239,6 @@ export function autoAssignShifts(
         }
       }
     }
-    
-    // Assign General shift to TLs and Vendor Coordinator
-    GENERAL_SHIFT_DEPARTMENTS.forEach(dept => {
-      const deptMembers = membersByDept[dept] || [];
-      deptMembers.forEach(member => {
-        if (availableMembers.has(member.id)) {
-          availableMembers.delete(member.id);
-          assignments.push({
-            id: `auto-${member.id}-${dateStr}`,
-            memberId: member.id,
-            shiftType: 'general',
-            date: dateStr,
-            department: member.department,
-          });
-        }
-      });
-    });
-    
-    // Assign TLs from rotating departments to General shift
-    teamMembers
-      .filter(m => m.role === 'TL' && ROTATING_DEPARTMENTS.includes(m.department))
-      .forEach(member => {
-        if (availableMembers.has(member.id)) {
-          availableMembers.delete(member.id);
-          assignments.push({
-            id: `auto-${member.id}-${dateStr}`,
-            memberId: member.id,
-            shiftType: 'general',
-            date: dateStr,
-            department: member.department,
-          });
-        }
-      });
   });
   
   return { assignments, shortages };
@@ -291,95 +268,14 @@ function groupMembersByDepartment(
 }
 
 /**
- * Compute member availability for all days
- */
-function computeMemberAvailability(
-  teamMembers: TeamMember[],
-  days: Date[],
-  publicHolidays: string[],
-  leaveRequests: { memberId: string; startDate: string; endDate: string }[],
-  config: AutoAssignmentConfig
-): { memberId: string; date: string; isAvailable: boolean; reason?: string }[] {
-  const availability: { memberId: string; date: string; isAvailable: boolean; reason?: string }[] = [];
-  
-  teamMembers.forEach(member => {
-    days.forEach(day => {
-      const dateStr = format(day, 'yyyy-MM-dd');
-      let isAvailable = member.status === 'available';
-      let reason: string | undefined;
-      
-      // Check leave requests
-      if (config.respectLeaves) {
-        const onLeave = leaveRequests.some(lr => 
-          lr.memberId === member.id &&
-          dateStr >= lr.startDate &&
-          dateStr <= lr.endDate
-        );
-        if (onLeave) {
-          isAvailable = false;
-          reason = 'leave';
-        }
-      }
-      
-      // Check public holidays
-      if (config.respectPublicHolidays && publicHolidays.includes(dateStr)) {
-        isAvailable = false;
-        reason = 'public-off';
-      }
-      
-      availability.push({
-        memberId: member.id,
-        date: dateStr,
-        isAvailable,
-        reason,
-      });
-    });
-  });
-  
-  return availability;
-}
-
-/**
- * Determine which members get week-off on a given day index
- * Uses rotating 5+2 pattern staggered across team
- */
-function assignWeekOffs(
-  teamMembers: TeamMember[],
-  dayIndex: number,
-  workDays: number,
-  offDays: number
-): string[] {
-  const cycleLength = workDays + offDays;
-  const weekOffMembers: string[] = [];
-  
-  // Filter to only rotating department members
-  const rotatingMembers = teamMembers.filter(m => 
-    ROTATING_DEPARTMENTS.includes(m.department) &&
-    m.role !== 'TL'
-  );
-  
-  rotatingMembers.forEach((member, memberIndex) => {
-    // Stagger week-offs so not everyone is off same days
-    const memberOffset = (memberIndex * offDays) % cycleLength;
-    const adjustedDayIndex = (dayIndex + memberOffset) % cycleLength;
-    
-    // Off days are at the end of each cycle
-    if (adjustedDayIndex >= workDays) {
-      weekOffMembers.push(member.id);
-    }
-  });
-  
-  return weekOffMembers;
-}
-
-/**
  * Manual override - update a single assignment
  */
 export function overrideAssignment(
   assignments: ShiftAssignment[],
   memberId: string,
   date: string,
-  newShiftType: ShiftType | null
+  newShiftType: ShiftType | null,
+  department: Department
 ): ShiftAssignment[] {
   // Remove existing assignment for this member/date
   const filtered = assignments.filter(
@@ -388,16 +284,30 @@ export function overrideAssignment(
   
   // Add new assignment if not null
   if (newShiftType) {
-    // We'd need to find the member to get department
-    // This is a simplified version
     filtered.push({
       id: `override-${memberId}-${date}`,
       memberId,
       shiftType: newShiftType,
       date,
-      department: 'Support', // Would need proper lookup
+      department,
     });
   }
   
   return filtered;
+}
+
+/**
+ * Initialize rotation state for a member
+ */
+export function initializeMemberRotationState(
+  memberId: string,
+  startDate: Date,
+  shiftSequence: string[]
+): MemberRotationState {
+  return {
+    id: `new-${memberId}`,
+    member_id: memberId,
+    current_shift_type: shiftSequence[0],
+    cycle_start_date: format(startDate, 'yyyy-MM-dd'),
+  };
 }

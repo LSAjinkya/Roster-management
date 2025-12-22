@@ -25,6 +25,14 @@ export interface RotationConfig {
   work_days: number;
   off_days: number;
   is_active: boolean;
+  shift_sequence: string[]; // e.g., ['afternoon', 'morning', 'night']
+}
+
+export interface MemberRotationState {
+  id: string;
+  member_id: string;
+  current_shift_type: string;
+  cycle_start_date: string;
 }
 
 export interface ShiftViolation {
@@ -60,7 +68,8 @@ export interface AutoAssignmentConfig {
   rotationCycleDays: number;
   work_days: number;
   off_days: number;
-  flagShortages: boolean; // Instead of auto-violating rules
+  flagShortages: boolean;
+  shiftSequence: string[]; // Shift rotation order
 }
 
 export const DEFAULT_ASSIGNMENT_CONFIG: AutoAssignmentConfig = {
@@ -73,7 +82,57 @@ export const DEFAULT_ASSIGNMENT_CONFIG: AutoAssignmentConfig = {
   minRestHours: 12,
   rotationCycleDays: 15,
   flagShortages: true,
+  shiftSequence: ['afternoon', 'morning', 'night'],
 };
+
+// Calculate which shift type a member should be on for a given date
+export function getMemberShiftTypeForDate(
+  cycleStartDate: Date,
+  targetDate: Date,
+  currentShiftType: string,
+  rotationCycleDays: number,
+  shiftSequence: string[]
+): string {
+  const daysDiff = Math.floor((targetDate.getTime() - cycleStartDate.getTime()) / (1000 * 60 * 60 * 24));
+  const cyclesPassed = Math.floor(daysDiff / rotationCycleDays);
+  
+  const currentIndex = shiftSequence.indexOf(currentShiftType);
+  if (currentIndex === -1) return shiftSequence[0];
+  
+  const newIndex = (currentIndex + cyclesPassed) % shiftSequence.length;
+  return shiftSequence[newIndex];
+}
+
+// Get week-off days within a 15-day cycle (2+2 pattern = 4 days off)
+export function getWeekOffDaysInCycle(
+  cycleStartDate: Date,
+  memberOffset: number,
+  rotationCycleDays: number
+): number[] {
+  // 2+2 pattern: 2 offs in first week, 2 offs in second week
+  // For 15-day cycle: offs on days ~3,4 and ~10,11 (staggered by member)
+  const weekLength = 7;
+  const offsPerWeek = 2;
+  
+  const offDays: number[] = [];
+  
+  // First week offs (days 5-6 of week 1, staggered)
+  const week1Start = (5 + memberOffset) % weekLength;
+  for (let i = 0; i < offsPerWeek; i++) {
+    offDays.push((week1Start + i) % rotationCycleDays);
+  }
+  
+  // Second week offs (days 5-6 of week 2, staggered)
+  const week2Start = (weekLength + 5 + memberOffset) % rotationCycleDays;
+  for (let i = 0; i < offsPerWeek; i++) {
+    const day = (week2Start + i) % rotationCycleDays;
+    if (!offDays.includes(day)) {
+      offDays.push(day);
+    }
+  }
+  
+  return offDays.sort((a, b) => a - b);
+}
 
 // Shift eligibility by role
 export const ROLE_SHIFT_ELIGIBILITY: Record<Role, ShiftType[]> = {

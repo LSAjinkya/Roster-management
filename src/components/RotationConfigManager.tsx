@@ -1,17 +1,33 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Settings, Save, RotateCcw } from 'lucide-react';
+import { Settings, Save, RotateCcw, ArrowRight, GripVertical } from 'lucide-react';
 import { RotationConfig } from '@/types/shiftRules';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+
+const SHIFT_TYPE_COLORS: Record<string, string> = {
+  'afternoon': 'bg-amber-500 text-white',
+  'morning': 'bg-blue-500 text-white',
+  'night': 'bg-purple-600 text-white',
+};
+
+const SHIFT_TYPE_LABELS: Record<string, string> = {
+  'afternoon': 'Afternoon (13:00-22:00)',
+  'morning': 'Morning (07:00-16:00)',
+  'night': 'Night (21:00-07:00)',
+};
+
+type ExtendedRotationConfig = Omit<RotationConfig, 'shift_sequence'> & {
+  shift_sequence?: string[];
+};
 
 export function RotationConfigManager() {
-  const [config, setConfig] = useState<RotationConfig | null>(null);
+  const [config, setConfig] = useState<ExtendedRotationConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -28,7 +44,14 @@ export function RotationConfigManager() {
         .maybeSingle();
 
       if (error) throw error;
-      setConfig(data);
+      
+      // Ensure shift_sequence has a default
+      const configData = data as ExtendedRotationConfig | null;
+      if (configData && !configData.shift_sequence) {
+        configData.shift_sequence = ['afternoon', 'morning', 'night'];
+      }
+      
+      setConfig(configData);
     } catch (error) {
       console.error('Error fetching rotation config:', error);
       toast.error('Failed to load rotation configuration');
@@ -50,6 +73,7 @@ export function RotationConfigManager() {
           min_rest_hours: config.min_rest_hours,
           work_days: config.work_days,
           off_days: config.off_days,
+          shift_sequence: config.shift_sequence,
         })
         .eq('id', config.id);
 
@@ -71,7 +95,18 @@ export function RotationConfigManager() {
       min_rest_hours: 12,
       work_days: 5,
       off_days: 2,
+      shift_sequence: ['afternoon', 'morning', 'night'],
     } : null);
+  };
+
+  const handleDragEnd = (result: DropResult) => {
+    if (!result.destination || !config?.shift_sequence) return;
+    
+    const items = Array.from(config.shift_sequence);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+    
+    setConfig({ ...config, shift_sequence: items });
   };
 
   if (loading) {
@@ -90,6 +125,8 @@ export function RotationConfigManager() {
     );
   }
 
+  const shiftSequence = config.shift_sequence || ['afternoon', 'morning', 'night'];
+
   return (
     <Card>
       <CardHeader>
@@ -100,58 +137,72 @@ export function RotationConfigManager() {
               Rotation Configuration
             </CardTitle>
             <CardDescription>
-              Configure shift rotation patterns and constraints
+              Configure 15-day shift rotation with 2+2 weekly offs
             </CardDescription>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleReset} className="gap-2">
               <RotateCcw size={16} />
-              Reset Defaults
+              Reset
             </Button>
             <Button onClick={handleSave} disabled={saving} className="gap-2">
               <Save size={16} />
-              {saving ? 'Saving...' : 'Save Changes'}
+              {saving ? 'Saving...' : 'Save'}
             </Button>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Work Pattern */}
+        {/* Shift Rotation Sequence */}
+        <div className="space-y-4 p-4 rounded-lg border">
+          <h3 className="font-medium">Shift Rotation Sequence</h3>
+          <p className="text-sm text-muted-foreground">
+            Drag to reorder. Each member works 15 days in one shift, then moves to the next.
+          </p>
+          
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="shifts" direction="horizontal">
+              {(provided) => (
+                <div 
+                  {...provided.droppableProps} 
+                  ref={provided.innerRef}
+                  className="flex items-center gap-2 flex-wrap"
+                >
+                  {shiftSequence.map((shift, index) => (
+                    <Draggable key={shift} draggableId={shift} index={index}>
+                      {(provided, snapshot) => (
+                        <div className="flex items-center gap-2">
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-grab ${SHIFT_TYPE_COLORS[shift]} ${snapshot.isDragging ? 'shadow-lg' : ''}`}
+                          >
+                            <GripVertical size={14} />
+                            <span className="font-medium">{SHIFT_TYPE_LABELS[shift]}</span>
+                          </div>
+                          {index < shiftSequence.length - 1 && (
+                            <ArrowRight size={20} className="text-muted-foreground" />
+                          )}
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
+        </div>
+
+        {/* Cycle Configuration */}
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-4 p-4 rounded-lg border">
-            <h3 className="font-medium">Work Pattern (5+2 Rotation)</h3>
+            <h3 className="font-medium">15-Day Rotation Cycle</h3>
             
             <div className="space-y-2">
               <div className="flex justify-between">
-                <Label>Work Days per Cycle</Label>
-                <span className="text-sm font-medium">{config.work_days} days</span>
-              </div>
-              <Slider
-                value={[config.work_days]}
-                onValueChange={([v]) => setConfig({ ...config, work_days: v })}
-                min={4}
-                max={6}
-                step={1}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <Label>Off Days per Cycle</Label>
-                <span className="text-sm font-medium">{config.off_days} days</span>
-              </div>
-              <Slider
-                value={[config.off_days]}
-                onValueChange={([v]) => setConfig({ ...config, off_days: v })}
-                min={1}
-                max={3}
-                step={1}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <Label>Rotation Cycle Length</Label>
+                <Label>Cycle Length</Label>
                 <span className="text-sm font-medium">{config.rotation_cycle_days} days</span>
               </div>
               <Slider
@@ -162,13 +213,23 @@ export function RotationConfigManager() {
                 step={1}
               />
               <p className="text-xs text-muted-foreground">
-                Shift pattern repeats after this many days
+                Each member stays on one shift for this many days before rotating
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <Label>Weekly Offs Pattern</Label>
+                <span className="text-sm font-medium">2 + 2 days</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                2 offs in first week + 2 offs in second week of each cycle
               </p>
             </div>
           </div>
 
           <div className="space-y-4 p-4 rounded-lg border">
-            <h3 className="font-medium">Constraints</h3>
+            <h3 className="font-medium">Safety Constraints</h3>
             
             <div className="space-y-2">
               <div className="flex justify-between">
@@ -179,17 +240,14 @@ export function RotationConfigManager() {
                 value={[config.max_consecutive_nights]}
                 onValueChange={([v]) => setConfig({ ...config, max_consecutive_nights: v })}
                 min={1}
-                max={7}
+                max={15}
                 step={1}
               />
-              <p className="text-xs text-muted-foreground">
-                Workers won't be assigned more consecutive night shifts than this
-              </p>
             </div>
 
             <div className="space-y-2">
               <div className="flex justify-between">
-                <Label>Minimum Rest Hours Between Shifts</Label>
+                <Label>Minimum Rest Hours</Label>
                 <span className="text-sm font-medium">{config.min_rest_hours} hours</span>
               </div>
               <Slider
@@ -199,22 +257,38 @@ export function RotationConfigManager() {
                 max={16}
                 step={1}
               />
-              <p className="text-xs text-muted-foreground">
-                Ensures adequate rest between consecutive shift days
-              </p>
             </div>
           </div>
         </div>
 
-        {/* Summary */}
+        {/* Example Pattern */}
         <div className="p-4 rounded-lg bg-muted/50">
-          <h4 className="font-medium mb-2">Current Pattern Summary</h4>
-          <p className="text-sm text-muted-foreground">
-            Workers will work <strong>{config.work_days} days</strong> followed by{' '}
-            <strong>{config.off_days} days off</strong> in a rotating pattern. 
-            Shifts rotate every <strong>{config.rotation_cycle_days} days</strong>. 
-            No worker will have more than <strong>{config.max_consecutive_nights} consecutive night shifts</strong>.
-          </p>
+          <h4 className="font-medium mb-3">Example: Dipali's Schedule</h4>
+          <div className="flex flex-wrap gap-2 text-sm">
+            <div className="flex items-center gap-2">
+              <Badge className={SHIFT_TYPE_COLORS[shiftSequence[0]]}>
+                Jan 1-14
+              </Badge>
+              <span>{SHIFT_TYPE_LABELS[shiftSequence[0]]}</span>
+              <span className="text-muted-foreground">(2+2 offs)</span>
+            </div>
+            <ArrowRight size={16} className="text-muted-foreground" />
+            <div className="flex items-center gap-2">
+              <Badge className={SHIFT_TYPE_COLORS[shiftSequence[1]]}>
+                Jan 15-28
+              </Badge>
+              <span>{SHIFT_TYPE_LABELS[shiftSequence[1]]}</span>
+              <span className="text-muted-foreground">(2+2 offs)</span>
+            </div>
+            <ArrowRight size={16} className="text-muted-foreground" />
+            <div className="flex items-center gap-2">
+              <Badge className={SHIFT_TYPE_COLORS[shiftSequence[2]]}>
+                Jan 29-Feb 11
+              </Badge>
+              <span>{SHIFT_TYPE_LABELS[shiftSequence[2]]}</span>
+              <span className="text-muted-foreground">(2+2 offs)</span>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>

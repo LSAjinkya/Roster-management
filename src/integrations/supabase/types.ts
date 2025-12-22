@@ -221,6 +221,41 @@ export type Database = {
         }
         Relationships: []
       }
+      member_rotation_state: {
+        Row: {
+          created_at: string
+          current_shift_type: string
+          cycle_start_date: string
+          id: string
+          member_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_shift_type?: string
+          cycle_start_date?: string
+          id?: string
+          member_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_shift_type?: string
+          cycle_start_date?: string
+          id?: string
+          member_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_rotation_state_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: true
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pending_2fa_verification: {
         Row: {
           created_at: string
@@ -365,6 +400,7 @@ export type Database = {
           min_rest_hours: number
           off_days: number
           rotation_cycle_days: number
+          shift_sequence: string[] | null
           updated_at: string
           work_days: number
         }
@@ -376,6 +412,7 @@ export type Database = {
           min_rest_hours?: number
           off_days?: number
           rotation_cycle_days?: number
+          shift_sequence?: string[] | null
           updated_at?: string
           work_days?: number
         }
@@ -387,6 +424,7 @@ export type Database = {
           min_rest_hours?: number
           off_days?: number
           rotation_cycle_days?: number
+          shift_sequence?: string[] | null
           updated_at?: string
           work_days?: number
         }
