@@ -80,10 +80,14 @@ const STATUS_COLORS: Record<UserStatus, string> = {
 };
 
 const TEAM_ROLE_COLORS: Record<string, string> = {
+  'Admin': 'bg-destructive/20 text-destructive border-destructive/30',
+  'Manager': 'bg-violet-500/20 text-violet-700 border-violet-500/30',
   'TL': 'bg-primary/20 text-primary border-primary/30',
+  'L3': 'bg-indigo-500/20 text-indigo-700 border-indigo-500/30',
   'L2': 'bg-blue-500/20 text-blue-700 border-blue-500/30',
   'L1': 'bg-green-500/20 text-green-700 border-green-500/30',
   'HR': 'bg-purple-500/20 text-purple-700 border-purple-500/30',
+  'Trainee': 'bg-amber-500/20 text-amber-700 border-amber-500/30',
 };
 
 export default function RoleManagement() {
