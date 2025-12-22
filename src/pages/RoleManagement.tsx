@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search, FileUp, Users, UserCheck, Trash2, Plus } from 'lucide-react';
+import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search, FileUp, Users, UserCheck, Trash2, Plus, Link2, Unlink, RefreshCw } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -124,6 +124,8 @@ export default function RoleManagement() {
     role: 'L1' as string,
   });
   const [addingMember, setAddingMember] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [linkingUser, setLinkingUser] = useState<string | null>(null);
 
   const canAccess = isAdmin || isHR;
 
@@ -522,6 +524,83 @@ export default function RoleManagement() {
     }
   };
 
+  // Sync functions for linking users with team members
+  const handleSyncAll = async () => {
+    setSyncing(true);
+    try {
+      let linkedCount = 0;
+      
+      for (const userProfile of users) {
+        const matchingMember = teamMembers.find(
+          m => m.email.toLowerCase() === userProfile.email.toLowerCase()
+        );
+        
+        if (matchingMember) {
+          await supabase
+            .from('profiles')
+            .update({ 
+              team_member_id: matchingMember.id,
+              department: matchingMember.department 
+            })
+            .eq('user_id', userProfile.id);
+          
+          linkedCount++;
+        }
+      }
+      
+      toast.success(`Synced ${linkedCount} user(s) with team members`);
+      fetchUsers();
+    } catch (error) {
+      console.error('Sync error:', error);
+      toast.error('Failed to sync users');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleLinkUserToMember = async (userId: string, memberId: string | null) => {
+    setLinkingUser(userId);
+    try {
+      const member = memberId ? teamMembers.find(m => m.id === memberId) : null;
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          team_member_id: memberId,
+          department: member?.department || null
+        })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      toast.success(memberId ? 'User linked to team member' : 'User unlinked');
+      fetchUsers();
+    } catch (error) {
+      console.error('Error linking user:', error);
+      toast.error('Failed to update link');
+    } finally {
+      setLinkingUser(null);
+    }
+  };
+
+  const getSyncedUsersCount = () => {
+    return users.filter(u => {
+      const matchingMember = teamMembers.find(
+        m => m.email.toLowerCase() === u.email.toLowerCase()
+      );
+      return !!matchingMember;
+    }).length;
+  };
+
+  const getSyncedUsers = () => {
+    return users.map(u => {
+      const matchingMember = teamMembers.find(
+        m => m.email.toLowerCase() === u.email.toLowerCase()
+      );
+      return { ...u, linkedMember: matchingMember || null };
+    });
+  };
+
   const handleCsvImport = async () => {
     if (!csvData.trim()) {
       toast.error('Please enter CSV data');
@@ -734,6 +813,10 @@ export default function RoleManagement() {
           <TabsTrigger value="auth-users" className="gap-2">
             <UserCheck className="h-4 w-4" />
             Auth Users ({users.length})
+          </TabsTrigger>
+          <TabsTrigger value="sync" className="gap-2">
+            <Link2 className="h-4 w-4" />
+            Sync ({getSyncedUsersCount()}/{users.length})
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-2">
             <Clock className="h-4 w-4" />
@@ -1204,6 +1287,146 @@ export default function RoleManagement() {
                   </TableBody>
                 </Table>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Sync Tab */}
+        <TabsContent value="sync">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Link2 className="h-5 w-5" />
+                    User & Org Chart Sync
+                  </CardTitle>
+                  <CardDescription>
+                    Link authenticated users to team members in the org chart
+                  </CardDescription>
+                </div>
+                <Button onClick={handleSyncAll} disabled={syncing}>
+                  {syncing ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Auto-Sync All
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <Card className="bg-green-500/10 border-green-500/30">
+                  <CardContent className="pt-4">
+                    <p className="text-2xl font-bold text-green-700 dark:text-green-300">{getSyncedUsersCount()}</p>
+                    <p className="text-xs text-muted-foreground">Synced Users</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-amber-500/10 border-amber-500/30">
+                  <CardContent className="pt-4">
+                    <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{users.length - getSyncedUsersCount()}</p>
+                    <p className="text-xs text-muted-foreground">Unsynced Users</p>
+                  </CardContent>
+                </Card>
+                <Card className="bg-blue-500/10 border-blue-500/30">
+                  <CardContent className="pt-4">
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{teamMembers.length}</p>
+                    <p className="text-xs text-muted-foreground">Team Members</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Auth User</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Linked Team Member</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-40">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {getSyncedUsers().map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="text-xs">
+                              {u.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium">{u.full_name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{u.email}</TableCell>
+                      <TableCell>
+                        {u.linkedMember ? (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className={TEAM_ROLE_COLORS[u.linkedMember.role] || ''}>
+                              {u.linkedMember.role}
+                            </Badge>
+                            <span className="text-sm">{u.linkedMember.name}</span>
+                            <span className="text-xs text-muted-foreground">({u.linkedMember.department})</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Not linked</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {u.linkedMember ? (
+                          <Badge variant="outline" className="bg-green-500/20 text-green-700 border-green-500/30">
+                            <Link2 className="h-3 w-3 mr-1" />
+                            Synced
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-amber-500/20 text-amber-700 border-amber-500/30">
+                            <Unlink className="h-3 w-3 mr-1" />
+                            Unsynced
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {u.linkedMember ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleLinkUserToMember(u.id, null)}
+                            disabled={linkingUser === u.id}
+                            className="text-destructive"
+                          >
+                            {linkingUser === u.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Unlink className="h-4 w-4 mr-1" />
+                                Unlink
+                              </>
+                            )}
+                          </Button>
+                        ) : (
+                          <Select
+                            onValueChange={(value) => handleLinkUserToMember(u.id, value)}
+                            disabled={linkingUser === u.id}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue placeholder="Link to..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {teamMembers.map((m) => (
+                                <SelectItem key={m.id} value={m.id}>
+                                  {m.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
