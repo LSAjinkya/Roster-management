@@ -103,41 +103,46 @@ export function getMemberShiftTypeForDate(
   return shiftSequence[newIndex];
 }
 
-// Get week-off days within a 14-day cycle (2 days off per week = 4 days total)
-// Week-offs can be on ANY day, staggered by member offset to distribute evenly
+// Get week-off days within a 7-day work cycle
+// Pattern: 5 consecutive working days, then 2 consecutive off days
+// Member offset staggers which day their cycle starts
 export function getWeekOffDaysInCycle(
   cycleStartDate: Date,
   memberOffset: number,
   rotationCycleDays: number
 ): number[] {
-  // For a 14-day cycle: 2 days off each week (4 days total)
-  // Distribute off days evenly across all 7 days of the week using member offset
   const offDays: number[] = [];
   
-  // Calculate off days for week 1 (days 0-6)
-  // Use member offset to stagger across all days of the week
-  const week1FirstOff = memberOffset % 7;
-  const week1SecondOff = (week1FirstOff + 3) % 7; // Space them ~3 days apart within the week
-  offDays.push(week1FirstOff);
-  offDays.push(week1SecondOff);
+  // Each member has a 7-day pattern: 5 work + 2 off
+  // The offset determines where in the week their 2 off days fall
+  // Offset 0: off on days 5,6 (Sat, Sun if starting Monday)
+  // Offset 1: off on days 6,0 (Sun, Mon)
+  // Offset 2: off on days 0,1 (Mon, Tue)
+  // etc.
   
-  // Calculate off days for week 2 (days 7-13)
-  // Offset by 1 from week 1 pattern to create variety
-  const week2FirstOff = 7 + ((week1FirstOff + 1) % 7);
-  const week2SecondOff = 7 + ((week1SecondOff + 1) % 7);
+  const offStartDay = (5 + memberOffset) % 7; // Which day of week the 2-day off block starts
   
-  if (week2FirstOff < rotationCycleDays) {
-    offDays.push(week2FirstOff);
+  // Calculate off days for the entire cycle period
+  for (let week = 0; week < Math.ceil(rotationCycleDays / 7); week++) {
+    const weekStart = week * 7;
+    
+    // First off day of this week
+    const firstOff = weekStart + offStartDay;
+    // Second off day (consecutive)
+    const secondOff = weekStart + ((offStartDay + 1) % 7);
+    
+    // Handle wrap-around: if second off would be before first, adjust
+    const actualSecondOff = secondOff < firstOff ? firstOff + 1 : secondOff;
+    
+    if (firstOff < rotationCycleDays) {
+      offDays.push(firstOff);
+    }
+    if (actualSecondOff < rotationCycleDays && actualSecondOff !== firstOff) {
+      offDays.push(actualSecondOff);
+    }
   }
-  if (week2SecondOff < rotationCycleDays && week2SecondOff !== week2FirstOff) {
-    offDays.push(week2SecondOff);
-  }
   
-  // Ensure we always have exactly 4 offs for 14-day cycle (2 per week)
-  // If we have duplicates or missing days, adjust
-  const uniqueOffs = [...new Set(offDays)].sort((a, b) => a - b);
-  
-  return uniqueOffs;
+  return [...new Set(offDays)].sort((a, b) => a - b);
 }
 
 // Shift eligibility by role
