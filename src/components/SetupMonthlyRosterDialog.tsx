@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format, addMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay, getWeek } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,12 +14,21 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarPlus, Loader2, Settings2, Eye, Save, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarPlus, Loader2, Settings2, Eye, Save, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { TeamMember, ShiftType, Department, DEPARTMENTS } from '@/types/roster';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RosterPreviewTable } from './RosterPreviewTable';
+import { 
+  MemberRotationState, 
+  RotationConfig, 
+  getMemberShiftTypeForDate, 
+  getWeekOffDaysInCycle,
+  ROTATING_DEPARTMENTS,
+  GENERAL_SHIFT_DEPARTMENTS 
+} from '@/types/shiftRules';
+import { Badge } from '@/components/ui/badge';
 
 interface SetupMonthlyRosterDialogProps {
   teamMembers: TeamMember[];
@@ -32,14 +41,6 @@ interface DepartmentShiftConfig {
   defaultShift: ShiftType;
   rotateShifts: boolean;
   availableShifts: ShiftType[];
-}
-
-interface WeekOffConfig {
-  enabled: boolean;
-  workDays: number; // Number of consecutive work days (default 5)
-  offDays: number; // Number of consecutive off days (default 2)
-  rotationMonths: number; // Rotate week-off pattern every N months (default 3)
-  startOffset: number; // Starting offset for the pattern (0-6)
 }
 
 interface PreviewAssignment {
@@ -68,14 +69,11 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
   const [publicHolidays, setPublicHolidays] = useState<string[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
   
-  // Week-off configuration - 5 days work + 2 days off pattern
-  const [weekOffConfig, setWeekOffConfig] = useState<WeekOffConfig>({
-    enabled: true,
-    workDays: 5,
-    offDays: 2,
-    rotationMonths: 3,
-    startOffset: 0,
-  });
+  // 15-day rotation data
+  const [rotationConfig, setRotationConfig] = useState<RotationConfig | null>(null);
+  const [rotationStates, setRotationStates] = useState<MemberRotationState[]>([]);
+  const [loadingRotation, setLoadingRotation] = useState(false);
+  const [use15DayRotation, setUse15DayRotation] = useState(true);
 
   // Filter team members by selected department
   const filteredTeamMembers = useMemo(() => {
@@ -101,6 +99,52 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
   const monthName = format(nextMonth, 'MMMM yyyy');
   const totalDays = eachDayOfInterval({ start: monthStart, end: monthEnd }).length;
 
+  // Fetch rotation config and states when dialog opens
+  useEffect(() => {
+    if (open) {
+      fetchRotationData();
+      fetchHolidays();
+    }
+  }, [open]);
+
+  const fetchRotationData = async () => {
+    setLoadingRotation(true);
+    try {
+      const [configRes, statesRes] = await Promise.all([
+        supabase.from('rotation_config').select('*').eq('is_active', true).maybeSingle(),
+        supabase.from('member_rotation_state').select('*')
+      ]);
+
+      if (configRes.error) throw configRes.error;
+      if (statesRes.error) throw statesRes.error;
+
+      if (configRes.data) {
+        const config = configRes.data as any;
+        setRotationConfig({
+          ...config,
+          shift_sequence: config.shift_sequence || ['afternoon', 'morning', 'night']
+        });
+      }
+      setRotationStates(statesRes.data || []);
+    } catch (error) {
+      console.error('Error fetching rotation data:', error);
+    } finally {
+      setLoadingRotation(false);
+    }
+  };
+
+  const fetchHolidays = async () => {
+    const { data } = await supabase
+      .from('public_holidays')
+      .select('date')
+      .gte('date', format(monthStart, 'yyyy-MM-dd'))
+      .lte('date', format(monthEnd, 'yyyy-MM-dd'));
+    
+    if (data) {
+      setPublicHolidays(data.map(h => h.date));
+    }
+  };
+
   const updateDeptConfig = (dept: Department, updates: Partial<DepartmentShiftConfig>) => {
     setDeptConfigs(prev => 
       prev.map(config => 
@@ -109,70 +153,91 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
     );
   };
 
-  // Fetch public holidays for the month
-  useMemo(() => {
-    const fetchHolidays = async () => {
-      const { data } = await supabase
-        .from('public_holidays')
-        .select('date')
-        .gte('date', format(monthStart, 'yyyy-MM-dd'))
-        .lte('date', format(monthEnd, 'yyyy-MM-dd'));
-      
-      if (data) {
-        setPublicHolidays(data.map(h => h.date));
-      }
-    };
-    if (open) fetchHolidays();
-  }, [open, monthStart, monthEnd]);
-
-  // Calculate if a date is a week-off based on 5-work + 2-off pattern
-  const isWeekOff = (dayIndex: number, memberIndex: number): boolean => {
-    if (!weekOffConfig.enabled) return false;
-    
-    const cycleLength = weekOffConfig.workDays + weekOffConfig.offDays; // 7 days cycle
-    const memberOffset = (memberIndex * weekOffConfig.offDays) % cycleLength;
-    const adjustedDayIndex = (dayIndex + weekOffConfig.startOffset + memberOffset) % cycleLength;
-    
-    // Off days are at the end of each cycle
-    return adjustedDayIndex >= weekOffConfig.workDays;
-  };
+  // Get uninitialized members
+  const uninitializedMembers = useMemo(() => {
+    const initializedIds = new Set(rotationStates.map(s => s.member_id));
+    return filteredTeamMembers.filter(m => 
+      ROTATING_DEPARTMENTS.includes(m.department) && 
+      m.role !== 'TL' &&
+      !initializedIds.has(m.id)
+    );
+  }, [filteredTeamMembers, rotationStates]);
 
   const generateAssignments = (): PreviewAssignment[] => {
     const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
     const assignments: PreviewAssignment[] = [];
 
-    const membersByDept: Record<string, TeamMember[]> = {};
-    filteredTeamMembers.forEach(member => {
-      if (!membersByDept[member.department]) {
-        membersByDept[member.department] = [];
-      }
-      membersByDept[member.department].push(member);
-    });
+    const shiftSequence = rotationConfig?.shift_sequence || ['afternoon', 'morning', 'night'];
+    const cycleDays = rotationConfig?.rotation_cycle_days || 15;
 
-    days.forEach((day, dayIndex) => {
+    // Build rotation state lookup
+    const stateMap: Record<string, MemberRotationState> = {};
+    rotationStates.forEach(s => { stateMap[s.member_id] = s; });
+
+    // Calculate member offsets for staggering
+    const rotatingMembers = filteredTeamMembers.filter(m => 
+      ROTATING_DEPARTMENTS.includes(m.department) && m.role !== 'TL'
+    );
+    const memberOffsets: Record<string, number> = {};
+    rotatingMembers.forEach((m, i) => { memberOffsets[m.id] = i % 7; });
+
+    days.forEach((day) => {
       const dateStr = format(day, 'yyyy-MM-dd');
       const isPublicHoliday = publicHolidays.includes(dateStr);
 
-      Object.entries(membersByDept).forEach(([dept, members]) => {
-        if (members.length === 0) return;
+      filteredTeamMembers.forEach((member) => {
+        const isRotating = ROTATING_DEPARTMENTS.includes(member.department) && member.role !== 'TL';
+        const isGeneralOnly = GENERAL_SHIFT_DEPARTMENTS.includes(member.department) || member.role === 'TL';
 
-        const config = deptConfigs.find(c => c.department === dept);
-        if (!config) return;
+        // Public holiday
+        if (isPublicHoliday) {
+          assignments.push({
+            member_id: member.id,
+            shift_type: 'public-off',
+            date: dateStr,
+            department: member.department as Department,
+          });
+          return;
+        }
 
-        members.forEach((member, memberIndex) => {
-          // Check for public holiday first
-          if (isPublicHoliday) {
-            assignments.push({
-              member_id: member.id,
-              shift_type: 'public-off',
-              date: dateStr,
-              department: member.department as Department,
-            });
-            return;
-          }
+        // General shift departments (TLs, HR, Vendor Coordinator)
+        if (isGeneralOnly) {
+          assignments.push({
+            member_id: member.id,
+            shift_type: 'general',
+            date: dateStr,
+            department: member.department as Department,
+          });
+          return;
+        }
 
-          // Check for week-off (5 work + 2 off pattern)
-          if (isWeekOff(dayIndex, memberIndex)) {
+        // Rotating members with 15-day cycle logic
+        if (isRotating && use15DayRotation && rotationConfig) {
+          const state = stateMap[member.id];
+          const cycleStartDate = state 
+            ? new Date(state.cycle_start_date) 
+            : monthStart;
+          const currentShiftType = state?.current_shift_type || shiftSequence[0];
+
+          // Get shift type for this day
+          const shiftType = getMemberShiftTypeForDate(
+            cycleStartDate,
+            day,
+            currentShiftType,
+            cycleDays,
+            shiftSequence
+          ) as ShiftType;
+
+          // Check for week-off (2+2 pattern)
+          const daysSinceCycleStart = Math.floor(
+            (day.getTime() - cycleStartDate.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          const dayInCycle = ((daysSinceCycleStart % cycleDays) + cycleDays) % cycleDays;
+          
+          const memberOffset = memberOffsets[member.id] || 0;
+          const weekOffDays = getWeekOffDaysInCycle(cycleStartDate, memberOffset, cycleDays);
+
+          if (weekOffDays.includes(dayInCycle)) {
             assignments.push({
               member_id: member.id,
               shift_type: 'week-off',
@@ -182,23 +247,25 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
             return;
           }
 
-          // Assign regular shift
-          let shiftType: ShiftType;
-          
-          if (config.rotateShifts && config.availableShifts.length > 1) {
-            const shiftIndex = (dayIndex + memberIndex) % config.availableShifts.length;
-            shiftType = config.availableShifts[shiftIndex];
-          } else {
-            shiftType = config.defaultShift;
-          }
-
           assignments.push({
             member_id: member.id,
             shift_type: shiftType,
             date: dateStr,
             department: member.department as Department,
           });
-        });
+          return;
+        }
+
+        // Fallback: use department config
+        const config = deptConfigs.find(c => c.department === member.department);
+        if (config) {
+          assignments.push({
+            member_id: member.id,
+            shift_type: config.defaultShift,
+            date: dateStr,
+            department: member.department as Department,
+          });
+        }
       });
     });
 
@@ -347,135 +414,120 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
               )}
             </div>
 
-            <Tabs defaultValue="weekoff" className="w-full">
+            <Tabs defaultValue="rotation" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="weekoff">Week-Off Rules</TabsTrigger>
+                <TabsTrigger value="rotation">15-Day Rotation</TabsTrigger>
                 <TabsTrigger value="shifts">Department Shifts</TabsTrigger>
                 <TabsTrigger value="summary">Summary</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="weekoff" className="space-y-4 mt-4">
+              <TabsContent value="rotation" className="space-y-4 mt-4">
+                {/* 15-Day Rotation Toggle */}
                 <div className="rounded-lg border p-4 space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-base">Enable Week-Offs</Label>
+                      <Label className="text-base">Use 15-Day Rotation</Label>
                       <p className="text-sm text-muted-foreground">
-                        5 days work + 2 consecutive days off pattern
+                        Each member works 15 days in one shift, then rotates
                       </p>
                     </div>
                     <Switch
-                      checked={weekOffConfig.enabled}
-                      onCheckedChange={(enabled) => 
-                        setWeekOffConfig(prev => ({ ...prev, enabled }))
-                      }
+                      checked={use15DayRotation}
+                      onCheckedChange={setUse15DayRotation}
                     />
                   </div>
 
-                  {weekOffConfig.enabled && (
+                  {use15DayRotation && rotationConfig && (
                     <>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Work Days (Consecutive)</Label>
-                          <Select
-                            value={String(weekOffConfig.workDays)}
-                            onValueChange={(v) => 
-                              setWeekOffConfig(prev => ({ ...prev, workDays: Number(v) }))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="4">4 days</SelectItem>
-                              <SelectItem value="5">5 days</SelectItem>
-                              <SelectItem value="6">6 days</SelectItem>
-                            </SelectContent>
-                          </Select>
+                      <div className="grid grid-cols-2 gap-4 p-3 bg-muted/50 rounded-lg">
+                        <div>
+                          <span className="text-sm text-muted-foreground">Cycle Length:</span>
+                          <span className="ml-2 font-medium">{rotationConfig.rotation_cycle_days} days</span>
                         </div>
-
-                        <div className="space-y-2">
-                          <Label>Off Days (Consecutive)</Label>
-                          <Select
-                            value={String(weekOffConfig.offDays)}
-                            onValueChange={(v) => 
-                              setWeekOffConfig(prev => ({ ...prev, offDays: Number(v) }))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="1">1 day</SelectItem>
-                              <SelectItem value="2">2 days</SelectItem>
-                              <SelectItem value="3">3 days</SelectItem>
-                            </SelectContent>
-                          </Select>
+                        <div>
+                          <span className="text-sm text-muted-foreground">Sequence:</span>
+                          <span className="ml-2 font-medium">
+                            {(rotationConfig.shift_sequence || ['A', 'M', 'N']).map((s: string) => s.charAt(0).toUpperCase()).join(' → ')}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-sm text-muted-foreground">Weekly Offs:</span>
+                          <span className="ml-2 font-medium">2+2 pattern</span>
+                        </div>
+                        <div>
+                          <span className="text-sm text-muted-foreground">Initialized:</span>
+                          <span className="ml-2 font-medium">
+                            {rotationStates.length} members
+                          </span>
                         </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <Label>Rotation Period</Label>
-                        <p className="text-xs text-muted-foreground mb-2">
-                          Week-off days shift after this many months
-                        </p>
-                        <Select
-                          value={String(weekOffConfig.rotationMonths)}
-                          onValueChange={(v) => 
-                            setWeekOffConfig(prev => ({ ...prev, rotationMonths: Number(v) }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="1">Every month</SelectItem>
-                            <SelectItem value="2">Every 2 months</SelectItem>
-                            <SelectItem value="3">Every 3 months</SelectItem>
-                            <SelectItem value="6">Every 6 months</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Starting Day Offset</Label>
-                        <p className="text-xs text-muted-foreground mb-2">
-                          Adjust when the first week-off occurs in the cycle
-                        </p>
-                        <div className="flex gap-2 flex-wrap">
-                          {[0, 1, 2, 3, 4, 5, 6].map((offset) => (
-                            <Button
-                              key={offset}
-                              variant={weekOffConfig.startOffset === offset ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => setWeekOffConfig(prev => ({ ...prev, startOffset: offset }))}
-                            >
-                              Day {offset + 1}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="rounded-lg bg-muted/50 p-3">
-                        <p className="text-sm font-medium mb-1">Pattern Preview</p>
-                        <div className="flex gap-1 flex-wrap">
-                          {Array.from({ length: weekOffConfig.workDays + weekOffConfig.offDays }).map((_, i) => (
-                            <div
-                              key={i}
-                              className={`w-8 h-8 rounded flex items-center justify-center text-xs font-medium ${
-                                i < weekOffConfig.workDays 
-                                  ? 'bg-primary/20 text-primary' 
-                                  : 'bg-gray-300 text-gray-700'
-                              }`}
-                            >
-                              {i < weekOffConfig.workDays ? 'W' : 'OFF'}
+                      {/* Uninitialized members warning */}
+                      {uninitializedMembers.length > 0 && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-3">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="text-amber-600 mt-0.5" size={16} />
+                            <div className="flex-1">
+                              <p className="font-medium text-amber-800 dark:text-amber-200 text-sm">
+                                {uninitializedMembers.length} member(s) not initialized
+                              </p>
+                              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                                These members will use the first shift in sequence. Initialize them in Settings → Rotation for accurate tracking.
+                              </p>
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {uninitializedMembers.slice(0, 5).map(m => (
+                                  <Badge key={m.id} variant="outline" className="text-xs">
+                                    {m.name}
+                                  </Badge>
+                                ))}
+                                {uninitializedMembers.length > 5 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{uninitializedMembers.length - 5} more
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
-                          ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Pattern Example */}
+                      <div className="rounded-lg bg-muted/50 p-3">
+                        <p className="text-sm font-medium mb-2">Example Pattern</p>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <div className="flex items-center gap-1">
+                            <Badge className="bg-amber-500 text-white">Days 1-{rotationConfig.rotation_cycle_days}</Badge>
+                            <span>Afternoon</span>
+                          </div>
+                          <span className="text-muted-foreground">→</span>
+                          <div className="flex items-center gap-1">
+                            <Badge className="bg-blue-500 text-white">Days {rotationConfig.rotation_cycle_days + 1}-{rotationConfig.rotation_cycle_days * 2}</Badge>
+                            <span>Morning</span>
+                          </div>
+                          <span className="text-muted-foreground">→</span>
+                          <div className="flex items-center gap-1">
+                            <Badge className="bg-purple-600 text-white">Days {rotationConfig.rotation_cycle_days * 2 + 1}-{rotationConfig.rotation_cycle_days * 3}</Badge>
+                            <span>Night</span>
+                          </div>
                         </div>
                         <p className="text-xs text-muted-foreground mt-2">
-                          Cycle: {weekOffConfig.workDays} work + {weekOffConfig.offDays} off = {weekOffConfig.workDays + weekOffConfig.offDays} days
+                          2+2 weekly offs: 2 days off in each week of the cycle
                         </p>
                       </div>
                     </>
+                  )}
+
+                  {use15DayRotation && !rotationConfig && (
+                    <div className="text-center py-4 text-muted-foreground">
+                      <p>No rotation configuration found.</p>
+                      <p className="text-sm">Go to Settings → Shift Rules to configure.</p>
+                    </div>
+                  )}
+
+                  {!use15DayRotation && (
+                    <div className="text-center py-4 text-muted-foreground">
+                      <p>Legacy mode: shifts will be assigned based on department configuration</p>
+                    </div>
                   )}
                 </div>
 
@@ -596,11 +648,11 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
                     <span>{selectedDepartment === 'all' ? 'All Departments' : selectedDepartment}</span>
                     <span className="text-muted-foreground">Team Members:</span>
                     <span>{filteredTeamMembers.length}</span>
-                    <span className="text-muted-foreground">Week-Offs:</span>
+                    <span className="text-muted-foreground">Rotation:</span>
                     <span>
-                      {weekOffConfig.enabled 
-                        ? `${weekOffConfig.workDays} work + ${weekOffConfig.offDays} off (rotate every ${weekOffConfig.rotationMonths} months)`
-                        : 'Disabled'}
+                      {use15DayRotation && rotationConfig
+                        ? `${rotationConfig.rotation_cycle_days}-day cycle with 2+2 offs`
+                        : 'Legacy mode'}
                     </span>
                   </div>
                 </div>
