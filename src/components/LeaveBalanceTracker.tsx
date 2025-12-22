@@ -1,8 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Briefcase, HeartPulse, Flag } from 'lucide-react';
+import { Loader2, Briefcase, HeartPulse, Flag, Settings2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
+import { LeaveBalanceAdjustDialog } from './LeaveBalanceAdjustDialog';
 
 interface LeaveBalance {
   id: string;
@@ -22,8 +25,13 @@ interface LeaveBalance {
 
 export function LeaveBalanceTracker() {
   const { user, isAdmin, isHR } = useAuth();
+  const queryClient = useQueryClient();
   const currentYear = new Date().getFullYear();
   const canViewAll = isAdmin || isHR;
+  const canAdjust = isAdmin || isHR;
+
+  const [selectedBalance, setSelectedBalance] = useState<LeaveBalance | null>(null);
+  const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
 
   const { data: balances, isLoading } = useQuery({
     queryKey: ['leave-balances', currentYear, canViewAll],
@@ -58,6 +66,15 @@ export function LeaveBalanceTracker() {
       return [] as LeaveBalance[];
     },
   });
+
+  const handleAdjustClick = (balance: LeaveBalance) => {
+    setSelectedBalance(balance);
+    setAdjustDialogOpen(true);
+  };
+
+  const handleAdjustSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ['leave-balances'] });
+  };
 
   const getLeaveColor = (used: number, total: number) => {
     const percentage = (used / total) * 100;
@@ -104,110 +121,151 @@ export function LeaveBalanceTracker() {
     return { ...type, totalUsed, totalAvailable, remaining };
   }) : [];
 
+  // Check for low balance warnings
+  const getLowBalanceWarning = (balance: LeaveBalance) => {
+    const warnings: string[] = [];
+    if (balance.casual_leave_total - balance.casual_leave_used < 3) warnings.push('CL');
+    if (balance.sick_leave_total - balance.sick_leave_used < 3) warnings.push('SL');
+    if (balance.public_holidays_total - balance.public_holidays_used < 3) warnings.push('PH');
+    return warnings;
+  };
+
   return (
-    <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
-      <div className="p-4 border-b border-border/50">
-        <h2 className="font-semibold text-lg">Leave Balance Tracker</h2>
-        <p className="text-sm text-muted-foreground">
-          {canViewAll ? 'All employees' : 'Your'} remaining leave days - {currentYear}
-        </p>
-      </div>
+    <>
+      <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+        <div className="p-4 border-b border-border/50">
+          <h2 className="font-semibold text-lg">Leave Balance Tracker</h2>
+          <p className="text-sm text-muted-foreground">
+            {canViewAll ? 'All employees' : 'Your'} remaining leave days - {currentYear}
+          </p>
+        </div>
 
-      <div className="p-4">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : !balances || balances.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">No leave balance data available</p>
-        ) : canViewAll ? (
-          <>
-            {/* Summary Cards for Admin/HR */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              {summaryData.map(type => (
-                <div key={type.key} className="p-4 rounded-lg bg-secondary/50">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className={`p-2 rounded-lg ${type.iconBg}`}>
-                      <type.icon className={`h-5 w-5 ${type.iconColor}`} />
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{type.label}</p>
-                      <p className="text-xs text-muted-foreground">All employees</p>
-                    </div>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold">{type.remaining}</span>
-                    <span className="text-sm text-muted-foreground">remaining of {type.totalAvailable}</span>
-                  </div>
-                  <Progress 
-                    value={(type.totalUsed / type.totalAvailable) * 100} 
-                    className="mt-2 h-2"
-                  />
-                </div>
-              ))}
+        <div className="p-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-
-            {/* Individual Employee List */}
-            <div className="space-y-3 max-h-80 overflow-y-auto">
-              <p className="text-sm font-medium text-muted-foreground mb-2">Individual Balances</p>
-              {balances.map((balance) => (
-                <div key={balance.id} className="p-3 rounded-lg border border-border/50 bg-secondary/30">
-                  <p className="font-medium mb-2">{balance.profile?.full_name || 'Unknown'}</p>
-                  <div className="grid grid-cols-3 gap-3 text-sm">
-                    {leaveTypes.map(type => {
-                      const used = type.getUsed(balance);
-                      const total = type.getTotal(balance);
-                      const remaining = total - used;
-                      return (
-                        <div key={type.key} className="text-center">
-                          <p className="text-xs text-muted-foreground">{type.label}</p>
-                          <p className={`font-bold ${remaining <= 2 ? 'text-destructive' : ''}`}>
-                            {remaining}/{total}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          /* Single User View */
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {balances.map(balance => 
-              leaveTypes.map(type => {
-                const used = type.getUsed(balance);
-                const total = type.getTotal(balance);
-                const remaining = total - used;
-                const percentage = (used / total) * 100;
-                
-                return (
+          ) : !balances || balances.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">No leave balance data available</p>
+          ) : canViewAll ? (
+            <>
+              {/* Summary Cards for Admin/HR */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {summaryData.map(type => (
                   <div key={type.key} className="p-4 rounded-lg bg-secondary/50">
                     <div className="flex items-center gap-3 mb-3">
                       <div className={`p-2 rounded-lg ${type.iconBg}`}>
                         <type.icon className={`h-5 w-5 ${type.iconColor}`} />
                       </div>
-                      <p className="font-medium text-sm">{type.label}</p>
+                      <div>
+                        <p className="font-medium text-sm">{type.label}</p>
+                        <p className="text-xs text-muted-foreground">All employees</p>
+                      </div>
                     </div>
-                    <div className="flex items-baseline gap-2 mb-2">
-                      <span className={`text-3xl font-bold ${remaining <= 2 ? 'text-destructive' : ''}`}>
-                        {remaining}
-                      </span>
-                      <span className="text-sm text-muted-foreground">of {total} remaining</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-bold">{type.remaining}</span>
+                      <span className="text-sm text-muted-foreground">remaining of {type.totalAvailable}</span>
                     </div>
                     <Progress 
-                      value={percentage} 
-                      className={`h-2 ${getLeaveColor(used, total)}`}
+                      value={(type.totalUsed / type.totalAvailable) * 100} 
+                      className="mt-2 h-2"
                     />
-                    <p className="text-xs text-muted-foreground mt-2">{used} days used</p>
                   </div>
-                );
-              })
-            )}
-          </div>
-        )}
+                ))}
+              </div>
+
+              {/* Individual Employee List */}
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                <p className="text-sm font-medium text-muted-foreground mb-2">Individual Balances</p>
+                {balances.map((balance) => {
+                  const warnings = getLowBalanceWarning(balance);
+                  return (
+                    <div key={balance.id} className="p-3 rounded-lg border border-border/50 bg-secondary/30">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{balance.profile?.full_name || 'Unknown'}</p>
+                          {warnings.length > 0 && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">
+                              Low: {warnings.join(', ')}
+                            </span>
+                          )}
+                        </div>
+                        {canAdjust && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={() => handleAdjustClick(balance)}
+                          >
+                            <Settings2 className="h-3.5 w-3.5 mr-1" />
+                            Adjust
+                          </Button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 text-sm">
+                        {leaveTypes.map(type => {
+                          const used = type.getUsed(balance);
+                          const total = type.getTotal(balance);
+                          const remaining = total - used;
+                          return (
+                            <div key={type.key} className="text-center">
+                              <p className="text-xs text-muted-foreground">{type.label}</p>
+                              <p className={`font-bold ${remaining < 3 ? 'text-destructive' : ''}`}>
+                                {remaining}/{total}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            /* Single User View */
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {balances.map(balance => 
+                leaveTypes.map(type => {
+                  const used = type.getUsed(balance);
+                  const total = type.getTotal(balance);
+                  const remaining = total - used;
+                  const percentage = (used / total) * 100;
+                  
+                  return (
+                    <div key={type.key} className="p-4 rounded-lg bg-secondary/50">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className={`p-2 rounded-lg ${type.iconBg}`}>
+                          <type.icon className={`h-5 w-5 ${type.iconColor}`} />
+                        </div>
+                        <p className="font-medium text-sm">{type.label}</p>
+                      </div>
+                      <div className="flex items-baseline gap-2 mb-2">
+                        <span className={`text-3xl font-bold ${remaining < 3 ? 'text-destructive' : ''}`}>
+                          {remaining}
+                        </span>
+                        <span className="text-sm text-muted-foreground">of {total} remaining</span>
+                      </div>
+                      <Progress 
+                        value={percentage} 
+                        className={`h-2 ${getLeaveColor(used, total)}`}
+                      />
+                      <p className="text-xs text-muted-foreground mt-2">{used} days used</p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      <LeaveBalanceAdjustDialog
+        open={adjustDialogOpen}
+        onOpenChange={setAdjustDialogOpen}
+        balance={selectedBalance}
+        onSuccess={handleAdjustSuccess}
+      />
+    </>
   );
 }

@@ -5,6 +5,7 @@ import { WhosOutToday } from '@/components/WhosOutToday';
 import { MyUpcomingShifts } from '@/components/MyUpcomingShifts';
 import { LeaveSummaryWidget } from '@/components/LeaveSummaryWidget';
 import { LeaveBalanceTracker } from '@/components/LeaveBalanceTracker';
+import { LowLeaveBalanceAlert } from '@/components/LowLeaveBalanceAlert';
 import { RolePermissionBadge } from '@/components/PermissionIndicator';
 import { SHIFT_DEFINITIONS } from '@/types/roster';
 import { Users, Calendar, Building2, TrendingUp, ArrowRightLeft, Plus, Loader2 } from 'lucide-react';
@@ -113,6 +114,9 @@ export default function Dashboard() {
           </div>
         ) : (
           <>
+            {/* Low Leave Balance Alerts */}
+            <LowLeaveBalanceAlert />
+            
             {/* Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard
