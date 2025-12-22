@@ -845,7 +845,9 @@ export default function RoleManagement() {
                             onValueChange={(value) => handleTeamMemberRoleChange(member.id, value)}
                           >
                             <SelectTrigger className="w-24">
-                              <SelectValue />
+                              <Badge variant="outline" className={TEAM_ROLE_COLORS[member.role] || ''}>
+                                {member.role}
+                              </Badge>
                             </SelectTrigger>
                             <SelectContent>
                               {ROLES.map((role) => (
@@ -863,8 +865,10 @@ export default function RoleManagement() {
                             value={member.status}
                             onValueChange={(value) => handleTeamMemberStatusChange(member.id, value)}
                           >
-                            <SelectTrigger className="w-32">
-                              <SelectValue />
+                            <SelectTrigger className="w-36">
+                              <Badge variant="outline" className={STATUS_COLORS[member.status as UserStatus] || ''}>
+                                {STATUS_LABELS[member.status as UserStatus] || member.status}
+                              </Badge>
                             </SelectTrigger>
                             <SelectContent>
                               {(['available', 'on-leave', 'unavailable']).map((status) => (

@@ -22,16 +22,24 @@ import { Badge } from '@/components/ui/badge';
 import { ThemeToggle } from './ThemeToggle';
 import leapswitchLogo from '@/assets/leapswitch-logo-alt.png';
 
-const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/', adminOnly: false },
-  { icon: Calendar, label: 'Roster', path: '/roster', adminOnly: false },
-  { icon: Users, label: 'Team', path: '/team', adminOnly: false },
-  { icon: Clock, label: 'Shifts', path: '/shifts', adminOnly: false },
-  { icon: CalendarDays, label: 'Leave', path: '/leave', adminOnly: false },
-  { icon: Building2, label: 'Departments', path: '/departments', adminOnly: false },
-  { icon: Network, label: 'Org Chart', path: '/org-chart', adminOnly: false },
-  { icon: Shield, label: 'Users & Roles', path: '/admin/roles', adminOnly: true },
-  { icon: Settings, label: 'Settings', path: '/settings', adminOnly: false },
+interface NavItem {
+  icon: typeof LayoutDashboard;
+  label: string;
+  path: string;
+  requiredRoles?: ('admin' | 'hr' | 'tl' | 'member')[];
+  hideFromRoles?: ('admin' | 'hr' | 'tl' | 'member')[];
+}
+
+const navItems: NavItem[] = [
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
+  { icon: Calendar, label: 'Roster', path: '/roster' },
+  { icon: Users, label: 'Team', path: '/team' },
+  { icon: Clock, label: 'Shifts', path: '/shifts', requiredRoles: ['admin', 'hr', 'tl'] },
+  { icon: CalendarDays, label: 'Leave', path: '/leave' },
+  { icon: Building2, label: 'Departments', path: '/departments', requiredRoles: ['admin', 'hr', 'tl'] },
+  { icon: Network, label: 'Org Chart', path: '/org-chart' },
+  { icon: Shield, label: 'Users & Roles', path: '/admin/roles', requiredRoles: ['admin', 'hr'] },
+  { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
 export function AppSidebar() {
@@ -89,7 +97,17 @@ export function AppSidebar() {
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1">
         {navItems
-          .filter(item => !item.adminOnly || isAdmin)
+          .filter(item => {
+            // If no required roles specified, show to everyone
+            if (!item.requiredRoles) return true;
+            // Check if user has any of the required roles
+            return item.requiredRoles.some(role => {
+              if (role === 'admin') return isAdmin;
+              if (role === 'hr') return isHR;
+              if (role === 'tl') return isTL;
+              return true;
+            });
+          })
           .map((item) => {
             const isActive = location.pathname === item.path;
             return (
