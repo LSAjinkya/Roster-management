@@ -17,6 +17,7 @@ import NotFound from "./pages/NotFound";
 import RoleManagement from "./pages/RoleManagement";
 import LeaveRequests from "./pages/LeaveRequests";
 import OrgChartPage from "./pages/OrgChartPage";
+import PermissionsMatrix from "./pages/PermissionsMatrix";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,11 @@ const App = () => (
               <Route path="/admin/roles" element={
                 <ProtectedRoute requiredRoles={['admin', 'hr']}>
                   <RoleManagement />
+                </ProtectedRoute>
+              } />
+              <Route path="/admin/permissions" element={
+                <ProtectedRoute requiredRoles={['admin', 'hr']}>
+                  <PermissionsMatrix />
                 </ProtectedRoute>
               } />
               <Route path="/org-chart" element={<OrgChartPage />} />
