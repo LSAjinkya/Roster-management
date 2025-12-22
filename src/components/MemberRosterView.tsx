@@ -38,6 +38,9 @@ const shiftColors: Record<ShiftType, string> = {
   general: 'bg-shift-general',
   leave: 'bg-red-100',
   'comp-off': 'bg-orange-100',
+  'week-off': 'bg-gray-200',
+  'public-off': 'bg-blue-100',
+  'paid-leave': 'bg-green-100',
 };
 
 const shiftLetters: Record<ShiftType, string> = {
@@ -47,6 +50,9 @@ const shiftLetters: Record<ShiftType, string> = {
   general: 'G',
   leave: 'L',
   'comp-off': 'CO',
+  'week-off': 'OFF',
+  'public-off': 'PO',
+  'paid-leave': 'PL',
 };
 
 export function MemberRosterView({ assignments, teamMembers }: MemberRosterViewProps) {

@@ -36,6 +36,9 @@ const shiftColors: Record<ShiftType, string> = {
   general: 'bg-shift-general text-emerald-900',
   leave: 'bg-red-100 text-red-700',
   'comp-off': 'bg-orange-100 text-orange-700',
+  'week-off': 'bg-gray-200 text-gray-700',
+  'public-off': 'bg-blue-100 text-blue-700',
+  'paid-leave': 'bg-green-100 text-green-700',
 };
 
 const shiftLabels: Record<ShiftType, string> = {
@@ -44,7 +47,10 @@ const shiftLabels: Record<ShiftType, string> = {
   night: 'Night',
   general: 'General',
   leave: 'Leave',
-  'comp-off': 'Comp Off',
+  'comp-off': 'CO',
+  'week-off': 'OFF',
+  'public-off': 'PO',
+  'paid-leave': 'PL',
 };
 
 export function ShiftSwapDialog({
