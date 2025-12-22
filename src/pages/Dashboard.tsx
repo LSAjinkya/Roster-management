@@ -3,6 +3,7 @@ import { StatCard } from '@/components/StatCard';
 import { ShiftBadge } from '@/components/ShiftBadge';
 import { WhosOutToday } from '@/components/WhosOutToday';
 import { MyUpcomingShifts } from '@/components/MyUpcomingShifts';
+import { LeaveSummaryWidget } from '@/components/LeaveSummaryWidget';
 import { RolePermissionBadge } from '@/components/PermissionIndicator';
 import { SHIFT_DEFINITIONS } from '@/types/roster';
 import { Users, Calendar, Building2, TrendingUp, ArrowRightLeft, Plus, Loader2 } from 'lucide-react';
@@ -180,6 +181,9 @@ export default function Dashboard() {
               {/* Who's Out Today Widget */}
               <WhosOutToday />
             </div>
+
+            {/* Leave Summary Widget */}
+            <LeaveSummaryWidget />
 
             {/* My Upcoming Shifts + Department Distribution */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

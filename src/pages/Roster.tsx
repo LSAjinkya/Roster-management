@@ -23,9 +23,11 @@ export default function Roster() {
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [currentDate] = useState(new Date());
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(mockTeamMembers);
+  const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     fetchTeamMembers();
+    fetchDepartments();
   }, []);
 
   const fetchTeamMembers = async () => {
@@ -54,6 +56,21 @@ export default function Roster() {
     }
   };
 
+  const fetchDepartments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+      setDepartments(data || []);
+    } catch (error) {
+      console.error('Error fetching departments:', error);
+    }
+  };
+
   // Calculate date ranges for export
   const exportDates = useMemo(() => {
     if (viewMode === 'weekly') {
@@ -77,7 +94,7 @@ export default function Roster() {
         subtitle="View and manage shift assignments"
       >
         <div className="flex items-center gap-3">
-          {canEditShifts && <SetupMonthlyRosterDialog teamMembers={teamMembers} />}
+          {canEditShifts && <SetupMonthlyRosterDialog teamMembers={teamMembers} departments={departments} />}
           
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
             <TabsList className="bg-muted/50">
