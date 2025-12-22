@@ -11,9 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Loader2, Network, Users, Building2, Plus, Trash2, UserMinus, Settings } from 'lucide-react';
+import { Loader2, Network, Users, Building2, Plus, Trash2, UserMinus, Settings, GitBranch } from 'lucide-react';
 import { OrgChart } from '@/components/OrgChart';
 import { ReportingHierarchy } from '@/components/ReportingHierarchy';
+import { OrgTreeView } from '@/components/OrgTreeView';
 import { DEPARTMENTS, ROLES } from '@/types/roster';
 
 interface TeamMember {
@@ -473,8 +474,12 @@ export default function OrgChartPage() {
       )}
 
       {/* Tabs for different views */}
-      <Tabs defaultValue="chart" className="space-y-4">
+      <Tabs defaultValue="tree" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="tree" className="gap-2">
+            <GitBranch className="h-4 w-4" />
+            Tree View
+          </TabsTrigger>
           <TabsTrigger value="chart" className="gap-2">
             <Network className="h-4 w-4" />
             Org Chart
@@ -484,6 +489,13 @@ export default function OrgChartPage() {
             Reporting Hierarchy
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="tree">
+          <OrgTreeView 
+            members={filteredMembers} 
+            onMemberClick={(member) => toast.info(`${member.name} - ${member.email}`)}
+          />
+        </TabsContent>
 
         <TabsContent value="chart">
           <OrgChart 
