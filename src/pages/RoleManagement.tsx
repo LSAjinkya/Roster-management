@@ -845,16 +845,16 @@ export default function RoleManagement() {
                             onValueChange={(value) => handleTeamMemberRoleChange(member.id, value)}
                           >
                             <SelectTrigger className="w-24">
-                              <Badge variant="outline" className={TEAM_ROLE_COLORS[member.role] || ''}>
-                                {member.role}
-                              </Badge>
+                              <SelectValue>
+                                <Badge variant="outline" className={TEAM_ROLE_COLORS[member.role] || ''}>
+                                  {member.role}
+                                </Badge>
+                              </SelectValue>
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-popover">
                               {ROLES.map((role) => (
                                 <SelectItem key={role} value={role}>
-                                  <Badge variant="outline" className={TEAM_ROLE_COLORS[role] || ''}>
-                                    {role}
-                                  </Badge>
+                                  {role}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -866,16 +866,16 @@ export default function RoleManagement() {
                             onValueChange={(value) => handleTeamMemberStatusChange(member.id, value)}
                           >
                             <SelectTrigger className="w-36">
-                              <Badge variant="outline" className={STATUS_COLORS[member.status as UserStatus] || ''}>
-                                {STATUS_LABELS[member.status as UserStatus] || member.status}
-                              </Badge>
+                              <SelectValue>
+                                <Badge variant="outline" className={STATUS_COLORS[member.status as UserStatus] || ''}>
+                                  {STATUS_LABELS[member.status as UserStatus] || member.status}
+                                </Badge>
+                              </SelectValue>
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-popover">
                               {(['available', 'on-leave', 'unavailable']).map((status) => (
                                 <SelectItem key={status} value={status}>
-                                  <Badge variant="outline" className={STATUS_COLORS[status as UserStatus] || ''}>
-                                    {STATUS_LABELS[status as UserStatus] || status}
-                                  </Badge>
+                                  {STATUS_LABELS[status as UserStatus] || status}
                                 </SelectItem>
                               ))}
                             </SelectContent>

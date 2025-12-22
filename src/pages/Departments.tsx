@@ -824,18 +824,13 @@ export default function Departments() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select department head" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-popover">
                   <SelectItem value="none">No department head</SelectItem>
                   {teamMembers
-                    .filter(m => m.department === deptToEdit?.name)
+                    .filter(m => m.department === deptToEdit?.name && (m.role === 'TL' || m.role === 'L2'))
                     .map((member) => (
                       <SelectItem key={member.id} value={member.id}>
-                        <div className="flex items-center gap-2">
-                          <span>{member.name}</span>
-                          {member.role === 'TL' && (
-                            <Badge variant="outline" className="text-xs">Current TL</Badge>
-                          )}
-                        </div>
+                        {member.name} ({member.role})
                       </SelectItem>
                     ))}
                 </SelectContent>
