@@ -7,19 +7,20 @@ import { MonthlyRosterView } from '@/components/MonthlyRosterView';
 import { MemberRosterView } from '@/components/MemberRosterView';
 import { TableRosterView } from '@/components/TableRosterView';
 import { DepartmentSheetView } from '@/components/DepartmentSheetView';
+import { TeamRosterView } from '@/components/TeamRosterView';
 import { ExportDropdown } from '@/components/ExportDropdown';
 import { SetupMonthlyRosterDialog } from '@/components/SetupMonthlyRosterDialog';
 import { RotationPreview } from '@/components/RotationPreview';
 import { BulkTeamAssignment } from '@/components/BulkTeamAssignment';
 import { teamMembers as mockTeamMembers, currentWeekAssignments } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, CalendarClock } from 'lucide-react';
+import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, CalendarClock, Users } from 'lucide-react';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { TeamMember, Department, Role, TeamGroup } from '@/types/roster';
 import { useAuth } from '@/hooks/useAuth';
 
-type ViewMode = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'table' | 'member' | 'department' | 'rotation';
+type ViewMode = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'table' | 'member' | 'department' | 'rotation' | 'team';
 
 export default function Roster() {
   const { canEditShifts } = useAuth();
@@ -121,6 +122,10 @@ export default function Roster() {
                 <Table2 size={16} />
                 <span className="hidden sm:inline">Table</span>
               </TabsTrigger>
+              <TabsTrigger value="team" className="gap-2">
+                <Users size={16} />
+                <span className="hidden sm:inline">Team</span>
+              </TabsTrigger>
               <TabsTrigger value="rotation" className="gap-2">
                 <Eye size={16} />
                 <span className="hidden sm:inline">Rotation</span>
@@ -167,6 +172,12 @@ export default function Roster() {
       <div className="flex-1 overflow-auto p-6">
         {viewMode === 'table' && (
           <TableRosterView 
+            assignments={currentWeekAssignments} 
+            teamMembers={teamMembers} 
+          />
+        )}
+        {viewMode === 'team' && (
+          <TeamRosterView 
             assignments={currentWeekAssignments} 
             teamMembers={teamMembers} 
           />

@@ -23,14 +23,36 @@ export type UserRole = 'admin' | 'hr' | 'tl' | 'member';
 // Team groups for synchronized shift rotation (Alpha, Gamma, Beta)
 export type TeamGroup = 'Alpha' | 'Gamma' | 'Beta';
 
-export const TEAM_GROUPS: TeamGroup[] = ['Alpha', 'Gamma', 'Beta'];
+export const TEAM_GROUPS: TeamGroup[] = ['Alpha', 'Beta', 'Gamma'];
 
-// Team shift mapping - when Alpha is on one shift, what shift are others on
-export const TEAM_SHIFT_ROTATION: Record<TeamGroup, Record<ShiftType, ShiftType>> = {
-  'Alpha': { 'afternoon': 'afternoon', 'morning': 'morning', 'night': 'night', 'general': 'general', 'leave': 'leave', 'comp-off': 'comp-off', 'week-off': 'week-off', 'public-off': 'public-off', 'paid-leave': 'paid-leave' },
-  'Gamma': { 'afternoon': 'morning', 'morning': 'night', 'night': 'afternoon', 'general': 'general', 'leave': 'leave', 'comp-off': 'comp-off', 'week-off': 'week-off', 'public-off': 'public-off', 'paid-leave': 'paid-leave' },
-  'Beta': { 'afternoon': 'night', 'morning': 'afternoon', 'night': 'morning', 'general': 'general', 'leave': 'leave', 'comp-off': 'comp-off', 'week-off': 'week-off', 'public-off': 'public-off', 'paid-leave': 'paid-leave' },
+// Team shift assignment - each team is in one shift at a time
+// When Alpha is in Morning, Beta is in Afternoon, Gamma is in Night
+// This rotates: after shift cycle, Alpha → Afternoon, Beta → Night, Gamma → Morning
+export const TEAM_BASE_SHIFTS: Record<TeamGroup, ShiftType> = {
+  'Alpha': 'morning',
+  'Beta': 'afternoon',
+  'Gamma': 'night',
 };
+
+// Calculate team's shift based on cycle number
+// Cycle 0: Alpha=Morning, Beta=Afternoon, Gamma=Night
+// Cycle 1: Alpha=Afternoon, Beta=Night, Gamma=Morning
+// Cycle 2: Alpha=Night, Beta=Morning, Gamma=Afternoon
+export function getTeamShiftForCycle(team: TeamGroup, cycleNumber: number): ShiftType {
+  const shiftOrder: ShiftType[] = ['morning', 'afternoon', 'night'];
+  const teamIndex = TEAM_GROUPS.indexOf(team);
+  const shiftIndex = (teamIndex + cycleNumber) % 3;
+  return shiftOrder[shiftIndex];
+}
+
+// Get all teams and their shifts for a given cycle
+export function getAllTeamShiftsForCycle(cycleNumber: number): Record<TeamGroup, ShiftType> {
+  return {
+    'Alpha': getTeamShiftForCycle('Alpha', cycleNumber),
+    'Beta': getTeamShiftForCycle('Beta', cycleNumber),
+    'Gamma': getTeamShiftForCycle('Gamma', cycleNumber),
+  };
+}
 
 export interface ShiftDefinition {
   id: ShiftType;
