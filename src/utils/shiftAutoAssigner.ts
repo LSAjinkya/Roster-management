@@ -235,6 +235,7 @@ export function autoAssignShifts(
             actual: assignedCount,
             date: dateStr,
             message: `${shiftType.toUpperCase()}: ${rule.department}${datacenterName ? ` (${datacenterName})` : ''} - Need ${rule.min_count - assignedCount} more`,
+            severity: 'error',
           });
         }
       }
