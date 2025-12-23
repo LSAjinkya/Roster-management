@@ -75,6 +75,7 @@ export function validateShiftComposition(
         actual: actualCount,
         date,
         message: `${rule.shift_type.toUpperCase()}: ${rule.department}${dcInfo} needs ${shortage} more ${roleInfo} (${actualCount}/${requiredCount})`,
+        severity: 'error',
       });
     }
   }

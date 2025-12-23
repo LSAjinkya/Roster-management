@@ -36,7 +36,7 @@ export interface MemberRotationState {
 }
 
 export interface ShiftViolation {
-  type: 'shortage' | 'constraint' | 'rest';
+  type: 'shortage' | 'constraint' | 'rest' | 'cycle' | 'stability' | 'night-safety';
   shift_type: ShiftType;
   department: Department;
   datacenter_id?: string | null;
@@ -44,6 +44,8 @@ export interface ShiftViolation {
   actual: number;
   date: string;
   message: string;
+  memberId?: string;
+  severity: 'error' | 'warning';
 }
 
 export interface ShiftValidationResult {
@@ -59,6 +61,30 @@ export interface MemberAvailability {
   reason?: 'leave' | 'comp-off' | 'week-off' | 'public-off' | 'unavailable';
 }
 
+// =====================================================
+// CORE CONSTANTS - SHIFT RULES
+// =====================================================
+
+// Rule 1: Core Work Cycle - 5 work days + 2 OFF days
+export const WORK_DAYS_IN_CYCLE = 5;
+export const OFF_DAYS_IN_CYCLE = 2;
+export const CYCLE_LENGTH = WORK_DAYS_IN_CYCLE + OFF_DAYS_IN_CYCLE; // 7 days
+
+// Rule 2: Shift Stability - Same shift for 10 working days
+export const SHIFT_STABILITY_WORK_DAYS = 10;
+// Full shift cycle = 10 work days + 4 OFF days (2 blocks of 2)
+export const SHIFT_CYCLE_CALENDAR_DAYS = 14; // 10 work + 4 OFF
+
+// Rule 4: Shift Rotation Order
+export const SHIFT_ROTATION_ORDER: ShiftType[] = ['afternoon', 'morning', 'night'];
+
+// Rule 5: Night Shift Safety - REST days required before night shift
+export const REST_DAYS_BEFORE_NIGHT = 2;
+
+// =====================================================
+// ASSIGNMENT CONFIG
+// =====================================================
+
 export interface AutoAssignmentConfig {
   respectWeeklyOffs: boolean;
   respectLeaves: boolean;
@@ -69,21 +95,33 @@ export interface AutoAssignmentConfig {
   work_days: number;
   off_days: number;
   flagShortages: boolean;
-  shiftSequence: string[]; // Shift rotation order
+  shiftSequence: string[];
 }
 
 export const DEFAULT_ASSIGNMENT_CONFIG: AutoAssignmentConfig = {
   respectWeeklyOffs: true,
   respectLeaves: true,
   respectPublicHolidays: true,
-  work_days: 5,
-  off_days: 2,
+  work_days: WORK_DAYS_IN_CYCLE,
+  off_days: OFF_DAYS_IN_CYCLE,
   maxConsecutiveNights: 5,
   minRestHours: 12,
-  rotationCycleDays: 15,
+  rotationCycleDays: SHIFT_CYCLE_CALENDAR_DAYS,
   flagShortages: true,
-  shiftSequence: ['afternoon', 'morning', 'night'],
+  shiftSequence: SHIFT_ROTATION_ORDER,
 };
+
+// =====================================================
+// MEMBER SHIFT CYCLE TRACKING
+// =====================================================
+
+export interface MemberShiftCycle {
+  memberId: string;
+  cycleStartDate: Date;
+  currentShiftType: ShiftType;
+  workDaysCompleted: number;
+  offDaysCompleted: number;
+}
 
 // Calculate which shift type a member should be on for a given date
 export function getMemberShiftTypeForDate(
@@ -103,47 +141,117 @@ export function getMemberShiftTypeForDate(
   return shiftSequence[newIndex];
 }
 
-// Get week-off days within a 7-day work cycle
-// Pattern: 5 consecutive working days, then 2 consecutive off days
-// Member offset staggers which day their cycle starts
+// =====================================================
+// WORK CYCLE FUNCTIONS (5 WORK + 2 OFF)
+// =====================================================
+
+/**
+ * Get week-off days for a member within their cycle.
+ * Pattern: 5 consecutive work days, then 2 consecutive OFF days.
+ * Member offset staggers which calendar day their OFF days fall on.
+ * 
+ * @param cycleStartDate - The start date of the member's current shift cycle
+ * @param memberOffset - Offset (0-6) to stagger OFF days across team members
+ * @param totalDays - Total days to calculate for
+ * @returns Array of day indices (0-based from cycleStartDate) that are OFF days
+ */
 export function getWeekOffDaysInCycle(
   cycleStartDate: Date,
   memberOffset: number,
-  rotationCycleDays: number
+  totalDays: number
 ): number[] {
   const offDays: number[] = [];
   
-  // Each member has a 7-day pattern: 5 work + 2 off
-  // The offset determines where in the week their 2 off days fall
-  // Offset 0: off on days 5,6 (Sat, Sun if starting Monday)
-  // Offset 1: off on days 6,0 (Sun, Mon)
-  // Offset 2: off on days 0,1 (Mon, Tue)
-  // etc.
+  // Calculate the starting position in the 7-day cycle based on member offset
+  // This staggers when each member's 2-day OFF block occurs
+  const cycleOffset = memberOffset % CYCLE_LENGTH;
   
-  const offStartDay = (5 + memberOffset) % 7; // Which day of week the 2-day off block starts
-  
-  // Calculate off days for the entire cycle period
-  for (let week = 0; week < Math.ceil(rotationCycleDays / 7); week++) {
-    const weekStart = week * 7;
+  for (let day = 0; day < totalDays; day++) {
+    // Calculate position in the 7-day work cycle (5 work + 2 off)
+    const positionInCycle = (day + CYCLE_LENGTH - cycleOffset) % CYCLE_LENGTH;
     
-    // First off day of this week
-    const firstOff = weekStart + offStartDay;
-    // Second off day (consecutive)
-    const secondOff = weekStart + ((offStartDay + 1) % 7);
-    
-    // Handle wrap-around: if second off would be before first, adjust
-    const actualSecondOff = secondOff < firstOff ? firstOff + 1 : secondOff;
-    
-    if (firstOff < rotationCycleDays) {
-      offDays.push(firstOff);
-    }
-    if (actualSecondOff < rotationCycleDays && actualSecondOff !== firstOff) {
-      offDays.push(actualSecondOff);
+    // Days 5 and 6 in the cycle are OFF days (0-4 are work days)
+    if (positionInCycle >= WORK_DAYS_IN_CYCLE) {
+      offDays.push(day);
     }
   }
   
-  return [...new Set(offDays)].sort((a, b) => a - b);
+  return offDays;
 }
+
+/**
+ * Calculate which shift a member should be on for a specific date.
+ * Shift changes only after completing 10 work days.
+ * 
+ * @param cycleStartDate - When the member started their current shift cycle
+ * @param targetDate - The date to check
+ * @param currentShiftType - The member's starting shift type
+ * @param memberOffset - Member's offset for week-off staggering
+ * @returns The shift type for the target date
+ */
+export function getMemberShiftForDate(
+  cycleStartDate: Date,
+  targetDate: Date,
+  currentShiftType: ShiftType,
+  memberOffset: number
+): ShiftType {
+  const daysDiff = Math.floor((targetDate.getTime() - cycleStartDate.getTime()) / (1000 * 60 * 60 * 24));
+  
+  if (daysDiff < 0) return currentShiftType;
+  
+  // Count work days from cycle start to target date
+  let workDaysCount = 0;
+  for (let i = 0; i <= daysDiff; i++) {
+    const positionInCycle = (i + CYCLE_LENGTH - (memberOffset % CYCLE_LENGTH)) % CYCLE_LENGTH;
+    if (positionInCycle < WORK_DAYS_IN_CYCLE) {
+      workDaysCount++;
+    }
+  }
+  
+  // Calculate how many full shift cycles (10 work days each) have passed
+  const shiftCyclesPassed = Math.floor(workDaysCount / SHIFT_STABILITY_WORK_DAYS);
+  
+  // Get the new shift based on rotation order
+  const currentIndex = SHIFT_ROTATION_ORDER.indexOf(currentShiftType);
+  if (currentIndex === -1) return SHIFT_ROTATION_ORDER[0];
+  
+  const newIndex = (currentIndex + shiftCyclesPassed) % SHIFT_ROTATION_ORDER.length;
+  return SHIFT_ROTATION_ORDER[newIndex];
+}
+
+/**
+ * Check if a date should be an OFF day for a member
+ */
+export function isOffDay(
+  cycleStartDate: Date,
+  targetDate: Date,
+  memberOffset: number
+): boolean {
+  const daysDiff = Math.floor((targetDate.getTime() - cycleStartDate.getTime()) / (1000 * 60 * 60 * 24));
+  const positionInCycle = (daysDiff + CYCLE_LENGTH - (memberOffset % CYCLE_LENGTH)) % CYCLE_LENGTH;
+  return positionInCycle >= WORK_DAYS_IN_CYCLE;
+}
+
+/**
+ * Get the previous shift type in the rotation order
+ */
+export function getPreviousShift(shiftType: ShiftType): ShiftType {
+  const index = SHIFT_ROTATION_ORDER.indexOf(shiftType);
+  if (index <= 0) return SHIFT_ROTATION_ORDER[SHIFT_ROTATION_ORDER.length - 1];
+  return SHIFT_ROTATION_ORDER[index - 1];
+}
+
+/**
+ * Check if transitioning from one shift to night shift requires rest days
+ */
+export function requiresRestBeforeNight(previousShift: ShiftType, newShift: ShiftType): boolean {
+  if (newShift !== 'night') return false;
+  return previousShift === 'morning' || previousShift === 'afternoon';
+}
+
+// =====================================================
+// ROLE & DEPARTMENT ELIGIBILITY
+// =====================================================
 
 // Shift eligibility by role
 export const ROLE_SHIFT_ELIGIBILITY: Record<Role, ShiftType[]> = {
@@ -172,3 +280,18 @@ export const GENERAL_SHIFT_DEPARTMENTS: Department[] = [
   'HR',
   'Vendor Coordinator',
 ];
+
+/**
+ * Check if a role is eligible for a specific shift type
+ */
+export function isRoleEligibleForShift(role: Role, shiftType: ShiftType): boolean {
+  const eligible = ROLE_SHIFT_ELIGIBILITY[role];
+  return eligible ? eligible.includes(shiftType) : false;
+}
+
+/**
+ * Check if a department uses rotation shifts
+ */
+export function isDepartmentRotating(department: Department): boolean {
+  return ROTATING_DEPARTMENTS.includes(department);
+}
