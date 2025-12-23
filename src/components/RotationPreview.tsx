@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { Eye, RefreshCw, Play, Users, Calendar } from 'lucide-react';
-import { TeamMember, Department, Role, ShiftType, TeamGroup, TEAM_SHIFT_ROTATION, TEAM_GROUPS } from '@/types/roster';
+import { TeamMember, Department, Role, ShiftType, TeamGroup, TEAM_GROUPS, getTeamShiftForCycle, getAllTeamShiftsForCycle } from '@/types/roster';
 import { MemberRotationState, getMemberShiftTypeForDate, getWeekOffDaysInCycle, RotationConfig, ROTATING_DEPARTMENTS } from '@/types/shiftRules';
 import { cn } from '@/lib/utils';
 
@@ -183,7 +183,11 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
         );
 
         // Get this member's shift based on their team
-        const shiftType = TEAM_SHIFT_ROTATION[memberTeam][alphaShiftForDay as ShiftType] || alphaShiftForDay;
+        // Calculate which cycle we're in based on days since start
+        const daysSinceStart = Math.floor((day.getTime() - alphaStartDate.getTime()) / (1000 * 60 * 60 * 24));
+        const cycleNumber = Math.floor(daysSinceStart / rotationConfig.rotation_cycle_days);
+        const teamShifts = getAllTeamShiftsForCycle(cycleNumber);
+        const shiftType = teamShifts[memberTeam] || alphaShiftForDay;
 
         // Check for week-off
         const daysSinceCycleStart = Math.floor(
@@ -336,8 +340,8 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
                         </Badge>
                       </td>
                       <td className="p-1">
-                        <Badge className={cn("text-[10px]", SHIFT_COLORS[TEAM_SHIFT_ROTATION[team][currentCycleShift as ShiftType]])}>
-                          {(TEAM_SHIFT_ROTATION[team][currentCycleShift as ShiftType] || currentCycleShift).charAt(0).toUpperCase()}
+                        <Badge className={cn("text-[10px]", SHIFT_COLORS[getTeamShiftForCycle(team, 0)])}>
+                          {getTeamShiftForCycle(team, 0).charAt(0).toUpperCase()}
                         </Badge>
                       </td>
                       {shifts.map(s => (

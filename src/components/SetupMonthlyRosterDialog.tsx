@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CalendarPlus, Loader2, Settings2, Eye, Save, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { TeamMember, ShiftType, Department, DEPARTMENTS, TeamGroup, TEAM_SHIFT_ROTATION, TEAM_GROUPS } from '@/types/roster';
+import { TeamMember, ShiftType, Department, DEPARTMENTS, TeamGroup, TEAM_GROUPS, getTeamShiftForCycle, getAllTeamShiftsForCycle } from '@/types/roster';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RosterPreviewTable } from './RosterPreviewTable';
 import { 
@@ -318,11 +318,13 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
           }
           
           // Use team-based shift mapping
-          const teamShift = TEAM_SHIFT_ROTATION[memberTeam][currentShift as keyof typeof TEAM_SHIFT_ROTATION[typeof memberTeam]];
+          // Calculate cycle number based on work day count
+          const cycleNumber = Math.floor((memberWorkDayCounts[member.id] || 0) / SHIFT_STABILITY_WORK_DAYS);
+          const teamShift = getTeamShiftForCycle(memberTeam, cycleNumber);
           
           assignments.push({
             member_id: member.id,
-            shift_type: teamShift || currentShift,
+            shift_type: teamShift,
             date: dateStr,
             department: member.department as Department,
           });
