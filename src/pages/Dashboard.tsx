@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { StatCard } from '@/components/StatCard';
 import { ShiftBadge } from '@/components/ShiftBadge';
@@ -10,7 +11,7 @@ import { RolePermissionBadge } from '@/components/PermissionIndicator';
 import { SHIFT_DEFINITIONS } from '@/types/roster';
 import { Users, Calendar, Building2, TrendingUp, ArrowRightLeft, Plus, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Link } from 'react-router-dom';
@@ -18,11 +19,12 @@ import { Button } from '@/components/ui/button';
 
 export default function Dashboard() {
   const { isAdmin, isHR, isTL } = useAuth();
+  const queryClient = useQueryClient();
   const todayStr = format(new Date(), 'yyyy-MM-dd');
 
   const canSeeSwapRequests = isAdmin || isHR || isTL;
 
-  // Fetch team members from database
+  // Fetch team members from database with refetch interval for real-time updates
   const { data: teamMembersData, isLoading: membersLoading } = useQuery({
     queryKey: ['dashboard-team-members'],
     queryFn: async () => {
@@ -33,6 +35,7 @@ export default function Dashboard() {
       if (error) throw error;
       return data || [];
     },
+    refetchInterval: 30000, // Refetch every 30 seconds
   });
 
   // Fetch departments from database
@@ -47,9 +50,10 @@ export default function Dashboard() {
       if (error) throw error;
       return data || [];
     },
+    refetchInterval: 60000, // Refetch every minute
   });
 
-  // Fetch today's shift assignments
+  // Fetch today's shift assignments with real-time updates
   const { data: todayAssignments = [], isLoading: shiftsLoading } = useQuery({
     queryKey: ['dashboard-shifts', todayStr],
     queryFn: async () => {
@@ -61,6 +65,7 @@ export default function Dashboard() {
       if (error) throw error;
       return data || [];
     },
+    refetchInterval: 30000, // Refetch every 30 seconds
   });
 
   // Fetch pending swap requests count for TLs/HR/Admins
@@ -76,7 +81,40 @@ export default function Dashboard() {
       return count || 0;
     },
     enabled: canSeeSwapRequests,
+    refetchInterval: 30000, // Refetch every 30 seconds
   });
+
+  // Set up real-time subscriptions for live updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'team_members' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['dashboard-team-members'] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'shift_assignments' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['dashboard-shifts', todayStr] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'swap_requests' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['pending-swap-count'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient, todayStr]);
 
   const teamMembers = teamMembersData || [];
   const departments = departmentsData || [];

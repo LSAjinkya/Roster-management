@@ -1,11 +1,19 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Briefcase, HeartPulse, Flag, Settings2 } from 'lucide-react';
+import { Loader2, Briefcase, HeartPulse, Flag, Settings2, Search } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { LeaveBalanceAdjustDialog } from './LeaveBalanceAdjustDialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface LeaveBalance {
   id: string;
@@ -32,6 +40,8 @@ export function LeaveBalanceTracker() {
 
   const [selectedBalance, setSelectedBalance] = useState<LeaveBalance | null>(null);
   const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState<string>('all');
 
   const { data: balances, isLoading } = useQuery({
     queryKey: ['leave-balances', currentYear, canViewAll],
@@ -65,6 +75,17 @@ export function LeaveBalanceTracker() {
 
       return [] as LeaveBalance[];
     },
+  });
+
+  // Filter balances by search query and selected user
+  const filteredBalances = balances?.filter(balance => {
+    const matchesSearch = searchQuery === '' || 
+      balance.profile?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      balance.profile?.email?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesUser = selectedUserId === 'all' || balance.user_id === selectedUserId;
+    
+    return matchesSearch && matchesUser;
   });
 
   const handleAdjustClick = (balance: LeaveBalance) => {
@@ -134,10 +155,42 @@ export function LeaveBalanceTracker() {
     <>
       <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
         <div className="p-4 border-b border-border/50">
-          <h2 className="font-semibold text-lg">Leave Balance Tracker</h2>
-          <p className="text-sm text-muted-foreground">
-            {canViewAll ? 'All employees' : 'Your'} remaining leave days - {currentYear}
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-lg">Leave Balance Tracker</h2>
+              <p className="text-sm text-muted-foreground">
+                {canViewAll ? 'All employees' : 'Your'} remaining leave days - {currentYear}
+              </p>
+            </div>
+          </div>
+          
+          {/* Search and Filter Controls */}
+          {canViewAll && balances && balances.length > 0 && (
+            <div className="flex items-center gap-3 mt-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name or email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="All Users" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Users</SelectItem>
+                  {balances.map(balance => (
+                    <SelectItem key={balance.user_id} value={balance.user_id}>
+                      {balance.profile?.full_name || 'Unknown'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         <div className="p-4">
@@ -176,8 +229,10 @@ export function LeaveBalanceTracker() {
 
               {/* Individual Employee List */}
               <div className="space-y-3 max-h-80 overflow-y-auto">
-                <p className="text-sm font-medium text-muted-foreground mb-2">Individual Balances</p>
-                {balances.map((balance) => {
+                <p className="text-sm font-medium text-muted-foreground mb-2">
+                  Individual Balances ({filteredBalances?.length || 0} users)
+                </p>
+                {filteredBalances?.map((balance) => {
                   const warnings = getLowBalanceWarning(balance);
                   return (
                     <div key={balance.id} className="p-3 rounded-lg border border-border/50 bg-secondary/30">
