@@ -2,9 +2,11 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { PermissionRequestDialog } from '@/components/PermissionRequestDialog';
 import { PermissionRequestsManager } from '@/components/PermissionRequestsManager';
+import { RolePermissionEditor } from '@/components/RolePermissionEditor';
 import { 
   Shield, 
   Check, 
@@ -22,7 +24,7 @@ import {
   Edit,
   Plus,
   Trash2,
-  HandHelping
+  Sliders
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -200,6 +202,22 @@ export default function PermissionsMatrix() {
       <div className="flex-1 overflow-auto p-6 space-y-6">
         {/* Permission Requests Section */}
         <PermissionRequestsManager />
+
+        {/* Admin Permission Editor */}
+        {isAdmin && (
+          <Tabs defaultValue="view" className="w-full">
+            <TabsList>
+              <TabsTrigger value="view" className="gap-2">
+                <Eye size={16} />
+                View Matrix
+              </TabsTrigger>
+              <TabsTrigger value="edit" className="gap-2">
+                <Sliders size={16} />
+                Configure Permissions
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="view" className="space-y-6 mt-6">
         {/* Role Legend */}
         <Card>
           <CardHeader>
@@ -411,6 +429,114 @@ export default function PermissionsMatrix() {
             </div>
           </CardContent>
         </Card>
+            </TabsContent>
+            
+            <TabsContent value="edit" className="mt-6">
+              <RolePermissionEditor />
+            </TabsContent>
+          </Tabs>
+        )}
+
+        {/* Non-admin view - show read-only matrix */}
+        {!isAdmin && (
+          <>
+            {/* Role Legend */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  Role Definitions
+                </CardTitle>
+                <CardDescription>
+                  Your current role: <Badge variant="outline" className={ROLE_INFO.find(r => r.role === currentRole)?.color}>
+                    {ROLE_INFO.find(r => r.role === currentRole)?.label}
+                  </Badge>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {ROLE_INFO.map(({ role, label, color, description }) => (
+                    <div 
+                      key={role}
+                      className={cn(
+                        'p-4 rounded-lg border-2 transition-all',
+                        currentRole === role ? 'ring-2 ring-primary ring-offset-2' : '',
+                        'bg-card'
+                      )}
+                    >
+                      <Badge variant="outline" className={cn(color, 'mb-2')}>
+                        {label}
+                      </Badge>
+                      <p className="text-sm text-muted-foreground">{description}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Quick Summary for Current Role */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Your Access Summary</CardTitle>
+                <CardDescription>
+                  Features you can access based on your current role
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {FEATURES.map((feature) => {
+                    const FeatureIcon = feature.icon;
+                    const permissionEntries = Object.entries(feature.permissions) as [Permission, typeof feature.permissions.view][];
+                    const allowedPermissions = permissionEntries
+                      .filter(([_, roles]) => roles && roles[currentRole])
+                      .map(([perm]) => perm);
+                    
+                    const hasAnyAccess = allowedPermissions.length > 0;
+                    
+                    return (
+                      <div 
+                        key={feature.feature}
+                        className={cn(
+                          'p-4 rounded-lg border',
+                          hasAnyAccess 
+                            ? 'bg-card border-border' 
+                            : 'bg-muted/30 border-dashed opacity-60'
+                        )}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <FeatureIcon className={cn(
+                            'h-5 w-5',
+                            hasAnyAccess ? 'text-primary' : 'text-muted-foreground'
+                          )} />
+                          <span className="font-medium">{feature.feature}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {allowedPermissions.length > 0 ? (
+                            allowedPermissions.map((perm) => {
+                              const Icon = PERMISSION_ICONS[perm];
+                              return (
+                                <Badge 
+                                  key={perm} 
+                                  variant="secondary" 
+                                  className="text-xs gap-1 bg-green-500/10 text-green-700 border-green-500/30"
+                                >
+                                  <Icon className="h-3 w-3" />
+                                  {PERMISSION_LABELS[perm]}
+                                </Badge>
+                              );
+                            })
+                          ) : (
+                            <span className="text-xs text-muted-foreground">No access</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
     </div>
   );
