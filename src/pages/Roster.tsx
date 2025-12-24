@@ -1,37 +1,42 @@
 import { useState, useMemo, useEffect } from 'react';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { WeeklyRosterView } from '@/components/WeeklyRosterView';
-import { BiWeeklyRosterView } from '@/components/BiWeeklyRosterView';
 import { SingleDayRosterView } from '@/components/SingleDayRosterView';
 import { MonthlyRosterView } from '@/components/MonthlyRosterView';
 import { MemberRosterView } from '@/components/MemberRosterView';
 import { TableRosterView } from '@/components/TableRosterView';
 import { DepartmentSheetView } from '@/components/DepartmentSheetView';
-import { TeamRosterView } from '@/components/TeamRosterView';
 import { ExportDropdown } from '@/components/ExportDropdown';
 import { SetupMonthlyRosterDialog } from '@/components/SetupMonthlyRosterDialog';
 import { RotationPreview } from '@/components/RotationPreview';
-import { BulkTeamAssignment } from '@/components/BulkTeamAssignment';
-import { teamMembers as mockTeamMembers, currentWeekAssignments } from '@/data/mockData';
+import { SwapRequestsManager } from '@/components/SwapRequestsManager';
+import { teamMembers as mockTeamMembers } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, CalendarClock, Users } from 'lucide-react';
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, ArrowLeftRight } from 'lucide-react';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
-import { TeamMember, Department, Role, TeamGroup } from '@/types/roster';
+import { TeamMember, Department, Role, TeamGroup, ShiftAssignment, ShiftType } from '@/types/roster';
 import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Badge } from '@/components/ui/badge';
 
-type ViewMode = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'table' | 'member' | 'department' | 'rotation' | 'team';
+type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member' | 'department' | 'rotation';
 
 export default function Roster() {
   const { canEditShifts } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [currentDate] = useState(new Date());
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(mockTeamMembers);
+  const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
+  const [pendingSwapCount, setPendingSwapCount] = useState(0);
 
   useEffect(() => {
     fetchTeamMembers();
     fetchDepartments();
+    fetchAssignments();
+    fetchPendingSwapCount();
   }, []);
 
   const fetchTeamMembers = async () => {
@@ -76,6 +81,44 @@ export default function Roster() {
     }
   };
 
+  const fetchAssignments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('shift_assignments')
+        .select('*')
+        .order('date');
+
+      if (error) throw error;
+
+      if (data) {
+        const shiftAssignments: ShiftAssignment[] = data.map(a => ({
+          id: a.id,
+          memberId: a.member_id,
+          date: a.date,
+          shiftType: a.shift_type as ShiftType,
+          department: a.department as Department,
+        }));
+        setAssignments(shiftAssignments);
+      }
+    } catch (error) {
+      console.error('Error fetching assignments:', error);
+    }
+  };
+
+  const fetchPendingSwapCount = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('swap_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      if (error) throw error;
+      setPendingSwapCount(count || 0);
+    } catch (error) {
+      console.error('Error fetching swap count:', error);
+    }
+  };
+
   // Calculate date ranges for export
   const exportDates = useMemo(() => {
     if (viewMode === 'weekly') {
@@ -92,6 +135,11 @@ export default function Roster() {
 
   const showExport = canEditShifts && (viewMode === 'weekly' || viewMode === 'monthly');
 
+  const handleRefresh = () => {
+    fetchAssignments();
+    fetchPendingSwapCount();
+  };
+
   return (
     <div className="flex flex-col h-full">
       <DashboardHeader 
@@ -101,18 +149,38 @@ export default function Roster() {
         <div className="flex items-center gap-3">
           {canEditShifts && (
             <>
-              <BulkTeamAssignment 
-                teamMembers={teamMembers.map(m => ({ 
-                  id: m.id, 
-                  name: m.name, 
-                  email: m.email, 
-                  department: m.department, 
-                  role: m.role, 
-                  team: m.team || null 
-                }))} 
-                onComplete={fetchTeamMembers} 
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button variant="outline" className="gap-2 relative">
+                    <ArrowLeftRight size={16} />
+                    Swap Requests
+                    {pendingSwapCount > 0 && (
+                      <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                        {pendingSwapCount}
+                      </Badge>
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="w-[500px] sm:max-w-[500px]">
+                  <SheetHeader>
+                    <SheetTitle>Shift Swap Requests</SheetTitle>
+                    <SheetDescription>
+                      Review and approve shift swap requests from team members
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className="mt-6">
+                    <SwapRequestsManager 
+                      teamMembers={teamMembers} 
+                      onApproved={handleRefresh} 
+                    />
+                  </div>
+                </SheetContent>
+              </Sheet>
+              <SetupMonthlyRosterDialog 
+                teamMembers={teamMembers} 
+                departments={departments}
+                onComplete={handleRefresh}
               />
-              <SetupMonthlyRosterDialog teamMembers={teamMembers} departments={departments} />
             </>
           )}
           
@@ -122,10 +190,6 @@ export default function Roster() {
                 <Table2 size={16} />
                 <span className="hidden sm:inline">Table</span>
               </TabsTrigger>
-              <TabsTrigger value="team" className="gap-2">
-                <Users size={16} />
-                <span className="hidden sm:inline">Team</span>
-              </TabsTrigger>
               <TabsTrigger value="rotation" className="gap-2">
                 <Eye size={16} />
                 <span className="hidden sm:inline">Rotation</span>
@@ -133,10 +197,6 @@ export default function Roster() {
               <TabsTrigger value="daily" className="gap-2">
                 <CalendarDays size={16} />
                 <span className="hidden sm:inline">Daily</span>
-              </TabsTrigger>
-              <TabsTrigger value="biweekly" className="gap-2">
-                <CalendarClock size={16} />
-                <span className="hidden sm:inline">14-Day</span>
               </TabsTrigger>
               <TabsTrigger value="weekly" className="gap-2">
                 <CalendarRange size={16} />
@@ -159,7 +219,7 @@ export default function Roster() {
 
           {showExport && (
             <ExportDropdown
-              assignments={currentWeekAssignments}
+              assignments={assignments}
               teamMembers={teamMembers}
               startDate={exportDates.start}
               endDate={exportDates.end}
@@ -172,14 +232,9 @@ export default function Roster() {
       <div className="flex-1 overflow-auto p-6">
         {viewMode === 'table' && (
           <TableRosterView 
-            assignments={currentWeekAssignments} 
-            teamMembers={teamMembers} 
-          />
-        )}
-        {viewMode === 'team' && (
-          <TeamRosterView 
-            assignments={currentWeekAssignments} 
-            teamMembers={teamMembers} 
+            assignments={assignments} 
+            teamMembers={teamMembers}
+            onRefresh={handleRefresh}
           />
         )}
         {viewMode === 'rotation' && (
@@ -187,37 +242,31 @@ export default function Roster() {
         )}
         {viewMode === 'daily' && (
           <SingleDayRosterView 
-            assignments={currentWeekAssignments} 
-            teamMembers={teamMembers} 
-          />
-        )}
-        {viewMode === 'biweekly' && (
-          <BiWeeklyRosterView 
-            assignments={currentWeekAssignments} 
+            assignments={assignments} 
             teamMembers={teamMembers} 
           />
         )}
         {viewMode === 'weekly' && (
           <WeeklyRosterView 
-            assignments={currentWeekAssignments} 
+            assignments={assignments} 
             teamMembers={teamMembers} 
           />
         )}
         {viewMode === 'monthly' && (
           <MonthlyRosterView 
-            assignments={currentWeekAssignments} 
+            assignments={assignments} 
             teamMembers={teamMembers} 
           />
         )}
         {viewMode === 'member' && (
           <MemberRosterView 
-            assignments={currentWeekAssignments} 
+            assignments={assignments} 
             teamMembers={teamMembers} 
           />
         )}
         {viewMode === 'department' && (
           <DepartmentSheetView 
-            assignments={currentWeekAssignments} 
+            assignments={assignments} 
             teamMembers={teamMembers} 
           />
         )}

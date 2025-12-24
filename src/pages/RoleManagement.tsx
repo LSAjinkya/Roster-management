@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { format } from 'date-fns';
 import { DEPARTMENTS, Department, ROLES, Role, TEAM_GROUPS, TeamGroup } from '@/types/roster';
+import { BulkTeamAssignment } from '@/components/BulkTeamAssignment';
 
 type AppRole = 'admin' | 'hr' | 'tl' | 'member';
 type UserStatus = 'available' | 'on-leave' | 'unavailable';
@@ -879,6 +880,17 @@ export default function RoleManagement() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <BulkTeamAssignment 
+                    teamMembers={teamMembers.map(m => ({ 
+                      id: m.id, 
+                      name: m.name, 
+                      email: m.email, 
+                      department: m.department, 
+                      role: m.role, 
+                      team: m.team 
+                    }))} 
+                    onComplete={fetchTeamMembers} 
+                  />
                   <Button onClick={() => setAddMemberDialogOpen(true)}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Member
