@@ -209,13 +209,17 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
     const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
     const assignments: PreviewAssignment[] = [];
 
+    // IMPORTANT: Always generate for ALL team members, not just filtered ones
+    // The filter is only for display purposes in the preview
+    const allMembers = teamMembers;
+
     // Build rotation state lookup
     const stateMap: Record<string, MemberRotationState> = {};
     rotationStates.forEach(s => { stateMap[s.member_id] = s; });
 
     // Calculate member offsets for staggering week-offs within a team
     // Using CYCLE_LENGTH (7) to stagger across the week
-    const rotatingMembers = filteredTeamMembers.filter(m => 
+    const rotatingMembers = allMembers.filter(m => 
       ROTATING_DEPARTMENTS.includes(m.department) && m.role !== 'TL'
     );
     
@@ -227,8 +231,8 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
       if (!membersByTeamFlat[team]) membersByTeamFlat[team] = [];
       membersByTeamFlat[team].push(m);
     });
-    Object.values(membersByTeamFlat).forEach(teamMembers => {
-      teamMembers.forEach((m, i) => { 
+    Object.values(membersByTeamFlat).forEach(teamMembersList => {
+      teamMembersList.forEach((m, i) => { 
         // Stagger offsets across the 7-day cycle length
         memberOffsets[m.id] = i % CYCLE_LENGTH; 
       });
@@ -249,7 +253,7 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
       const dateStr = format(day, 'yyyy-MM-dd');
       const isPublicHoliday = publicHolidays.includes(dateStr);
 
-      filteredTeamMembers.forEach((member) => {
+      allMembers.forEach((member) => {
         const isRotating = ROTATING_DEPARTMENTS.includes(member.department) && member.role !== 'TL';
         const isGeneralOnly = GENERAL_SHIFT_DEPARTMENTS.includes(member.department) || member.role === 'TL';
         const memberTeam = (member.team as TeamGroup) || 'Alpha';
