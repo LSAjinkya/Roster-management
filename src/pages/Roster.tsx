@@ -12,7 +12,7 @@ import { RotationPreview } from '@/components/RotationPreview';
 import { SwapRequestsManager } from '@/components/SwapRequestsManager';
 import { teamMembers as mockTeamMembers } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, ArrowLeftRight } from 'lucide-react';
+import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, ArrowLeftRight, CheckCircle2, AlertCircle, Clock, Loader2 } from 'lucide-react';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { TeamMember, Department, Role, TeamGroup, ShiftAssignment, ShiftType } from '@/types/roster';
@@ -20,8 +20,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member' | 'department' | 'rotation';
+type RosterStatus = 'no-data' | 'draft' | 'published';
 
 export default function Roster() {
   const { canEditShifts } = useAuth();
@@ -31,6 +33,7 @@ export default function Roster() {
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
   const [pendingSwapCount, setPendingSwapCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchTeamMembers();
@@ -82,6 +85,7 @@ export default function Roster() {
   };
 
   const fetchAssignments = async () => {
+    setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from('shift_assignments')
@@ -102,6 +106,8 @@ export default function Roster() {
       }
     } catch (error) {
       console.error('Error fetching assignments:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -116,6 +122,52 @@ export default function Roster() {
       setPendingSwapCount(count || 0);
     } catch (error) {
       console.error('Error fetching swap count:', error);
+    }
+  };
+
+  // Determine roster status based on current month's data
+  const rosterStatus = useMemo((): RosterStatus => {
+    const currentMonthStart = startOfMonth(currentDate);
+    const currentMonthEnd = endOfMonth(currentDate);
+    const currentMonthStartStr = format(currentMonthStart, 'yyyy-MM-dd');
+    const currentMonthEndStr = format(currentMonthEnd, 'yyyy-MM-dd');
+    
+    const currentMonthAssignments = assignments.filter(a => 
+      a.date >= currentMonthStartStr && a.date <= currentMonthEndStr
+    );
+    
+    if (currentMonthAssignments.length === 0) {
+      return 'no-data';
+    }
+    
+    // For now, if there are assignments, consider it published
+    // In a full implementation, you'd have a separate status field in the database
+    return 'published';
+  }, [assignments, currentDate]);
+
+  const getRosterStatusBadge = () => {
+    switch (rosterStatus) {
+      case 'no-data':
+        return (
+          <Badge variant="outline" className="gap-1 text-muted-foreground">
+            <AlertCircle size={12} />
+            No Roster for {format(currentDate, 'MMMM yyyy')}
+          </Badge>
+        );
+      case 'draft':
+        return (
+          <Badge variant="outline" className="gap-1 text-amber-600 border-amber-300 bg-amber-50">
+            <Clock size={12} />
+            Draft (Unsaved)
+          </Badge>
+        );
+      case 'published':
+        return (
+          <Badge variant="outline" className="gap-1 text-green-600 border-green-300 bg-green-50">
+            <CheckCircle2 size={12} />
+            Published
+          </Badge>
+        );
     }
   };
 
@@ -147,6 +199,22 @@ export default function Roster() {
         subtitle="View and manage shift assignments"
       >
         <div className="flex items-center gap-3">
+          {/* Roster Status Badge */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {getRosterStatusBadge()}
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>
+                  {rosterStatus === 'no-data' && 'No roster has been created for this month yet'}
+                  {rosterStatus === 'draft' && 'Roster changes are not yet saved'}
+                  {rosterStatus === 'published' && 'Roster is saved and published'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
           {canEditShifts && (
             <>
               <Sheet>
@@ -230,45 +298,53 @@ export default function Roster() {
       </DashboardHeader>
       
       <div className="flex-1 overflow-auto p-6">
-        {viewMode === 'table' && (
-          <TableRosterView 
-            assignments={assignments} 
-            teamMembers={teamMembers}
-            onRefresh={handleRefresh}
-          />
-        )}
-        {viewMode === 'rotation' && (
-          <RotationPreview teamMembers={teamMembers} />
-        )}
-        {viewMode === 'daily' && (
-          <SingleDayRosterView 
-            assignments={assignments} 
-            teamMembers={teamMembers} 
-          />
-        )}
-        {viewMode === 'weekly' && (
-          <WeeklyRosterView 
-            assignments={assignments} 
-            teamMembers={teamMembers} 
-          />
-        )}
-        {viewMode === 'monthly' && (
-          <MonthlyRosterView 
-            assignments={assignments} 
-            teamMembers={teamMembers} 
-          />
-        )}
-        {viewMode === 'member' && (
-          <MemberRosterView 
-            assignments={assignments} 
-            teamMembers={teamMembers} 
-          />
-        )}
-        {viewMode === 'department' && (
-          <DepartmentSheetView 
-            assignments={assignments} 
-            teamMembers={teamMembers} 
-          />
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <>
+            {viewMode === 'table' && (
+              <TableRosterView 
+                assignments={assignments} 
+                teamMembers={teamMembers}
+                onRefresh={handleRefresh}
+              />
+            )}
+            {viewMode === 'rotation' && (
+              <RotationPreview teamMembers={teamMembers} />
+            )}
+            {viewMode === 'daily' && (
+              <SingleDayRosterView 
+                assignments={assignments} 
+                teamMembers={teamMembers} 
+              />
+            )}
+            {viewMode === 'weekly' && (
+              <WeeklyRosterView 
+                assignments={assignments} 
+                teamMembers={teamMembers} 
+              />
+            )}
+            {viewMode === 'monthly' && (
+              <MonthlyRosterView 
+                assignments={assignments} 
+                teamMembers={teamMembers} 
+              />
+            )}
+            {viewMode === 'member' && (
+              <MemberRosterView 
+                assignments={assignments} 
+                teamMembers={teamMembers} 
+              />
+            )}
+            {viewMode === 'department' && (
+              <DepartmentSheetView 
+                assignments={assignments} 
+                teamMembers={teamMembers} 
+              />
+            )}
+          </>
         )}
       </div>
     </div>
