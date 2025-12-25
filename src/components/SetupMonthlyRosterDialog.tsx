@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CalendarPlus, Loader2, Settings2, Eye, Save, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { TeamMember, ShiftType, Department, DEPARTMENTS, TeamGroup, TEAM_GROUPS, getTeamShiftForCycle, getAllTeamShiftsForCycle } from '@/types/roster';
+import { TeamMember, ShiftType, Department, DEPARTMENTS, TeamGroup } from '@/types/roster';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RosterPreviewTable } from './RosterPreviewTable';
 import { 
@@ -110,13 +110,81 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
   const monthName = format(nextMonth, 'MMMM yyyy');
   const totalDays = eachDayOfInterval({ start: monthStart, end: monthEnd }).length;
 
+  // State to hold previous month's last assignments for continuity
+  const [previousMonthState, setPreviousMonthState] = useState<Record<string, { shift: ShiftType; workDaysInCurrent: number; offDaysUsed: number }>>({});
+
   // Fetch rotation config and states when dialog opens
   useEffect(() => {
     if (open) {
       fetchRotationData();
       fetchHolidays();
+      fetchPreviousMonthState();
     }
   }, [open]);
+
+  // Fetch last assignments from previous month for cross-month continuity
+  const fetchPreviousMonthState = async () => {
+    try {
+      const prevMonthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+      const prevMonthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+      
+      // Get last 7 days of previous month to understand cycle position
+      const { data: lastAssignments, error } = await supabase
+        .from('shift_assignments')
+        .select('member_id, date, shift_type')
+        .gte('date', prevMonthStart)
+        .lte('date', prevMonthEnd)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      
+      if (lastAssignments && lastAssignments.length > 0) {
+        // Group by member and calculate their end-of-month state
+        const stateMap: Record<string, { shift: ShiftType; workDaysInCurrent: number; offDaysUsed: number }> = {};
+        const memberAssignments: Record<string, any[]> = {};
+        
+        lastAssignments.forEach(a => {
+          if (!memberAssignments[a.member_id]) memberAssignments[a.member_id] = [];
+          memberAssignments[a.member_id].push(a);
+        });
+        
+        Object.entries(memberAssignments).forEach(([memberId, assignments]) => {
+          // Sort by date descending to get most recent
+          assignments.sort((a, b) => b.date.localeCompare(a.date));
+          
+          // Find the most recent non-off shift to determine current shift type
+          const lastWorkShift = assignments.find(a => 
+            a.shift_type !== 'week-off' && a.shift_type !== 'public-off' && a.shift_type !== 'comp-off'
+          );
+          
+          // Count consecutive work days at end of month (for cycle position)
+          let workDaysInCurrent = 0;
+          let offDaysUsed = 0;
+          
+          for (const a of assignments.slice(0, 7)) { // Check last 7 days
+            if (a.shift_type === 'week-off') {
+              offDaysUsed++;
+              break; // Reset work day count after finding OFF
+            } else if (a.shift_type !== 'public-off' && a.shift_type !== 'comp-off') {
+              workDaysInCurrent++;
+            }
+          }
+          
+          if (lastWorkShift) {
+            stateMap[memberId] = {
+              shift: lastWorkShift.shift_type as ShiftType,
+              workDaysInCurrent,
+              offDaysUsed
+            };
+          }
+        });
+        
+        setPreviousMonthState(stateMap);
+      }
+    } catch (error) {
+      console.error('Error fetching previous month state:', error);
+    }
+  };
 
   const fetchRotationData = async () => {
     setLoadingRotation(true);
@@ -210,43 +278,61 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
     const assignments: PreviewAssignment[] = [];
 
     // IMPORTANT: Always generate for ALL team members, not just filtered ones
-    // The filter is only for display purposes in the preview
     const allMembers = teamMembers;
 
     // Build rotation state lookup
     const stateMap: Record<string, MemberRotationState> = {};
     rotationStates.forEach(s => { stateMap[s.member_id] = s; });
 
-    // Calculate member offsets for staggering week-offs within a team
-    // Using CYCLE_LENGTH (7) to stagger across the week
+    // Track each member's cycle state with cross-month continuity
+    interface MemberCycleTracker {
+      workDaysInCycle: number;      // Days worked in current 7-day cycle (max 5)
+      offDaysInCycle: number;       // OFF days used in current 7-day cycle (need 2 total)
+      totalWorkDays: number;        // Total work days for shift stability (rotate after 10)
+      currentShift: ShiftType;       // Current assigned shift type
+      lastShiftBeforeOff: ShiftType | null; // Track for night transition
+      needsPreNightOff: boolean;     // Flag if needs OFF before night
+    }
+    
+    const memberTrackers: Record<string, MemberCycleTracker> = {};
+    
+    // Initialize trackers using previous month state for continuity
+    allMembers.forEach(member => {
+      const isRotating = ROTATING_DEPARTMENTS.includes(member.department) && member.role !== 'TL';
+      if (!isRotating) return;
+      
+      const prevState = previousMonthState[member.id];
+      const rotationState = stateMap[member.id];
+      
+      memberTrackers[member.id] = {
+        // Continue from previous month's work day count (capped at max 5)
+        workDaysInCycle: prevState?.workDaysInCurrent || 0,
+        offDaysInCycle: 0,  // Reset OFF days at month start
+        totalWorkDays: 0,
+        // Use previous month's shift or rotation state
+        currentShift: (prevState?.shift || rotationState?.current_shift_type || SHIFT_ROTATION_ORDER[0]) as ShiftType,
+        lastShiftBeforeOff: null,
+        needsPreNightOff: false
+      };
+    });
+
+    // Stagger OFF days across team members
     const rotatingMembers = allMembers.filter(m => 
       ROTATING_DEPARTMENTS.includes(m.department) && m.role !== 'TL'
     );
     
+    // Create offset map - stagger by 1-2 days within each team
     const memberOffsets: Record<string, number> = {};
-    // Group by team, then assign offsets within team to distribute OFF days
-    const membersByTeamFlat: Record<string, TeamMember[]> = {};
+    const membersByTeam: Record<string, TeamMember[]> = {};
     rotatingMembers.forEach(m => {
       const team = m.team || 'Alpha';
-      if (!membersByTeamFlat[team]) membersByTeamFlat[team] = [];
-      membersByTeamFlat[team].push(m);
+      if (!membersByTeam[team]) membersByTeam[team] = [];
+      membersByTeam[team].push(m);
     });
-    Object.values(membersByTeamFlat).forEach(teamMembersList => {
-      teamMembersList.forEach((m, i) => { 
-        // Stagger offsets across the 7-day cycle length
-        memberOffsets[m.id] = i % CYCLE_LENGTH; 
+    Object.values(membersByTeam).forEach(teamList => {
+      teamList.forEach((m, i) => { 
+        memberOffsets[m.id] = i % 3; // Stagger start by 0-2 days
       });
-    });
-
-    // Track work day counts for each member (for shift stability - 10 work days per shift)
-    const memberWorkDayCounts: Record<string, number> = {};
-    const memberCurrentShifts: Record<string, ShiftType> = {};
-    
-    // Initialize from rotation states
-    rotatingMembers.forEach(m => {
-      memberWorkDayCounts[m.id] = 0;
-      const state = stateMap[m.id];
-      memberCurrentShifts[m.id] = (state?.current_shift_type as ShiftType) || SHIFT_ROTATION_ORDER[0];
     });
 
     days.forEach((day, dayIndex) => {
@@ -256,7 +342,6 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
       allMembers.forEach((member) => {
         const isRotating = ROTATING_DEPARTMENTS.includes(member.department) && member.role !== 'TL';
         const isGeneralOnly = GENERAL_SHIFT_DEPARTMENTS.includes(member.department) || member.role === 'TL';
-        const memberTeam = (member.team as TeamGroup) || 'Alpha';
 
         // Public holiday - everyone gets off
         if (isPublicHoliday) {
@@ -280,61 +365,89 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
           return;
         }
 
-        // Rotating members with 5+2 cycle logic
+        // Rotating members with improved logic
         if (isRotating && use15DayRotation) {
+          const tracker = memberTrackers[member.id];
           const memberOffset = memberOffsets[member.id] || 0;
           
-          // Calculate position in the 7-day cycle (5 work + 2 off)
-          const positionInCycle = (dayIndex + CYCLE_LENGTH - memberOffset) % CYCLE_LENGTH;
+          // Check if member needs OFF day
+          // Rules:
+          // 1. Max 5 consecutive work days
+          // 2. Need 2 OFF days per 7-day cycle
+          // 3. OFF days can be split (not necessarily consecutive)
+          // 4. 1 OFF day required before transitioning TO night shift
           
-          // Days 0-4 are work days, days 5-6 are OFF days
-          const isOffDay = positionInCycle >= WORK_DAYS_IN_CYCLE;
+          let shouldBeOff = false;
+          let offReason = '';
           
-          if (isOffDay) {
+          // Rule 1: Max 5 work days reached - must take OFF
+          if (tracker.workDaysInCycle >= WORK_DAYS_IN_CYCLE) {
+            shouldBeOff = true;
+            offReason = 'max_work_days';
+          }
+          
+          // Rule 2: Check if we need pre-night OFF (transitioning to night)
+          if (tracker.needsPreNightOff) {
+            shouldBeOff = true;
+            offReason = 'pre_night_rest';
+            tracker.needsPreNightOff = false; // Consume the flag
+          }
+          
+          // Rule 3: Stagger OFF days - after 4-5 work days, consider taking 1 OFF
+          // This allows for split OFF days (not just consecutive 2 days off)
+          const adjustedPosition = (dayIndex + memberOffset) % CYCLE_LENGTH;
+          if (tracker.workDaysInCycle >= 4 && tracker.offDaysInCycle < 1 && adjustedPosition === 5) {
+            // Take first OFF day after 4+ work days on a staggered schedule
+            shouldBeOff = true;
+            offReason = 'first_split_off';
+          }
+          
+          if (shouldBeOff) {
             assignments.push({
               member_id: member.id,
               shift_type: 'week-off',
               date: dateStr,
               department: member.department as Department,
             });
+            
+            tracker.offDaysInCycle++;
+            
+            // Reset work cycle after 2 OFF days are taken
+            if (tracker.offDaysInCycle >= OFF_DAYS_IN_CYCLE) {
+              tracker.workDaysInCycle = 0;
+              tracker.offDaysInCycle = 0;
+            }
             return;
           }
           
-          // Work day - determine shift based on 10-day stability rule
-          let currentShift = memberCurrentShifts[member.id] || SHIFT_ROTATION_ORDER[0];
-          const workDayCount = memberWorkDayCounts[member.id] || 0;
+          // Work day - determine shift
+          let currentShift = tracker.currentShift;
           
           // Check if we need to rotate shift (after 10 work days)
-          if (workDayCount > 0 && workDayCount % SHIFT_STABILITY_WORK_DAYS === 0) {
-            // Time to rotate to next shift
+          if (tracker.totalWorkDays > 0 && tracker.totalWorkDays % SHIFT_STABILITY_WORK_DAYS === 0) {
             const currentIndex = SHIFT_ROTATION_ORDER.indexOf(currentShift);
             const nextIndex = (currentIndex + 1) % SHIFT_ROTATION_ORDER.length;
             const nextShift = SHIFT_ROTATION_ORDER[nextIndex];
             
-            // Night shift safety: if transitioning to night, check for required rest
-            if (nextShift === 'night' && requiresRestBeforeNight(currentShift, nextShift)) {
-              // Insert 2 OFF days before night shift starts
-              // For simplicity, we'll handle this in the validation/auto-fix step
+            // Night shift safety: insert OFF day before transitioning TO night
+            if (nextShift === 'night' && currentShift !== 'night') {
+              tracker.needsPreNightOff = true;
+              tracker.lastShiftBeforeOff = currentShift;
             }
             
             currentShift = nextShift;
-            memberCurrentShifts[member.id] = currentShift;
+            tracker.currentShift = currentShift;
           }
-          
-          // Use team-based shift mapping
-          // Calculate cycle number based on work day count
-          const cycleNumber = Math.floor((memberWorkDayCounts[member.id] || 0) / SHIFT_STABILITY_WORK_DAYS);
-          const teamShift = getTeamShiftForCycle(memberTeam, cycleNumber);
           
           assignments.push({
             member_id: member.id,
-            shift_type: teamShift,
+            shift_type: currentShift,
             date: dateStr,
             department: member.department as Department,
           });
           
-          // Increment work day counter
-          memberWorkDayCounts[member.id] = (memberWorkDayCounts[member.id] || 0) + 1;
+          tracker.workDaysInCycle++;
+          tracker.totalWorkDays++;
           return;
         }
 
