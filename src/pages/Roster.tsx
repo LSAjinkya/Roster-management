@@ -87,11 +87,11 @@ export default function Roster() {
   const fetchAssignments = async () => {
     setIsLoading(true);
     try {
-      // Fetch assignments in batches to overcome the 1000 row default limit
-      // Get current month and next 2 months to limit data scope
-      const monthStart = startOfMonth(new Date());
-      const futureLimit = endOfMonth(new Date(new Date().setMonth(new Date().getMonth() + 2)));
-      const pastLimit = startOfMonth(new Date(new Date().setMonth(new Date().getMonth() - 1)));
+      // Fetch assignments for a broad date range to cover all views
+      // Past 3 months through future 3 months for complete visibility
+      const now = new Date();
+      const pastLimit = startOfMonth(new Date(now.getFullYear(), now.getMonth() - 3, 1));
+      const futureLimit = endOfMonth(new Date(now.getFullYear(), now.getMonth() + 3, 1));
       
       const { data, error } = await supabase
         .from('shift_assignments')
@@ -99,7 +99,7 @@ export default function Roster() {
         .gte('date', format(pastLimit, 'yyyy-MM-dd'))
         .lte('date', format(futureLimit, 'yyyy-MM-dd'))
         .order('date')
-        .limit(10000); // Explicitly set a higher limit
+        .limit(50000); // High limit to ensure all assignments are fetched
 
       if (error) throw error;
 
