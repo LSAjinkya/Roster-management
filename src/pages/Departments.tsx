@@ -631,7 +631,7 @@ export default function Departments() {
                       </SelectTrigger>
                       <SelectContent>
                         {ROLES.map((role) => (
-                          <SelectItem key={role} value={role}>
+                          <SelectItem key={role} value={role} textValue={role}>
                             <Badge variant="outline" className={ROLE_COLORS[role] || ''}>
                               {role}
                             </Badge>
@@ -649,7 +649,11 @@ export default function Departments() {
                       </SelectTrigger>
                       <SelectContent>
                         {(['available', 'on-leave', 'unavailable']).map((status) => (
-                          <SelectItem key={status} value={status}>
+                          <SelectItem
+                            key={status}
+                            value={status}
+                            textValue={status.replace('-', ' ')}
+                          >
                             <span className={`capitalize ${STATUS_COLORS[status]}`}>
                               {status.replace('-', ' ')}
                             </span>

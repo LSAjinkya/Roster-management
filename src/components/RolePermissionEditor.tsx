@@ -319,7 +319,7 @@ export function RolePermissionEditor({ onSave }: RolePermissionEditorProps) {
             </SelectTrigger>
             <SelectContent>
               {ROLE_INFO.map(({ role, label, color }) => (
-                <SelectItem key={role} value={role}>
+                <SelectItem key={role} value={role} textValue={label}>
                   <Badge variant="outline" className={cn(color, 'text-xs')}>
                     {label}
                   </Badge>
