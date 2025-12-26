@@ -15,6 +15,7 @@ import { TwoFactorSetup } from '@/components/TwoFactorSetup';
 import { GoogleDomainSettings } from '@/components/GoogleDomainSettings';
 import { ShiftCompositionRulesManager } from '@/components/ShiftCompositionRulesManager';
 import { RotationConfigManager } from '@/components/RotationConfigManager';
+import { MemberRotationInitializer } from '@/components/MemberRotationInitializer';
 type UserStatus = 'available' | 'on-leave' | 'unavailable';
 const STATUS_LABELS: Record<UserStatus, string> = {
   available: 'Available',
@@ -292,7 +293,7 @@ export default function SettingsPage() {
             </div>
             <div className="p-6 space-y-6">
               <RotationConfigManager />
-              
+              <MemberRotationInitializer />
             </div>
           </div>}
 
