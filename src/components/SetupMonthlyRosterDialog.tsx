@@ -731,7 +731,7 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
                 <div className="rounded-lg border p-4 space-y-4">
                       <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-base">Use {rotationConfig?.rotation_cycle_days || 14}-Day Rotation</Label>
+                      <Label className="text-base">Rotational Policy</Label>
                       <p className="text-sm text-muted-foreground">
                         Each member works {rotationConfig?.rotation_cycle_days || 14} days in one shift, then rotates
                       </p>
