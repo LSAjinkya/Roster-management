@@ -9,48 +9,39 @@ import { toast } from 'sonner';
 import { Settings, Save, RotateCcw, ArrowRight, GripVertical } from 'lucide-react';
 import { RotationConfig } from '@/types/shiftRules';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-
 const SHIFT_TYPE_COLORS: Record<string, string> = {
   'afternoon': 'bg-amber-500 text-white',
   'morning': 'bg-blue-500 text-white',
-  'night': 'bg-purple-600 text-white',
+  'night': 'bg-purple-600 text-white'
 };
-
 const SHIFT_TYPE_LABELS: Record<string, string> = {
   'afternoon': 'Afternoon (13:00-22:00)',
   'morning': 'Morning (07:00-16:00)',
-  'night': 'Night (21:00-07:00)',
+  'night': 'Night (21:00-07:00)'
 };
-
 type ExtendedRotationConfig = Omit<RotationConfig, 'shift_sequence'> & {
   shift_sequence?: string[];
 };
-
 export function RotationConfigManager() {
   const [config, setConfig] = useState<ExtendedRotationConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
   useEffect(() => {
     fetchConfig();
   }, []);
-
   const fetchConfig = async () => {
     try {
-      const { data, error } = await supabase
-        .from('rotation_config')
-        .select('*')
-        .eq('is_active', true)
-        .maybeSingle();
-
+      const {
+        data,
+        error
+      } = await supabase.from('rotation_config').select('*').eq('is_active', true).maybeSingle();
       if (error) throw error;
-      
+
       // Ensure shift_sequence has a default
       const configData = data as ExtendedRotationConfig | null;
       if (configData && !configData.shift_sequence) {
         configData.shift_sequence = ['afternoon', 'morning', 'night'];
       }
-      
       setConfig(configData);
     } catch (error) {
       console.error('Error fetching rotation config:', error);
@@ -59,24 +50,20 @@ export function RotationConfigManager() {
       setLoading(false);
     }
   };
-
   const handleSave = async () => {
     if (!config) return;
-    
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('rotation_config')
-        .update({
-          rotation_cycle_days: config.rotation_cycle_days,
-          max_consecutive_nights: config.max_consecutive_nights,
-          min_rest_hours: config.min_rest_hours,
-          work_days: config.work_days,
-          off_days: config.off_days,
-          shift_sequence: config.shift_sequence,
-        })
-        .eq('id', config.id);
-
+      const {
+        error
+      } = await supabase.from('rotation_config').update({
+        rotation_cycle_days: config.rotation_cycle_days,
+        max_consecutive_nights: config.max_consecutive_nights,
+        min_rest_hours: config.min_rest_hours,
+        work_days: config.work_days,
+        off_days: config.off_days,
+        shift_sequence: config.shift_sequence
+      }).eq('id', config.id);
       if (error) throw error;
       toast.success('Configuration saved');
     } catch (error) {
@@ -86,7 +73,6 @@ export function RotationConfigManager() {
       setSaving(false);
     }
   };
-
   const handleReset = () => {
     setConfig(prev => prev ? {
       ...prev,
@@ -95,40 +81,33 @@ export function RotationConfigManager() {
       min_rest_hours: 12,
       work_days: 5,
       off_days: 2,
-      shift_sequence: ['afternoon', 'morning', 'night'],
+      shift_sequence: ['afternoon', 'morning', 'night']
     } : null);
   };
-
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination || !config?.shift_sequence) return;
-    
     const items = Array.from(config.shift_sequence);
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
-    
-    setConfig({ ...config, shift_sequence: items });
+    setConfig({
+      ...config,
+      shift_sequence: items
+    });
   };
-
   if (loading) {
     return <div className="flex items-center justify-center p-8">Loading configuration...</div>;
   }
-
   if (!config) {
-    return (
-      <Card>
+    return <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground text-center">
             No rotation configuration found. Please contact an administrator.
           </p>
         </CardContent>
-      </Card>
-    );
+      </Card>;
   }
-
   const shiftSequence = config.shift_sequence || ['afternoon', 'morning', 'night'];
-
-  return (
-    <Card>
+  return <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -162,35 +141,18 @@ export function RotationConfigManager() {
           
           <DragDropContext onDragEnd={handleDragEnd}>
             <Droppable droppableId="shifts" direction="horizontal">
-              {(provided) => (
-                <div 
-                  {...provided.droppableProps} 
-                  ref={provided.innerRef}
-                  className="flex items-center gap-2 flex-wrap"
-                >
-                  {shiftSequence.map((shift, index) => (
-                    <Draggable key={shift} draggableId={shift} index={index}>
-                      {(provided, snapshot) => (
-                        <div className="flex items-center gap-2">
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-grab ${SHIFT_TYPE_COLORS[shift]} ${snapshot.isDragging ? 'shadow-lg' : ''}`}
-                          >
+              {provided => <div {...provided.droppableProps} ref={provided.innerRef} className="flex items-center gap-2 flex-wrap">
+                  {shiftSequence.map((shift, index) => <Draggable key={shift} draggableId={shift} index={index}>
+                      {(provided, snapshot) => <div className="flex items-center gap-2">
+                          <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-grab ${SHIFT_TYPE_COLORS[shift]} ${snapshot.isDragging ? 'shadow-lg' : ''}`}>
                             <GripVertical size={14} />
                             <span className="font-medium">{SHIFT_TYPE_LABELS[shift]}</span>
                           </div>
-                          {index < shiftSequence.length - 1 && (
-                            <ArrowRight size={20} className="text-muted-foreground" />
-                          )}
-                        </div>
-                      )}
-                    </Draggable>
-                  ))}
+                          {index < shiftSequence.length - 1 && <ArrowRight size={20} className="text-muted-foreground" />}
+                        </div>}
+                    </Draggable>)}
                   {provided.placeholder}
-                </div>
-              )}
+                </div>}
             </Droppable>
           </DragDropContext>
         </div>
@@ -205,13 +167,10 @@ export function RotationConfigManager() {
                 <Label>Cycle Length</Label>
                 <span className="text-sm font-medium">{config.rotation_cycle_days} days</span>
               </div>
-              <Slider
-                value={[config.rotation_cycle_days]}
-                onValueChange={([v]) => setConfig({ ...config, rotation_cycle_days: v })}
-                min={7}
-                max={30}
-                step={1}
-              />
+              <Slider value={[config.rotation_cycle_days]} onValueChange={([v]) => setConfig({
+              ...config,
+              rotation_cycle_days: v
+            })} min={7} max={30} step={1} />
               <p className="text-xs text-muted-foreground">
                 Each member stays on one shift for this many days before rotating
               </p>
@@ -220,7 +179,7 @@ export function RotationConfigManager() {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <Label>Weekly Offs Pattern</Label>
-                <span className="text-sm font-medium">2 + 2 days</span>
+                <span className="text-sm font-medium">2 days</span>
               </div>
               <p className="text-xs text-muted-foreground">
                 2 offs in first week + 2 offs in second week of each cycle
@@ -236,13 +195,10 @@ export function RotationConfigManager() {
                 <Label>Max Consecutive Night Shifts</Label>
                 <span className="text-sm font-medium">{config.max_consecutive_nights} nights</span>
               </div>
-              <Slider
-                value={[config.max_consecutive_nights]}
-                onValueChange={([v]) => setConfig({ ...config, max_consecutive_nights: v })}
-                min={1}
-                max={15}
-                step={1}
-              />
+              <Slider value={[config.max_consecutive_nights]} onValueChange={([v]) => setConfig({
+              ...config,
+              max_consecutive_nights: v
+            })} min={1} max={15} step={1} />
             </div>
 
             <div className="space-y-2">
@@ -250,13 +206,10 @@ export function RotationConfigManager() {
                 <Label>Minimum Rest Hours</Label>
                 <span className="text-sm font-medium">{config.min_rest_hours} hours</span>
               </div>
-              <Slider
-                value={[config.min_rest_hours]}
-                onValueChange={([v]) => setConfig({ ...config, min_rest_hours: v })}
-                min={8}
-                max={16}
-                step={1}
-              />
+              <Slider value={[config.min_rest_hours]} onValueChange={([v]) => setConfig({
+              ...config,
+              min_rest_hours: v
+            })} min={8} max={16} step={1} />
             </div>
           </div>
         </div>
@@ -291,6 +244,5 @@ export function RotationConfigManager() {
           </div>
         </div>
       </CardContent>
-    </Card>
-  );
+    </Card>;
 }
