@@ -8,9 +8,10 @@ import {
   SHIFT_STABILITY_WORK_DAYS,
   SHIFT_ROTATION_ORDER,
   REST_DAYS_BEFORE_NIGHT,
+  MIN_WEEKLY_OFFS,
   ROTATING_DEPARTMENTS,
 } from '@/types/shiftRules';
-import { format, eachDayOfInterval, addDays, subDays } from 'date-fns';
+import { format, eachDayOfInterval, addDays, subDays, startOfWeek, endOfWeek } from 'date-fns';
 
 // =====================================================
 // VALIDATION RULE PRIORITY ORDER
@@ -152,6 +153,58 @@ export function validateOffDayBlocks(
 }
 
 /**
+ * Validates that a member has EXACTLY 2 week-offs per week (compulsory)
+ */
+export function validateWeeklyOffs(
+  memberId: string,
+  assignments: ShiftAssignment[],
+  startDate: Date,
+  endDate: Date,
+  memberName?: string
+): ShiftViolation[] {
+  const violations: ShiftViolation[] = [];
+  
+  // Get all weeks in the period
+  let currentWeekStart = startOfWeek(startDate, { weekStartsOn: 1 }); // Monday start
+  
+  while (currentWeekStart <= endDate) {
+    const currentWeekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
+    const weekDays = eachDayOfInterval({ 
+      start: currentWeekStart < startDate ? startDate : currentWeekStart, 
+      end: currentWeekEnd > endDate ? endDate : currentWeekEnd 
+    });
+    
+    // Only validate full weeks (7 days) or partial weeks with sufficient days
+    if (weekDays.length >= 5) {
+      // Count week-offs in this week
+      const weekOffCount = weekDays.filter(d => {
+        const dateStr = format(d, 'yyyy-MM-dd');
+        const assignment = assignments.find(a => a.memberId === memberId && a.date === dateStr);
+        return assignment && ['week-off', 'comp-off'].includes(assignment.shiftType);
+      }).length;
+      
+      if (weekOffCount < MIN_WEEKLY_OFFS) {
+        violations.push({
+          type: 'cycle',
+          shift_type: 'week-off',
+          department: 'Support' as Department,
+          required: MIN_WEEKLY_OFFS,
+          actual: weekOffCount,
+          date: format(currentWeekStart, 'yyyy-MM-dd'),
+          message: `${memberName || memberId}: Only ${weekOffCount} week-off(s) in week of ${format(currentWeekStart, 'MMM d')} (must have ${MIN_WEEKLY_OFFS} compulsory)`,
+          memberId,
+          severity: 'error',
+        });
+      }
+    }
+    
+    currentWeekStart = addDays(currentWeekStart, 7);
+  }
+  
+  return violations;
+}
+
+/**
  * Validates that a member has required OFF days (not zero)
  */
 export function validateMinimumOffDays(
@@ -196,7 +249,7 @@ export function validateMinimumOffDays(
 // =====================================================
 
 /**
- * Validates that members get required rest before starting night shift
+ * Validates that members get required rest (1-2 days) before starting night shift
  */
 export function validateNightShiftTransition(
   memberId: string,
@@ -210,32 +263,42 @@ export function validateNightShiftTransition(
     .filter(a => a.memberId === memberId)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
-  for (let i = 1; i < sortedAssignments.length; i++) {
-    const prev = sortedAssignments[i - 1];
+  for (let i = 0; i < sortedAssignments.length; i++) {
     const curr = sortedAssignments[i];
     
-    const prevDate = new Date(prev.date);
-    const currDate = new Date(curr.date);
-    const daysDiff = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
-    
-    // Check if transitioning TO night from morning/afternoon
-    if (curr.shiftType === 'night' && 
-        (prev.shiftType === 'morning' || prev.shiftType === 'afternoon')) {
+    // Check if this is a night shift
+    if (curr.shiftType === 'night') {
+      const currDate = new Date(curr.date);
       
-      // Check if there's enough rest gap
-      if (daysDiff === 1) {
-        // Consecutive days - no rest gap!
-        violations.push({
-          type: 'night-safety',
-          shift_type: 'night',
-          department: curr.department as Department,
-          required: REST_DAYS_BEFORE_NIGHT,
-          actual: 0,
-          date: curr.date,
-          message: `${memberName || memberId}: Transition to Night on ${format(currDate, 'MMM d')} without required ${REST_DAYS_BEFORE_NIGHT}-day rest (from ${prev.shiftType})`,
-          memberId,
-          severity: 'error',
-        });
+      // Look back to find rest days before this night shift
+      let restDaysBeforeNight = 0;
+      
+      for (let j = i - 1; j >= 0; j--) {
+        const prev = sortedAssignments[j];
+        const prevDate = new Date(prev.date);
+        const daysDiff = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysDiff > 3) break; // Only check last 3 days
+        
+        if (['week-off', 'comp-off', 'leave', 'paid-leave', 'public-off'].includes(prev.shiftType)) {
+          restDaysBeforeNight++;
+        } else if (['morning', 'afternoon'].includes(prev.shiftType)) {
+          // Found a non-rest day, check if we have enough rest
+          if (restDaysBeforeNight < REST_DAYS_BEFORE_NIGHT) {
+            violations.push({
+              type: 'night-safety',
+              shift_type: 'night',
+              department: curr.department as Department,
+              required: REST_DAYS_BEFORE_NIGHT,
+              actual: restDaysBeforeNight,
+              date: curr.date,
+              message: `${memberName || memberId}: Transition to Night on ${format(currDate, 'MMM d')} with only ${restDaysBeforeNight} rest day(s) (need ${REST_DAYS_BEFORE_NIGHT}-2 days rest)`,
+              memberId,
+              severity: 'error',
+            });
+          }
+          break;
+        }
       }
     }
   }
@@ -377,12 +440,13 @@ export function validateRoster(
   );
   
   rotatingMembers.forEach(member => {
-    // Rule 1: Work cycle validation
+    // Rule 1: Work cycle validation - Compulsory 2 week-offs per week
     const consecutiveViolations = validateConsecutiveWorkDays(member.id, assignments, member.name);
     const offBlockViolations = validateOffDayBlocks(member.id, assignments, startDate, endDate, member.name);
     const minOffViolations = validateMinimumOffDays(member.id, assignments, startDate, endDate, member.name);
+    const weeklyOffViolations = validateWeeklyOffs(member.id, assignments, startDate, endDate, member.name);
     
-    // Rule 2: Night shift safety
+    // Rule 2: Night shift safety - 1-2 days rest before night shift
     const nightSafetyViolations = validateNightShiftTransition(member.id, assignments, member.name);
     
     // Rule 3: Shift stability
@@ -396,6 +460,7 @@ export function validateRoster(
       ...consecutiveViolations,
       ...offBlockViolations,
       ...minOffViolations,
+      ...weeklyOffViolations,
       ...nightSafetyViolations,
       ...stabilityViolations,
       ...rotationViolations,

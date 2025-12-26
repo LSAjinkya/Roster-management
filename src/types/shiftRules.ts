@@ -65,10 +65,11 @@ export interface MemberAvailability {
 // CORE CONSTANTS - SHIFT RULES
 // =====================================================
 
-// Rule 1: Core Work Cycle - 5 work days + 2 OFF days
+// Rule 1: Core Work Cycle - 5 work days + 2 OFF days (COMPULSORY 2 week-offs per week)
 export const WORK_DAYS_IN_CYCLE = 5;
-export const OFF_DAYS_IN_CYCLE = 2;
+export const OFF_DAYS_IN_CYCLE = 2; // Compulsory 2 week-offs per week
 export const CYCLE_LENGTH = WORK_DAYS_IN_CYCLE + OFF_DAYS_IN_CYCLE; // 7 days
+export const MIN_WEEKLY_OFFS = 2; // Minimum week-offs required per week
 
 // Rule 2: Shift Stability - Same shift for 10 working days
 export const SHIFT_STABILITY_WORK_DAYS = 10;
@@ -78,8 +79,9 @@ export const SHIFT_CYCLE_CALENDAR_DAYS = 14; // 10 work + 4 OFF
 // Rule 4: Shift Rotation Order
 export const SHIFT_ROTATION_ORDER: ShiftType[] = ['afternoon', 'morning', 'night'];
 
-// Rule 5: Night Shift Safety - REST days required before night shift
-export const REST_DAYS_BEFORE_NIGHT = 2;
+// Rule 5: Night Shift Safety - REST days required before night shift (1-2 days minimum)
+export const REST_DAYS_BEFORE_NIGHT = 1; // Minimum 1 day rest before night shift
+export const MAX_REST_DAYS_BEFORE_NIGHT = 2; // Recommended 2 days rest before night shift
 
 // =====================================================
 // ASSIGNMENT CONFIG
