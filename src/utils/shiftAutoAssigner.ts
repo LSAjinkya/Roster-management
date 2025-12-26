@@ -101,7 +101,8 @@ export function autoAssignShifts(
     
     // Process each team member
     teamMembers.forEach(member => {
-      const isRotating = ROTATING_DEPARTMENTS.includes(member.department) && member.role !== 'TL';
+      const isRotating = ROTATING_DEPARTMENTS.includes(member.department) && member.role !== 'TL' && member.role !== 'Manager';
+      const isGeneralShiftWorker = member.role === 'TL' || member.role === 'Manager' || member.role === 'HR' || member.role === 'Admin' || GENERAL_SHIFT_DEPARTMENTS.includes(member.department);
       
       // Check if on leave
       const onLeave = config.respectLeaves && leaveRequests.some(lr => 
@@ -133,8 +134,33 @@ export function autoAssignShifts(
         return;
       }
       
-      // TLs and Vendor Coordinator get General shift
-      if (member.role === 'TL' || GENERAL_SHIFT_DEPARTMENTS.includes(member.department)) {
+      // Calculate member offset for week-offs (all employees get week-offs)
+      const memberOffset = memberOffsets[member.id] || (teamMembers.indexOf(member) % 7);
+      
+      // Calculate day within cycle for week-off
+      const referenceDate = startDate;
+      const daysSinceReference = Math.floor(
+        (day.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      const positionInCycle = ((daysSinceReference % 7) + 7 - memberOffset) % 7;
+      
+      // Days 5 and 6 in the 7-day cycle are week-offs (compulsory 2 per week)
+      const isWeekOff = positionInCycle >= 5;
+      
+      if (isWeekOff) {
+        assignments.push({
+          id: `auto-${member.id}-${dateStr}`,
+          memberId: member.id,
+          shiftType: 'week-off',
+          date: dateStr,
+          department: member.department,
+        });
+        dayAssignments['week-off'].push(member);
+        return;
+      }
+      
+      // TLs, Managers, HR, Admin and General shift departments get General shift
+      if (isGeneralShiftWorker) {
         assignments.push({
           id: `auto-${member.id}-${dateStr}`,
           memberId: member.id,
@@ -146,7 +172,7 @@ export function autoAssignShifts(
         return;
       }
       
-      // For rotating members, check week-off and determine shift
+      // For rotating members, determine shift type based on rotation
       if (isRotating) {
         const rotationState = rotationStateMap[member.id];
         const cycleStartDate = rotationState 
@@ -162,33 +188,6 @@ export function autoAssignShifts(
           config.rotationCycleDays,
           config.shiftSequence
         ) as ShiftType;
-        
-        // Calculate day within current cycle
-        const daysSinceCycleStart = Math.floor(
-          (day.getTime() - cycleStartDate.getTime()) / (1000 * 60 * 60 * 24)
-        );
-        const dayInCycle = ((daysSinceCycleStart % config.rotationCycleDays) + config.rotationCycleDays) % config.rotationCycleDays;
-        
-        // Get this member's week-off days
-        const memberOffset = memberOffsets[member.id] || 0;
-        const weekOffDays = getWeekOffDaysInCycle(
-          cycleStartDate,
-          memberOffset,
-          config.rotationCycleDays
-        );
-        
-        // Check if today is a week-off day for this member
-        if (weekOffDays.includes(dayInCycle)) {
-          assignments.push({
-            id: `auto-${member.id}-${dateStr}`,
-            memberId: member.id,
-            shiftType: 'week-off',
-            date: dateStr,
-            department: member.department,
-          });
-          dayAssignments['week-off'].push(member);
-          return;
-        }
         
         // Assign the calculated shift type
         assignments.push({

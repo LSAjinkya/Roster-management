@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { ROLES } from '@/types/roster';
-import { Building2, Users, UserCheck, Loader2, ChevronRight, Crown, Edit2, UserPlus, Plus, Trash2, Save, X } from 'lucide-react';
+import { Building2, Users, UserCheck, Loader2, ChevronRight, Crown, Edit2, UserPlus, Plus, Trash2, Save, X, Search } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -81,6 +81,7 @@ export default function Departments() {
   const [editedDept, setEditedDept] = useState({ name: '', description: '', headMemberId: '' });
   const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const queryClient = useQueryClient();
 
   // Fetch departments from database
@@ -134,6 +135,14 @@ export default function Departments() {
   });
 
   const selectedDeptData = departmentData.find(d => d.name === selectedDepartment);
+  
+  // Filter members by search query
+  const filteredDeptMembers = selectedDeptData?.members.filter(member => 
+    memberSearchQuery === '' || 
+    member.name.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
+    member.email.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
+    member.role.toLowerCase().includes(memberSearchQuery.toLowerCase())
+  ) || [];
 
   const handleAddDepartment = async () => {
     if (!newDept.name.trim()) {
@@ -598,9 +607,36 @@ export default function Departments() {
             </div>
           )}
           
-          <ScrollArea className="max-h-[50vh]">
+          {/* Search input */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search members by name, email, or role... (Ctrl+F)"
+              value={memberSearchQuery}
+              onChange={(e) => setMemberSearchQuery(e.target.value)}
+              className="pl-9"
+              autoFocus
+            />
+            {memberSearchQuery && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                onClick={() => setMemberSearchQuery('')}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+          
+          <ScrollArea className="max-h-[45vh]">
             <div className="space-y-3 pr-4">
-              {selectedDeptData?.members.map((member) => (
+              {filteredDeptMembers.length === 0 && memberSearchQuery && (
+                <div className="text-center py-8 text-muted-foreground">
+                  No members found matching "{memberSearchQuery}"
+                </div>
+              )}
+              {filteredDeptMembers.map((member) => (
                 <div 
                   key={member.id}
                   className="flex items-center justify-between p-4 rounded-lg border border-border/50 bg-secondary/20 hover:bg-secondary/40 transition-colors"
@@ -688,7 +724,7 @@ export default function Departments() {
                 </div>
               ))}
               
-              {selectedDeptData?.members.length === 0 && (
+              {filteredDeptMembers.length === 0 && !memberSearchQuery && (
                 <div className="text-center py-8 text-muted-foreground">
                   No team members in this department
                 </div>

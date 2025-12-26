@@ -83,9 +83,20 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
 
   const isCurrentMonth = isSameMonth(currentMonth, new Date());
 
-  // Get list of TLs for filter
+  // Get list of TLs and Managers for filter
   const tlMembers = useMemo(() => {
-    return teamMembers.filter(m => m.role === 'TL');
+    return teamMembers.filter(m => m.role === 'TL' || m.role === 'Manager');
+  }, [teamMembers]);
+
+  // Get department managers lookup
+  const departmentManagers = useMemo(() => {
+    const managers: Record<string, TeamMember> = {};
+    teamMembers.forEach(m => {
+      if ((m.role === 'Manager' || m.role === 'TL') && !managers[m.department]) {
+        managers[m.department] = m;
+      }
+    });
+    return managers;
   }, [teamMembers]);
 
   // Get selected TL for highlighted row
@@ -147,12 +158,9 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
     };
   };
 
-  // Find reporting TL for a member
-  const getReportingTL = (member: TeamMember): TeamMember | undefined => {
-    if (member.reportingTLId) {
-      return teamMembers.find(m => m.id === member.reportingTLId);
-    }
-    return undefined;
+  // Find department manager for a member
+  const getDepartmentManager = (member: TeamMember): TeamMember | undefined => {
+    return departmentManagers[member.department];
   };
 
   const handleCellClick = (member: TeamMember, day: Date, isRightClick = false) => {
@@ -400,7 +408,7 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
               {Object.entries(membersByDepartment).map(([department, members]) => (
                 members.map((member, memberIndex) => {
                   const stats = getMemberStats(member.id);
-                  const reportingTL = getReportingTL(member);
+                  const deptManager = getDepartmentManager(member);
                   
                   return (
                     <tr 
@@ -412,7 +420,7 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
                     >
                       {/* Manager/TL column */}
                       <td className="sticky left-0 z-10 bg-card p-2 font-medium text-muted-foreground truncate">
-                        {member.role === 'TL' || member.role === 'HR' ? member.name : (reportingTL?.name || '-')}
+                        {member.role === 'TL' || member.role === 'Manager' || member.role === 'HR' ? member.name : (deptManager?.name || '-')}
                       </td>
                       {/* Member name */}
                       <td className="sticky left-[120px] z-10 bg-card p-2 font-medium">
