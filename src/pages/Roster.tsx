@@ -240,8 +240,8 @@ export default function Roster() {
         </div>
       </DashboardHeader>
       
-      <div className="flex-1 overflow-auto p-6">
-        <div className="space-y-6">
+      <div className="flex-1 overflow-auto p-6 pt-3">
+        <div className="space-y-4">
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
             <TabsList className="bg-muted/50">
               <TabsTrigger value="table" className="gap-2">
