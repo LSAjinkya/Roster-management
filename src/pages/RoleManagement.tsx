@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search, FileUp, Users, UserCheck, Trash2, Plus, Link2, Unlink, RefreshCw } from 'lucide-react';
+import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search, FileUp, Users, UserCheck, Trash2, Plus, Link2, Unlink, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -44,6 +44,7 @@ interface TeamMember {
   team: string | null;
   status: string;
   reporting_tl_id: string | null;
+  isInitialized?: boolean;
 }
 
 interface StatusHistoryLog {
@@ -112,6 +113,7 @@ export default function RoleManagement() {
   const [teamSearchQuery, setTeamSearchQuery] = useState('');
   const [teamDeptFilter, setTeamDeptFilter] = useState<string>('all');
   const [teamRoleFilter, setTeamRoleFilter] = useState<string>('all');
+  const [teamInitFilter, setTeamInitFilter] = useState<string>('all');
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -192,7 +194,20 @@ export default function RoleManagement() {
         .order('name');
 
       if (error) throw error;
-      setTeamMembers(data || []);
+
+      // Fetch rotation states to determine initialization status
+      const { data: rotationStates } = await supabase
+        .from('member_rotation_state')
+        .select('member_id');
+
+      const initializedMemberIds = new Set((rotationStates || []).map(rs => rs.member_id));
+
+      const membersWithInitStatus = (data || []).map(member => ({
+        ...member,
+        isInitialized: initializedMemberIds.has(member.id),
+      }));
+
+      setTeamMembers(membersWithInitStatus);
     } catch (error) {
       console.error('Error fetching team members:', error);
       toast.error('Failed to load team members');
@@ -269,9 +284,15 @@ export default function RoleManagement() {
     
     const matchesDept = teamDeptFilter === 'all' || m.department === teamDeptFilter;
     const matchesRole = teamRoleFilter === 'all' || m.role === teamRoleFilter;
+    const matchesInit = teamInitFilter === 'all' || 
+      (teamInitFilter === 'initialized' && m.isInitialized) ||
+      (teamInitFilter === 'not-initialized' && !m.isInitialized);
     
-    return matchesSearch && matchesDept && matchesRole;
+    return matchesSearch && matchesDept && matchesRole && matchesInit;
   });
+
+  const initializedCount = teamMembers.filter(m => m.isInitialized).length;
+  const notInitializedCount = teamMembers.length - initializedCount;
 
   const handleDeleteMemberClick = (member: TeamMember) => {
     setMemberToDelete(member);
@@ -781,7 +802,7 @@ export default function RoleManagement() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="pt-4">
             <div className="flex items-center gap-2">
@@ -806,9 +827,23 @@ export default function RoleManagement() {
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div>
-              <p className="text-2xl font-bold">{users.filter(u => u.is_active).length}</p>
-              <p className="text-xs text-muted-foreground">Active Users</p>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="text-2xl font-bold">{initializedCount}</p>
+                <p className="text-xs text-muted-foreground">Initialized</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-amber-600" />
+              <div>
+                <p className="text-2xl font-bold">{notInitializedCount}</p>
+                <p className="text-xs text-muted-foreground">Not Initialized</p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -880,6 +915,16 @@ export default function RoleManagement() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <Select value={teamInitFilter} onValueChange={setTeamInitFilter}>
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="initialized">Initialized</SelectItem>
+                      <SelectItem value="not-initialized">Not Initialized</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <BulkTeamAssignment 
                     teamMembers={teamMembers.map(m => ({ 
                       id: m.id, 
@@ -922,6 +967,7 @@ export default function RoleManagement() {
                       <TableHead>Department</TableHead>
                       <TableHead>Team</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead>Initialized</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="w-20">Actions</TableHead>
                     </TableRow>
@@ -1015,6 +1061,19 @@ export default function RoleManagement() {
                           </Select>
                         </TableCell>
                         <TableCell>
+                          {member.isInitialized ? (
+                            <Badge variant="outline" className="bg-green-500/20 text-green-700 border-green-500/30">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              Yes
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-amber-500/20 text-amber-700 border-amber-500/30">
+                              <XCircle className="h-3 w-3 mr-1" />
+                              No
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           <Select
                             value={member.status}
                             onValueChange={(value) => handleTeamMemberStatusChange(member.id, value)}
@@ -1049,7 +1108,7 @@ export default function RoleManagement() {
                     ))}
                     {filteredTeamMembers.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                           No team members found
                         </TableCell>
                       </TableRow>
