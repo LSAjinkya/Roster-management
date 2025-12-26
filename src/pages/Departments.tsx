@@ -47,6 +47,7 @@ interface TeamMember {
   department: string;
   status: string;
   reporting_tl_id: string | null;
+  week_off_entitlement: number;
 }
 
 interface Department {
@@ -367,6 +368,23 @@ export default function Departments() {
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update status');
+    }
+  };
+
+  const handleWeekOffEntitlementChange = async (memberId: string, entitlement: number) => {
+    try {
+      const { error } = await supabase
+        .from('team_members')
+        .update({ week_off_entitlement: entitlement })
+        .eq('id', memberId);
+
+      if (error) throw error;
+
+      toast.success('Week-off entitlement updated');
+      refetchMembers();
+    } catch (error) {
+      console.error('Error updating week-off entitlement:', error);
+      toast.error('Failed to update week-off entitlement');
     }
   };
 
@@ -695,6 +713,23 @@ export default function Departments() {
                             </span>
                           </SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    <Select
+                      value={String(member.week_off_entitlement || 2)}
+                      onValueChange={(value) => handleWeekOffEntitlementChange(member.id, parseInt(value))}
+                    >
+                      <SelectTrigger className="w-20" title="Week-off entitlement">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1" textValue="1 OFF">
+                          <span className="text-sm">1 OFF</span>
+                        </SelectItem>
+                        <SelectItem value="2" textValue="2 OFF">
+                          <span className="text-sm">2 OFF</span>
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                     
