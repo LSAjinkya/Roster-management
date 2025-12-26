@@ -227,7 +227,21 @@ export default function Roster() {
               onComplete={handleRefresh}
             />
           )}
-          
+
+          {showExport && (
+            <ExportDropdown
+              assignments={assignments}
+              teamMembers={teamMembers}
+              startDate={exportDates.start}
+              endDate={exportDates.end}
+              viewType={viewMode === 'weekly' ? 'weekly' : 'monthly'}
+            />
+          )}
+        </div>
+      </DashboardHeader>
+      
+      <div className="flex-1 overflow-auto p-6">
+        <div className="space-y-6">
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
             <TabsList className="bg-muted/50">
               <TabsTrigger value="table" className="gap-2">
@@ -260,20 +274,6 @@ export default function Roster() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
-
-          {showExport && (
-            <ExportDropdown
-              assignments={assignments}
-              teamMembers={teamMembers}
-              startDate={exportDates.start}
-              endDate={exportDates.end}
-              viewType={viewMode === 'weekly' ? 'weekly' : 'monthly'}
-            />
-          )}
-        </div>
-      </DashboardHeader>
-      
-      <div className="flex-1 overflow-auto p-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -322,6 +322,7 @@ export default function Roster() {
             )}
           </>
         )}
+        </div>
       </div>
     </div>
   );

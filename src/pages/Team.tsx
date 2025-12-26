@@ -93,31 +93,33 @@ export default function Team() {
       <DashboardHeader 
         title="Team Members" 
         subtitle={`${members.length} total members across all departments`}
-      >
-        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-          <TabsList className="bg-muted/50">
-            <TabsTrigger value="overview" className="gap-2">
-              <LayoutGrid size={16} />
-              <span className="hidden sm:inline">Overview</span>
-            </TabsTrigger>
-            <TabsTrigger value="team" className="gap-2">
-              <Users size={16} />
-              <span className="hidden sm:inline">Team View</span>
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </DashboardHeader>
+      />
       
       <div className="flex-1 overflow-auto p-6">
-        {viewMode === 'overview' && (
-          <TeamOverview members={members} onMemberUpdate={fetchTeamMembers} />
-        )}
-        {viewMode === 'team' && (
-          <TeamRosterView 
-            assignments={assignments} 
-            teamMembers={members}
-          />
-        )}
+        <div className="space-y-6">
+          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+            <TabsList className="bg-muted/50">
+              <TabsTrigger value="overview" className="gap-2">
+                <LayoutGrid size={16} />
+                <span className="hidden sm:inline">Overview</span>
+              </TabsTrigger>
+              <TabsTrigger value="team" className="gap-2">
+                <Users size={16} />
+                <span className="hidden sm:inline">Team View</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {viewMode === 'overview' && (
+            <TeamOverview members={members} onMemberUpdate={fetchTeamMembers} />
+          )}
+          {viewMode === 'team' && (
+            <TeamRosterView 
+              assignments={assignments} 
+              teamMembers={members}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
