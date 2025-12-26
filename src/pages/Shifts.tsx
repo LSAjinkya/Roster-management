@@ -52,8 +52,8 @@ export default function Shifts() {
         subtitle="Configure shifts and view history" 
       />
       
-      <div className="flex-1 overflow-auto p-6">
-        <Tabs defaultValue="definitions" className="space-y-6">
+      <div className="flex-1 overflow-auto p-6 pt-3">
+        <Tabs defaultValue="definitions" className="space-y-4">
           <TabsList>
             <TabsTrigger value="definitions" className="gap-2">
               <Clock size={16} />
