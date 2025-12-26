@@ -39,6 +39,7 @@ export default function Team() {
         team: member.team as TeamMember['team'],
         status: (member.status as 'available' | 'on-leave' | 'unavailable') || 'available',
         reportingTLId: member.reporting_tl_id || undefined,
+        weekOffEntitlement: (member.week_off_entitlement as 1 | 2) || 2,
       }));
 
       setMembers(teamMembers);

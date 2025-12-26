@@ -634,6 +634,7 @@ export type Database = {
           status: string
           team: string | null
           updated_at: string
+          week_off_entitlement: number
         }
         Insert: {
           created_at?: string
@@ -647,6 +648,7 @@ export type Database = {
           status?: string
           team?: string | null
           updated_at?: string
+          week_off_entitlement?: number
         }
         Update: {
           created_at?: string
@@ -660,6 +662,7 @@ export type Database = {
           status?: string
           team?: string | null
           updated_at?: string
+          week_off_entitlement?: number
         }
         Relationships: [
           {

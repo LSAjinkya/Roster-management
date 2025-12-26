@@ -72,6 +72,7 @@ export interface TeamMember {
   avatar?: string;
   status: 'available' | 'on-leave' | 'unavailable';
   reportingTLId?: string; // Assigned based on department
+  weekOffEntitlement?: 1 | 2; // 1 or 2 OFF days per cycle (default: 2)
 }
 
 export interface ShiftAssignment {
