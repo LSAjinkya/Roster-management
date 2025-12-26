@@ -259,33 +259,22 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Rotation Rules */}
-        <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
-          <div className="p-4 border-b border-border/50 flex items-center gap-3">
-            <Clock size={20} className="text-muted-foreground" />
-            <h2 className="font-semibold">Rotation Rules</h2>
-          </div>
-          <div className="p-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label>Rotation Cycle (days)</Label>
-                <Input type="number" defaultValue="15" />
-              </div>
-              <div className="space-y-2">
-                <Label>Max Consecutive Night Shifts</Label>
-                <Input type="number" defaultValue="5" />
-              </div>
-              <div className="space-y-2">
-                <Label>Minimum Rest Hours</Label>
-                <Input type="number" defaultValue="12" />
-              </div>
-              <div className="space-y-2">
-                <Label>Weekly Off Days</Label>
-                <Input type="number" defaultValue="2" />
+        {/* Shift Rules - Admin Only */}
+        {isAdmin && (
+          <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+            <div className="p-4 border-b border-border/50 flex items-center gap-3">
+              <CalendarCog size={20} className="text-muted-foreground" />
+              <h2 className="font-semibold">Shift Rules & Rotation Config</h2>
+              <Badge variant="outline" className="ml-auto">Admin Only</Badge>
+            </div>
+            <div className="p-6 space-y-6">
+              <RotationConfigManager />
+              <div className="border-t pt-6">
+                <ShiftCompositionRulesManager />
               </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Notifications */}
         <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
