@@ -574,10 +574,10 @@ export default function Departments() {
                         Assign Head
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuLabel>Select Team Member</DropdownMenuLabel>
+                    <DropdownMenuContent align="end" className="w-56 z-50 bg-popover">
+                      <DropdownMenuLabel>Select TL/Manager</DropdownMenuLabel>
                       <DropdownMenuSeparator />
-                      {selectedDeptData.members.filter(m => m.role !== 'TL').map(member => (
+                      {selectedDeptData.members.filter(m => m.role === 'Manager' || m.role === 'TL').map(member => (
                         <DropdownMenuItem 
                           key={member.id}
                           onClick={(e) => {
@@ -585,11 +585,11 @@ export default function Departments() {
                             handleSetDepartmentHead(member.id);
                           }}
                         >
-                          {member.name}
+                          {member.name} ({member.role})
                         </DropdownMenuItem>
                       ))}
-                      {selectedDeptData.members.filter(m => m.role !== 'TL').length === 0 && (
-                        <DropdownMenuItem disabled>No available members</DropdownMenuItem>
+                      {selectedDeptData.members.filter(m => m.role === 'Manager' || m.role === 'TL').length === 0 && (
+                        <DropdownMenuItem disabled>No TL/Manager in this department</DropdownMenuItem>
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -629,7 +629,7 @@ export default function Departments() {
                       <SelectTrigger className="w-24">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-50 bg-popover">
                         {ROLES.map((role) => (
                           <SelectItem key={role} value={role}>
                             <Badge variant="outline" className={ROLE_COLORS[role] || ''}>
@@ -647,7 +647,7 @@ export default function Departments() {
                       <SelectTrigger className="w-32">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="z-50 bg-popover">
                         {(['available', 'on-leave', 'unavailable']).map((status) => (
                           <SelectItem key={status} value={status}>
                             <span className={`capitalize ${STATUS_COLORS[status]}`}>
@@ -664,7 +664,7 @@ export default function Departments() {
                           <Edit2 className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuContent align="end" className="w-48 z-50 bg-popover">
                         <DropdownMenuLabel>Move to Department</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         {departments.filter(d => d.name !== member.department).map(dept => (
@@ -827,7 +827,7 @@ export default function Departments() {
                 <SelectContent className="bg-popover">
                   <SelectItem value="none">No department head</SelectItem>
                   {teamMembers
-                    .filter(m => m.department === deptToEdit?.name && (m.role === 'TL' || m.role === 'L2'))
+                    .filter(m => m.department === deptToEdit?.name && (m.role === 'TL' || m.role === 'Manager'))
                     .map((member) => (
                       <SelectItem key={member.id} value={member.id}>
                         {member.name} ({member.role})
