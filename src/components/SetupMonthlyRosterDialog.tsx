@@ -760,9 +760,9 @@ export function SetupMonthlyRosterDialog({ teamMembers, departments, onComplete 
                           <span className="ml-2 font-medium">{rotationConfig.off_days} days off pattern</span>
                         </div>
                         <div>
-                          <span className="text-sm text-muted-foreground">Initialized:</span>
+                          <span className="text-sm text-muted-foreground">Total Members:</span>
                           <span className="ml-2 font-medium">
-                            {rotationStates.length} members
+                            {teamMembers.length} members ({rotationStates.length} initialized)
                           </span>
                         </div>
                       </div>
