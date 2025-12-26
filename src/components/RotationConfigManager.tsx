@@ -182,7 +182,7 @@ export function RotationConfigManager() {
                 <span className="text-sm font-medium">2 days</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                2 offs in first week + 2 offs in second week of each cycle
+                2 days offs in a week 
               </p>
             </div>
           </div>
