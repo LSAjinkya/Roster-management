@@ -130,6 +130,7 @@ export default function RoleManagement() {
   const [addingMember, setAddingMember] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [linkingUser, setLinkingUser] = useState<string | null>(null);
+  const [initializingAll, setInitializingAll] = useState(false);
 
   const canAccess = isAdmin || isHR;
 
@@ -293,6 +294,40 @@ export default function RoleManagement() {
 
   const initializedCount = teamMembers.filter(m => m.isInitialized).length;
   const notInitializedCount = teamMembers.length - initializedCount;
+  const uninitializedMembers = teamMembers.filter(m => !m.isInitialized);
+
+  const SHIFT_TYPES = ['morning', 'afternoon', 'night'] as const;
+
+  const handleInitializeAll = async () => {
+    if (uninitializedMembers.length === 0) {
+      toast.info('All members are already initialized');
+      return;
+    }
+
+    setInitializingAll(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const records = uninitializedMembers.map((member, index) => ({
+        member_id: member.id,
+        current_shift_type: SHIFT_TYPES[index % SHIFT_TYPES.length],
+        cycle_start_date: today,
+      }));
+
+      const { error } = await supabase
+        .from('member_rotation_state')
+        .insert(records);
+
+      if (error) throw error;
+
+      toast.success(`Initialized ${uninitializedMembers.length} members`);
+      fetchTeamMembers();
+    } catch (error) {
+      console.error('Error initializing members:', error);
+      toast.error('Failed to initialize members');
+    } finally {
+      setInitializingAll(false);
+    }
+  };
 
   const handleDeleteMemberClick = (member: TeamMember) => {
     setMemberToDelete(member);
@@ -925,6 +960,21 @@ export default function RoleManagement() {
                       <SelectItem value="not-initialized">Not Initialized</SelectItem>
                     </SelectContent>
                   </Select>
+                  {notInitializedCount > 0 && (
+                    <Button 
+                      onClick={handleInitializeAll} 
+                      disabled={initializingAll}
+                      variant="outline"
+                      className="border-amber-500/50 text-amber-700 hover:bg-amber-500/10"
+                    >
+                      {initializingAll ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                      )}
+                      Initialize All ({notInitializedCount})
+                    </Button>
+                  )}
                   <BulkTeamAssignment 
                     teamMembers={teamMembers.map(m => ({ 
                       id: m.id, 
