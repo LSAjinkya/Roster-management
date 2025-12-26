@@ -215,34 +215,7 @@ export function RotationConfigManager() {
         </div>
 
         {/* Example Pattern */}
-        <div className="p-4 rounded-lg bg-muted/50">
-          <h4 className="font-medium mb-3">Example: Dipali's Schedule</h4>
-          <div className="flex flex-wrap gap-2 text-sm">
-            <div className="flex items-center gap-2">
-              <Badge className={SHIFT_TYPE_COLORS[shiftSequence[0]]}>
-                Jan 1-14
-              </Badge>
-              <span>{SHIFT_TYPE_LABELS[shiftSequence[0]]}</span>
-              <span className="text-muted-foreground">(2+2 offs)</span>
-            </div>
-            <ArrowRight size={16} className="text-muted-foreground" />
-            <div className="flex items-center gap-2">
-              <Badge className={SHIFT_TYPE_COLORS[shiftSequence[1]]}>
-                Jan 15-28
-              </Badge>
-              <span>{SHIFT_TYPE_LABELS[shiftSequence[1]]}</span>
-              <span className="text-muted-foreground">(2+2 offs)</span>
-            </div>
-            <ArrowRight size={16} className="text-muted-foreground" />
-            <div className="flex items-center gap-2">
-              <Badge className={SHIFT_TYPE_COLORS[shiftSequence[2]]}>
-                Jan 29-Feb 11
-              </Badge>
-              <span>{SHIFT_TYPE_LABELS[shiftSequence[2]]}</span>
-              <span className="text-muted-foreground">(2+2 offs)</span>
-            </div>
-          </div>
-        </div>
+        
       </CardContent>
     </Card>;
 }
