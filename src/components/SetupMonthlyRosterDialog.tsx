@@ -369,7 +369,10 @@ export function SetupMonthlyRosterDialog({
               shouldBeOff = true;
             }
           }
-          if (shouldBeOff) {
+          // Check if member is in the middle of consecutive off days (for general shift)
+          const isInConsecutiveOffGeneral = t.offDaysRemaining < t.weekOffEntitlement && t.consecutiveWorkDays === 0;
+
+          if (shouldBeOff || isInConsecutiveOffGeneral) {
             assignments.push({
               member_id: member.id,
               shift_type: 'week-off',
@@ -450,7 +453,10 @@ export function SetupMonthlyRosterDialog({
           // ASSIGN SHIFT OR WEEK-OFF
           // ========================
 
-          if (shouldBeOff) {
+          // Check if member is in the middle of consecutive off days
+          const isInConsecutiveOff = tracker.offDaysRemaining < tracker.weekOffEntitlement && tracker.consecutiveWorkDays === 0;
+
+          if (shouldBeOff || isInConsecutiveOff) {
             assignments.push({
               member_id: member.id,
               shift_type: 'week-off',
@@ -461,7 +467,7 @@ export function SetupMonthlyRosterDialog({
             tracker.offDaysRemaining--;
             tracker.offDaysInRolling7.push(dayIndex);
 
-            // Reset off entitlement after all OFFs given
+            // Reset off entitlement after all OFFs given (consecutive days completed)
             if (tracker.offDaysRemaining <= 0) {
               tracker.offDaysRemaining = tracker.weekOffEntitlement;
 
