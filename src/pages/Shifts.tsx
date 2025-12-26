@@ -3,8 +3,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { SHIFT_DEFINITIONS, TeamMember, Department, Role } from '@/types/roster';
 import { ShiftBadge } from '@/components/ShiftBadge';
 import { ShiftHistoryLog } from '@/components/ShiftHistoryLog';
-import { SwapRequestsManager } from '@/components/SwapRequestsManager';
-import { Clock, Users, History, ArrowLeftRight } from 'lucide-react';
+import { Clock, Users, History } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -50,7 +49,7 @@ export default function Shifts() {
     <div className="flex flex-col h-full">
       <DashboardHeader 
         title="Shift Management" 
-        subtitle="Configure shifts, view history, and manage swap requests" 
+        subtitle="Configure shifts and view history" 
       />
       
       <div className="flex-1 overflow-auto p-6">
@@ -59,10 +58,6 @@ export default function Shifts() {
             <TabsTrigger value="definitions" className="gap-2">
               <Clock size={16} />
               Shift Definitions
-            </TabsTrigger>
-            <TabsTrigger value="swaps" className="gap-2">
-              <ArrowLeftRight size={16} />
-              Swap Requests
             </TabsTrigger>
             <TabsTrigger value="history" className="gap-2">
               <History size={16} />
@@ -137,15 +132,6 @@ export default function Shifts() {
             </div>
           </TabsContent>
 
-          <TabsContent value="swaps">
-            <div className="bg-card rounded-xl border border-border/50 p-6">
-              <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                <ArrowLeftRight size={20} />
-                Swap Requests
-              </h2>
-              <SwapRequestsManager teamMembers={teamMembers} />
-            </div>
-          </TabsContent>
 
           <TabsContent value="history">
             <div className="bg-card rounded-xl border border-border/50 p-6">

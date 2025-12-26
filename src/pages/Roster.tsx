@@ -9,16 +9,13 @@ import { DepartmentSheetView } from '@/components/DepartmentSheetView';
 import { ExportDropdown } from '@/components/ExportDropdown';
 import { SetupMonthlyRosterDialog } from '@/components/SetupMonthlyRosterDialog';
 import { RotationPreview } from '@/components/RotationPreview';
-import { SwapRequestsManager } from '@/components/SwapRequestsManager';
 import { teamMembers as mockTeamMembers } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, ArrowLeftRight, CheckCircle2, AlertCircle, Clock, Loader2 } from 'lucide-react';
+import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, CheckCircle2, AlertCircle, Clock, Loader2 } from 'lucide-react';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { TeamMember, Department, Role, TeamGroup, ShiftAssignment, ShiftType } from '@/types/roster';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -32,14 +29,12 @@ export default function Roster() {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(mockTeamMembers);
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([]);
-  const [pendingSwapCount, setPendingSwapCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchTeamMembers();
     fetchDepartments();
     fetchAssignments();
-    fetchPendingSwapCount();
   }, []);
 
   const fetchTeamMembers = async () => {
@@ -135,19 +130,6 @@ export default function Roster() {
     }
   };
 
-  const fetchPendingSwapCount = async () => {
-    try {
-      const { count, error } = await supabase
-        .from('swap_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
-
-      if (error) throw error;
-      setPendingSwapCount(count || 0);
-    } catch (error) {
-      console.error('Error fetching swap count:', error);
-    }
-  };
 
   // Determine roster status based on current month's data
   const rosterStatus = useMemo((): RosterStatus => {
@@ -213,7 +195,6 @@ export default function Roster() {
 
   const handleRefresh = () => {
     fetchAssignments();
-    fetchPendingSwapCount();
   };
 
   return (
@@ -240,40 +221,11 @@ export default function Roster() {
           </TooltipProvider>
 
           {canEditShifts && (
-            <>
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button variant="outline" className="gap-2 relative">
-                    <ArrowLeftRight size={16} />
-                    Swap Requests
-                    {pendingSwapCount > 0 && (
-                      <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
-                        {pendingSwapCount}
-                      </Badge>
-                    )}
-                  </Button>
-                </SheetTrigger>
-                <SheetContent className="w-[500px] sm:max-w-[500px]">
-                  <SheetHeader>
-                    <SheetTitle>Shift Swap Requests</SheetTitle>
-                    <SheetDescription>
-                      Review and approve shift swap requests from team members
-                    </SheetDescription>
-                  </SheetHeader>
-                  <div className="mt-6">
-                    <SwapRequestsManager 
-                      teamMembers={teamMembers} 
-                      onApproved={handleRefresh} 
-                    />
-                  </div>
-                </SheetContent>
-              </Sheet>
-              <SetupMonthlyRosterDialog 
-                teamMembers={teamMembers} 
-                departments={departments}
-                onComplete={handleRefresh}
-              />
-            </>
+            <SetupMonthlyRosterDialog 
+              teamMembers={teamMembers} 
+              departments={departments}
+              onComplete={handleRefresh}
+            />
           )}
           
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>

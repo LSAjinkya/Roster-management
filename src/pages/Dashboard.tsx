@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { StatCard } from '@/components/StatCard';
 import { ShiftBadge } from '@/components/ShiftBadge';
@@ -8,7 +8,8 @@ import { LeaveSummaryWidget } from '@/components/LeaveSummaryWidget';
 import { LeaveBalanceTracker } from '@/components/LeaveBalanceTracker';
 import { LowLeaveBalanceAlert } from '@/components/LowLeaveBalanceAlert';
 import { RolePermissionBadge } from '@/components/PermissionIndicator';
-import { SHIFT_DEFINITIONS } from '@/types/roster';
+import { SwapRequestsManager } from '@/components/SwapRequestsManager';
+import { SHIFT_DEFINITIONS, TeamMember, Department, Role } from '@/types/roster';
 import { Users, Calendar, Building2, TrendingUp, ArrowRightLeft, Plus, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -16,8 +17,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Badge } from '@/components/ui/badge';
 
 export default function Dashboard() {
+  const [swapSheetOpen, setSwapSheetOpen] = useState(false);
   const { isAdmin, isHR, isTL } = useAuth();
   const queryClient = useQueryClient();
   const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -30,13 +34,24 @@ export default function Dashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('team_members')
-        .select('id, name, department, status, role');
+        .select('id, name, email, department, status, role, reporting_tl_id');
       
       if (error) throw error;
       return data || [];
     },
     refetchInterval: 30000, // Refetch every 30 seconds
   });
+
+  // Map team members for SwapRequestsManager
+  const teamMembersForSwap: TeamMember[] = (teamMembersData || []).map(m => ({
+    id: m.id,
+    name: m.name,
+    email: m.email,
+    role: m.role as Role,
+    department: m.department as Department,
+    status: (m.status as 'available' | 'on-leave' | 'unavailable') || 'available',
+    reportingTLId: m.reporting_tl_id || undefined,
+  }));
 
   // Fetch departments from database
   const { data: departmentsData, isLoading: deptsLoading } = useQuery({
@@ -179,15 +194,41 @@ export default function Dashboard() {
                 iconColor="text-shift-afternoon"
               />
               {canSeeSwapRequests && (
-                <Link to="/shifts" className="block">
-                  <StatCard
-                    title="Pending Swaps"
-                    value={pendingSwapCount}
-                    subtitle="Awaiting approval"
-                    icon={ArrowRightLeft}
-                    iconColor={pendingSwapCount > 0 ? "text-amber-500" : "text-muted-foreground"}
-                  />
-                </Link>
+                <Sheet open={swapSheetOpen} onOpenChange={setSwapSheetOpen}>
+                  <SheetTrigger asChild>
+                    <div className="cursor-pointer relative">
+                      <StatCard
+                        title="Pending Swaps"
+                        value={pendingSwapCount}
+                        subtitle="Click to review"
+                        icon={ArrowRightLeft}
+                        iconColor={pendingSwapCount > 0 ? "text-amber-500" : "text-muted-foreground"}
+                      />
+                      {pendingSwapCount > 0 && (
+                        <Badge variant="destructive" className="absolute -top-2 -right-2 h-6 w-6 p-0 flex items-center justify-center text-xs">
+                          {pendingSwapCount}
+                        </Badge>
+                      )}
+                    </div>
+                  </SheetTrigger>
+                  <SheetContent className="w-[500px] sm:max-w-[500px]">
+                    <SheetHeader>
+                      <SheetTitle>Shift Swap Requests</SheetTitle>
+                      <SheetDescription>
+                        Review and approve shift swap requests from team members
+                      </SheetDescription>
+                    </SheetHeader>
+                    <div className="mt-6">
+                      <SwapRequestsManager 
+                        teamMembers={teamMembersForSwap} 
+                        onApproved={() => {
+                          queryClient.invalidateQueries({ queryKey: ['pending-swap-count'] });
+                          queryClient.invalidateQueries({ queryKey: ['dashboard-shifts'] });
+                        }} 
+                      />
+                    </div>
+                  </SheetContent>
+                </Sheet>
               )}
               <StatCard
                 title="Departments"
