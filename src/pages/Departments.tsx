@@ -574,7 +574,7 @@ export default function Departments() {
                         Assign Head
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56 z-50 bg-popover">
+                    <DropdownMenuContent align="end" className="w-56">
                       <DropdownMenuLabel>Select TL/Manager</DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       {selectedDeptData.members.filter(m => m.role === 'Manager' || m.role === 'TL').map(member => (
@@ -629,7 +629,7 @@ export default function Departments() {
                       <SelectTrigger className="w-24">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="z-50 bg-popover">
+                      <SelectContent>
                         {ROLES.map((role) => (
                           <SelectItem key={role} value={role}>
                             <Badge variant="outline" className={ROLE_COLORS[role] || ''}>
@@ -647,7 +647,7 @@ export default function Departments() {
                       <SelectTrigger className="w-32">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="z-50 bg-popover">
+                      <SelectContent>
                         {(['available', 'on-leave', 'unavailable']).map((status) => (
                           <SelectItem key={status} value={status}>
                             <span className={`capitalize ${STATUS_COLORS[status]}`}>
@@ -664,7 +664,7 @@ export default function Departments() {
                           <Edit2 className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48 z-50 bg-popover">
+                      <DropdownMenuContent align="end" className="w-48">
                         <DropdownMenuLabel>Move to Department</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         {departments.filter(d => d.name !== member.department).map(dept => (
@@ -824,7 +824,7 @@ export default function Departments() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select department head" />
                 </SelectTrigger>
-                <SelectContent className="bg-popover">
+                <SelectContent>
                   <SelectItem value="none">No department head</SelectItem>
                   {teamMembers
                     .filter(m => m.department === deptToEdit?.name && (m.role === 'TL' || m.role === 'Manager'))
