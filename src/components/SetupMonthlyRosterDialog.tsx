@@ -271,6 +271,7 @@ export function SetupMonthlyRosterDialog({
       currentShift: ShiftType; // Current assigned shift type
       lastShiftType: ShiftType | null; // Previous shift for night transition check
       pendingNightTransition: boolean; // Need rest before night
+      pendingShiftRotation: boolean; // Rotation pending, apply after next OFF cycle
       offDaysInRolling7: number[]; // Track OFF days in rolling 7-day window
     }
     const memberTrackers: Record<string, MemberCycleTracker> = {};
@@ -298,6 +299,7 @@ export function SetupMonthlyRosterDialog({
         currentShift: (prevState?.shift || rotationState?.current_shift_type || SHIFT_ROTATION_ORDER[0]) as ShiftType,
         lastShiftType: null,
         pendingNightTransition,
+        pendingShiftRotation: false,
         offDaysInRolling7: []
       };
     });
@@ -347,6 +349,7 @@ export function SetupMonthlyRosterDialog({
               currentShift: 'general',
               lastShiftType: null,
               pendingNightTransition: false,
+              pendingShiftRotation: false,
               offDaysInRolling7: []
             };
           }
@@ -471,8 +474,9 @@ export function SetupMonthlyRosterDialog({
             if (tracker.offDaysRemaining <= 0) {
               tracker.offDaysRemaining = tracker.weekOffEntitlement;
 
-              // Check for shift rotation after completing OFF cycle
-              if (tracker.workDaysInCurrentShift >= SHIFT_STABILITY_WORK_DAYS) {
+              // Apply pending shift rotation ONLY after OFF cycle completes
+              // This ensures no mid-week shift changes within a 5-day work block
+              if (tracker.pendingShiftRotation || tracker.workDaysInCurrentShift >= SHIFT_STABILITY_WORK_DAYS) {
                 const currentIndex = SHIFT_ROTATION_ORDER.indexOf(tracker.currentShift as any);
                 const nextIndex = (currentIndex + 1) % SHIFT_ROTATION_ORDER.length;
                 const nextShift = SHIFT_ROTATION_ORDER[nextIndex] as ShiftType;
@@ -483,28 +487,22 @@ export function SetupMonthlyRosterDialog({
                 }
                 tracker.currentShift = nextShift;
                 tracker.workDaysInCurrentShift = 0;
+                tracker.pendingShiftRotation = false;
               }
             }
             return;
           }
 
           // WORK DAY - assign current shift
-          let currentShift = tracker.currentShift;
+          // NOTE: Shift rotation only happens AFTER OFF days (see lines 475-486)
+          // This ensures no mid-week shift changes within a 5-day work block
+          const currentShift = tracker.currentShift;
 
-          // Check if we need to rotate shift (after 10 work days on same shift)
-          if (tracker.workDaysInCurrentShift >= SHIFT_STABILITY_WORK_DAYS) {
-            const currentIndex = SHIFT_ROTATION_ORDER.indexOf(currentShift as any);
-            const nextIndex = (currentIndex + 1) % SHIFT_ROTATION_ORDER.length;
-            const nextShift = SHIFT_ROTATION_ORDER[nextIndex] as ShiftType;
-
-            // Night shift safety: need rest before transitioning TO night
-            if (nextShift === 'night' && currentShift !== 'night') {
-              tracker.pendingNightTransition = true;
-            }
-            currentShift = nextShift;
-            tracker.currentShift = currentShift;
-            tracker.workDaysInCurrentShift = 0;
+          // Track if rotation is pending (will apply after next OFF cycle)
+          if (tracker.workDaysInCurrentShift >= SHIFT_STABILITY_WORK_DAYS && !tracker.pendingShiftRotation) {
+            tracker.pendingShiftRotation = true;
           }
+
           assignments.push({
             member_id: member.id,
             shift_type: currentShift,
