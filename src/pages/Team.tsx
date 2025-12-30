@@ -3,7 +3,7 @@ import { DashboardHeader } from '@/components/DashboardHeader';
 import { TeamOverview } from '@/components/TeamOverview';
 import { TeamRosterView } from '@/components/TeamRosterView';
 import { supabase } from '@/integrations/supabase/client';
-import { TeamMember, Department, Role, ShiftAssignment } from '@/types/roster';
+import { TeamMember, Department, Role, ShiftAssignment, WorkLocation } from '@/types/roster';
 import { Loader2, Users, LayoutGrid } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format } from 'date-fns';
@@ -13,13 +13,30 @@ type ViewMode = 'overview' | 'team';
 export default function Team() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
+  const [workLocations, setWorkLocations] = useState<WorkLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('overview');
 
   useEffect(() => {
+    fetchWorkLocations();
     fetchTeamMembers();
     fetchAssignments();
   }, []);
+
+  const fetchWorkLocations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('work_locations')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+      setWorkLocations(data || []);
+    } catch (error) {
+      console.error('Error fetching work locations:', error);
+    }
+  };
 
   const fetchTeamMembers = async () => {
     try {
@@ -40,6 +57,7 @@ export default function Team() {
         status: (member.status as 'available' | 'on-leave' | 'unavailable') || 'available',
         reportingTLId: member.reporting_tl_id || undefined,
         weekOffEntitlement: (member.week_off_entitlement as 1 | 2) || 2,
+        workLocationId: member.work_location_id || undefined,
       }));
 
       setMembers(teamMembers);
@@ -112,7 +130,7 @@ export default function Team() {
           </Tabs>
 
           {viewMode === 'overview' && (
-            <TeamOverview members={members} onMemberUpdate={fetchTeamMembers} />
+            <TeamOverview members={members} workLocations={workLocations} onMemberUpdate={fetchTeamMembers} />
           )}
           {viewMode === 'team' && (
             <TeamRosterView 

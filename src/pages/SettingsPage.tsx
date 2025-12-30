@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Settings, Bell, Shield, Clock, Save, User, Loader2, Link2, KeyRound, CalendarCog } from 'lucide-react';
+import { Settings, Bell, Shield, Clock, Save, User, Loader2, Link2, KeyRound, CalendarCog, MapPin } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,6 +16,7 @@ import { GoogleDomainSettings } from '@/components/GoogleDomainSettings';
 import { ShiftCompositionRulesManager } from '@/components/ShiftCompositionRulesManager';
 import { RotationConfigManager } from '@/components/RotationConfigManager';
 import { MemberRotationInitializer } from '@/components/MemberRotationInitializer';
+import { WorkLocationManager } from '@/components/WorkLocationManager';
 type UserStatus = 'available' | 'on-leave' | 'unavailable';
 const STATUS_LABELS: Record<UserStatus, string> = {
   available: 'Available',
@@ -283,6 +284,18 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Work Locations - Admin Only */}
+        {isAdmin && <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+            <div className="p-4 border-b border-border/50 flex items-center gap-3">
+              <MapPin size={20} className="text-muted-foreground" />
+              <h2 className="font-semibold">Work Locations</h2>
+              <Badge variant="outline" className="ml-auto">Admin Only</Badge>
+            </div>
+            <div className="p-6">
+              <WorkLocationManager />
+            </div>
+          </div>}
 
         {/* Shift Rules - Admin Only */}
         {isAdmin && <div className="bg-card rounded-xl border border-border/50 overflow-hidden">

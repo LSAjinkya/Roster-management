@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShiftType, SHIFT_DEFINITIONS, TeamMember } from '@/types/roster';
+import { ShiftType, SHIFT_DEFINITIONS, TeamMember, WorkLocation } from '@/types/roster';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,11 +10,12 @@ import {
 } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, MapPin } from 'lucide-react';
 
 interface ShiftEditDialogProps {
   open: boolean;
@@ -22,7 +23,9 @@ interface ShiftEditDialogProps {
   member: TeamMember | null;
   date: Date | null;
   currentShift: ShiftType | null;
-  onSave: (memberId: string, date: string, shiftType: ShiftType | 'off') => void;
+  currentWorkLocationId?: string | null;
+  workLocations?: WorkLocation[];
+  onSave: (memberId: string, date: string, shiftType: ShiftType | 'off', workLocationId?: string | null) => void;
 }
 
 const shiftColors: Record<ShiftType | 'off', string> = {
@@ -44,17 +47,21 @@ export function ShiftEditDialog({
   member,
   date,
   currentShift,
+  currentWorkLocationId,
+  workLocations = [],
   onSave,
 }: ShiftEditDialogProps) {
   const [selectedShift, setSelectedShift] = useState<ShiftType | 'off'>(currentShift || 'off');
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(currentWorkLocationId || null);
   const [saving, setSaving] = useState(false);
 
   // Reset selected shift when dialog opens with new data
   useEffect(() => {
     if (open) {
       setSelectedShift(currentShift || 'off');
+      setSelectedLocationId(currentWorkLocationId || member?.workLocationId || null);
     }
-  }, [open, currentShift]);
+  }, [open, currentShift, currentWorkLocationId, member]);
 
   const handleSave = async () => {
     if (!member || !date) return;
@@ -74,7 +81,7 @@ export function ShiftEditDialog({
 
       if (deleteError) throw deleteError;
 
-      // If not "off", insert the new assignment
+      // If not "off", insert the new assignment with optional location override
       if (selectedShift !== 'off') {
         const { error: insertError } = await supabase
           .from('shift_assignments')
@@ -83,6 +90,7 @@ export function ShiftEditDialog({
             shift_type: selectedShift,
             date: dateStr,
             department: member.department,
+            work_location_id: selectedLocationId,
           });
 
         if (insertError) throw insertError;
@@ -103,7 +111,7 @@ export function ShiftEditDialog({
       });
 
       toast.success('Shift updated successfully');
-      onSave(member.id, dateStr, selectedShift);
+      onSave(member.id, dateStr, selectedShift, selectedLocationId);
       onOpenChange(false);
     } catch (error) {
       console.error('Error saving shift:', error);
@@ -220,6 +228,30 @@ export function ShiftEditDialog({
               </Label>
             </div>
           </RadioGroup>
+
+          {/* Work Location Override */}
+          {workLocations.length > 0 && selectedShift !== 'off' && (
+            <div className="space-y-2 pt-2 border-t">
+              <Label className="flex items-center gap-2">
+                <MapPin size={14} />
+                Work Location (for this shift)
+              </Label>
+              <Select 
+                value={selectedLocationId || 'default'} 
+                onValueChange={(v) => setSelectedLocationId(v === 'default' ? null : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Use default location" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="default">Use member's default</SelectItem>
+                  {workLocations.map(loc => (
+                    <SelectItem key={loc.id} value={loc.id}>{loc.name} ({loc.code})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-3">
