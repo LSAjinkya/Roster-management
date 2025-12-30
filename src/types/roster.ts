@@ -62,6 +62,16 @@ export interface ShiftDefinition {
   color: string;
 }
 
+export interface WorkLocation {
+  id: string;
+  name: string;
+  code: string;
+  address?: string | null;
+  min_night_shift_count: number;
+  work_from_home_if_below_min: boolean;
+  is_active: boolean;
+}
+
 export interface TeamMember {
   id: string;
   name: string;
@@ -73,6 +83,8 @@ export interface TeamMember {
   status: 'available' | 'on-leave' | 'unavailable';
   reportingTLId?: string; // Assigned based on department
   weekOffEntitlement?: 1 | 2; // 1 or 2 OFF days per cycle (default: 2)
+  workLocationId?: string; // Default work location
+  workLocation?: WorkLocation; // Populated work location data
 }
 
 export interface ShiftAssignment {
@@ -81,6 +93,8 @@ export interface ShiftAssignment {
   shiftType: ShiftType;
   date: string;
   department: Department;
+  workLocationId?: string; // Override work location for this shift
+  workLocation?: WorkLocation; // Populated work location data
 }
 
 export interface DailyRoster {

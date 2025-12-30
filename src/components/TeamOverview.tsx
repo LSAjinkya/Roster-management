@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { TeamMember, Department, Role, DEPARTMENTS, ROLES } from '@/types/roster';
+import { TeamMember, Department, Role, DEPARTMENTS, ROLES, WorkLocation } from '@/types/roster';
 import { TeamMemberCard } from './TeamMemberCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Users, Grid, List, LayoutGrid, Building2, ChevronDown, ChevronUp, Mail, Circle, GripVertical } from 'lucide-react';
+import { Search, Users, Grid, List, LayoutGrid, Building2, ChevronDown, ChevronUp, Mail, Circle, GripVertical, MapPin } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 
 interface TeamOverviewProps {
   members: TeamMember[];
+  workLocations?: WorkLocation[];
   onMemberUpdate?: () => void;
 }
 
@@ -51,20 +52,45 @@ const STATUS_COLORS: Record<string, string> = {
   'unavailable': 'text-red-500',
 };
 
-export function TeamOverview({ members, onMemberUpdate }: TeamOverviewProps) {
+export function TeamOverview({ members, workLocations = [], onMemberUpdate }: TeamOverviewProps) {
   const [search, setSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'all'>('all');
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
+  const [locationFilter, setLocationFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'roles' | 'departments'>('roles');
   const [expandedRoles, setExpandedRoles] = useState<Set<Role>>(new Set());
   const [expandedDepts, setExpandedDepts] = useState<Set<Department>>(new Set());
+
+  const getLocationName = (locationId?: string) => {
+    if (!locationId) return 'Unassigned';
+    const loc = workLocations.find(l => l.id === locationId);
+    return loc?.name || 'Unknown';
+  };
+
+  const handleLocationChange = async (memberId: string, locationId: string | null) => {
+    try {
+      const { error } = await supabase
+        .from('team_members')
+        .update({ work_location_id: locationId })
+        .eq('id', memberId);
+
+      if (error) throw error;
+      toast.success('Work location updated');
+      onMemberUpdate?.();
+    } catch (error) {
+      console.error('Error updating work location:', error);
+      toast.error('Failed to update work location');
+    }
+  };
 
   const filteredMembers = members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(search.toLowerCase()) ||
                          member.email.toLowerCase().includes(search.toLowerCase());
     const matchesDepartment = departmentFilter === 'all' || member.department === departmentFilter;
     const matchesRole = roleFilter === 'all' || member.role === roleFilter;
-    return matchesSearch && matchesDepartment && matchesRole;
+    const matchesLocation = locationFilter === 'all' || 
+                           (locationFilter === 'unassigned' ? !member.workLocationId : member.workLocationId === locationFilter);
+    return matchesSearch && matchesDepartment && matchesRole && matchesLocation;
   });
 
   const departmentCounts = DEPARTMENTS.reduce((acc, dept) => {
@@ -217,6 +243,20 @@ export function TeamOverview({ members, onMemberUpdate }: TeamOverviewProps) {
               ))}
             </SelectContent>
           </Select>
+          {workLocations.length > 0 && (
+            <Select value={locationFilter} onValueChange={setLocationFilter}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Location" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All Locations</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {workLocations.map(loc => (
+                  <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
@@ -376,6 +416,23 @@ export function TeamOverview({ members, onMemberUpdate }: TeamOverviewProps) {
                                       <Badge variant="outline" className="text-xs">
                                         {member.department}
                                       </Badge>
+                                      {workLocations.length > 0 && (
+                                        <Select 
+                                          value={member.workLocationId || 'unassigned'} 
+                                          onValueChange={(v) => handleLocationChange(member.id, v === 'unassigned' ? null : v)}
+                                        >
+                                          <SelectTrigger className="h-7 w-[120px] text-xs">
+                                            <MapPin size={12} className="mr-1" />
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent className="bg-popover">
+                                            <SelectItem value="unassigned">Unassigned</SelectItem>
+                                            {workLocations.map(loc => (
+                                              <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      )}
                                       <div className="flex items-center gap-1.5">
                                         <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
                                         <span className={`text-xs capitalize ${STATUS_COLORS[member.status]}`}>

@@ -440,6 +440,7 @@ export type Database = {
           member_id: string
           shift_type: string
           updated_at: string
+          work_location_id: string | null
         }
         Insert: {
           created_at?: string
@@ -450,6 +451,7 @@ export type Database = {
           member_id: string
           shift_type: string
           updated_at?: string
+          work_location_id?: string | null
         }
         Update: {
           created_at?: string
@@ -460,8 +462,17 @@ export type Database = {
           member_id?: string
           shift_type?: string
           updated_at?: string
+          work_location_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "shift_assignments_work_location_id_fkey"
+            columns: ["work_location_id"]
+            isOneToOne: false
+            referencedRelation: "work_locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       shift_composition_rules: {
         Row: {
@@ -635,6 +646,7 @@ export type Database = {
           team: string | null
           updated_at: string
           week_off_entitlement: number
+          work_location_id: string | null
         }
         Insert: {
           created_at?: string
@@ -649,6 +661,7 @@ export type Database = {
           team?: string | null
           updated_at?: string
           week_off_entitlement?: number
+          work_location_id?: string | null
         }
         Update: {
           created_at?: string
@@ -663,6 +676,7 @@ export type Database = {
           team?: string | null
           updated_at?: string
           week_off_entitlement?: number
+          work_location_id?: string | null
         }
         Relationships: [
           {
@@ -670,6 +684,13 @@ export type Database = {
             columns: ["datacenter_id"]
             isOneToOne: false
             referencedRelation: "datacenters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_members_work_location_id_fkey"
+            columns: ["work_location_id"]
+            isOneToOne: false
+            referencedRelation: "work_locations"
             referencedColumns: ["id"]
           },
         ]
@@ -722,6 +743,42 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      work_locations: {
+        Row: {
+          address: string | null
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          min_night_shift_count: number
+          name: string
+          updated_at: string
+          work_from_home_if_below_min: boolean
+        }
+        Insert: {
+          address?: string | null
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          min_night_shift_count?: number
+          name: string
+          updated_at?: string
+          work_from_home_if_below_min?: boolean
+        }
+        Update: {
+          address?: string | null
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          min_night_shift_count?: number
+          name?: string
+          updated_at?: string
+          work_from_home_if_below_min?: boolean
         }
         Relationships: []
       }
