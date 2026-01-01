@@ -4,7 +4,7 @@ import { TeamMemberCard } from './TeamMemberCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Users, Grid, List, LayoutGrid, Building2, ChevronDown, ChevronUp, Mail, Circle, GripVertical, MapPin } from 'lucide-react';
+import { Search, Users, Grid, List, LayoutGrid, Building2, ChevronDown, ChevronUp, Mail, Circle, GripVertical, MapPin, Home } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -17,6 +17,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { HybridWorkSettings } from './HybridWorkSettings';
 
 interface TeamOverviewProps {
   members: TeamMember[];
@@ -433,6 +434,14 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
                                           </SelectContent>
                                         </Select>
                                       )}
+                                      <HybridWorkSettings
+                                        memberId={member.id}
+                                        memberName={member.name}
+                                        isHybrid={member.isHybrid}
+                                        officeDays={member.hybridOfficeDays}
+                                        wfhDays={member.hybridWfhDays}
+                                        onUpdate={onMemberUpdate}
+                                      />
                                       <div className="flex items-center gap-1.5">
                                         <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
                                         <span className={`text-xs capitalize ${STATUS_COLORS[member.status]}`}>

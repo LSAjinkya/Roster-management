@@ -9,6 +9,7 @@ import { DepartmentSheetView } from '@/components/DepartmentSheetView';
 import { ExportDropdown } from '@/components/ExportDropdown';
 import { SetupMonthlyRosterDialog } from '@/components/SetupMonthlyRosterDialog';
 import { RotationPreview } from '@/components/RotationPreview';
+import { RosterImportDialog } from '@/components/RosterImportDialog';
 import { teamMembers as mockTeamMembers } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, CheckCircle2, AlertCircle, Clock, Loader2 } from 'lucide-react';
@@ -222,11 +223,14 @@ export default function Roster() {
           </TooltipProvider>
 
           {canEditShifts && (
-            <SetupMonthlyRosterDialog 
-              teamMembers={teamMembers} 
-              departments={departments}
-              onComplete={handleRefresh}
-            />
+            <>
+              <RosterImportDialog onImportComplete={handleRefresh} />
+              <SetupMonthlyRosterDialog 
+                teamMembers={teamMembers} 
+                departments={departments}
+                onComplete={handleRefresh}
+              />
+            </>
           )}
 
           {showExport && (

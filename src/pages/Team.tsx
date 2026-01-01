@@ -32,7 +32,18 @@ export default function Team() {
         .order('name');
 
       if (error) throw error;
-      setWorkLocations(data || []);
+      const locations: WorkLocation[] = (data || []).map(loc => ({
+        id: loc.id,
+        name: loc.name,
+        code: loc.code,
+        address: loc.address,
+        min_night_shift_count: loc.min_night_shift_count,
+        work_from_home_if_below_min: loc.work_from_home_if_below_min,
+        is_active: loc.is_active,
+        location_type: loc.location_type as WorkLocation['location_type'],
+        city: loc.city || undefined,
+      }));
+      setWorkLocations(locations);
     } catch (error) {
       console.error('Error fetching work locations:', error);
     }
@@ -58,6 +69,9 @@ export default function Team() {
         reportingTLId: member.reporting_tl_id || undefined,
         weekOffEntitlement: (member.week_off_entitlement as 1 | 2) || 2,
         workLocationId: member.work_location_id || undefined,
+        isHybrid: member.is_hybrid || false,
+        hybridOfficeDays: member.hybrid_office_days || 5,
+        hybridWfhDays: member.hybrid_wfh_days || 0,
       }));
 
       setMembers(teamMembers);

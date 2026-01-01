@@ -638,7 +638,10 @@ export type Database = {
           datacenter_id: string | null
           department: string
           email: string
+          hybrid_office_days: number | null
+          hybrid_wfh_days: number | null
           id: string
+          is_hybrid: boolean | null
           name: string
           reporting_tl_id: string | null
           role: string
@@ -653,7 +656,10 @@ export type Database = {
           datacenter_id?: string | null
           department: string
           email: string
+          hybrid_office_days?: number | null
+          hybrid_wfh_days?: number | null
           id: string
+          is_hybrid?: boolean | null
           name: string
           reporting_tl_id?: string | null
           role: string
@@ -668,7 +674,10 @@ export type Database = {
           datacenter_id?: string | null
           department?: string
           email?: string
+          hybrid_office_days?: number | null
+          hybrid_wfh_days?: number | null
           id?: string
+          is_hybrid?: boolean | null
           name?: string
           reporting_tl_id?: string | null
           role?: string
@@ -749,10 +758,12 @@ export type Database = {
       work_locations: {
         Row: {
           address: string | null
+          city: string | null
           code: string
           created_at: string
           id: string
           is_active: boolean
+          location_type: string | null
           min_night_shift_count: number
           name: string
           updated_at: string
@@ -760,10 +771,12 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          city?: string | null
           code: string
           created_at?: string
           id?: string
           is_active?: boolean
+          location_type?: string | null
           min_night_shift_count?: number
           name: string
           updated_at?: string
@@ -771,10 +784,12 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          city?: string | null
           code?: string
           created_at?: string
           id?: string
           is_active?: boolean
+          location_type?: string | null
           min_night_shift_count?: number
           name?: string
           updated_at?: string

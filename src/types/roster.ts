@@ -70,6 +70,14 @@ export interface WorkLocation {
   min_night_shift_count: number;
   work_from_home_if_below_min: boolean;
   is_active: boolean;
+  location_type?: 'office' | 'datacenter' | 'remote';
+  city?: string;
+}
+
+export interface HybridWorkSettings {
+  isHybrid: boolean;
+  officeDays: number;
+  wfhDays: number;
 }
 
 export interface TeamMember {
@@ -85,6 +93,10 @@ export interface TeamMember {
   weekOffEntitlement?: 1 | 2; // 1 or 2 OFF days per cycle (default: 2)
   workLocationId?: string; // Default work location
   workLocation?: WorkLocation; // Populated work location data
+  // Hybrid working settings
+  isHybrid?: boolean;
+  hybridOfficeDays?: number; // e.g., 3 days in office
+  hybridWfhDays?: number; // e.g., 2 days WFH
 }
 
 export interface ShiftAssignment {
