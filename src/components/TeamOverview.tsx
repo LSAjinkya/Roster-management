@@ -17,7 +17,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { MemberEditDialog } from './MemberEditDialog';
+import { MemberDetailDialog } from './MemberDetailDialog';
 
 interface TeamOverviewProps {
   members: TeamMember[];
@@ -382,10 +382,12 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
                                     className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 hover:bg-secondary transition-colors cursor-grab ${
                                       snapshot.isDragging ? 'shadow-lg ring-2 ring-primary' : ''
                                     }`}
+                                    onClick={() => handleOpenMemberEdit(member)}
                                   >
                                     <GripVertical size={12} className="text-muted-foreground" />
                                     <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
                                     <span className="text-sm font-medium">{member.name}</span>
+                                    <Settings size={12} className="text-muted-foreground hover:text-foreground" />
                                   </div>
                                 )}
                               </Draggable>
@@ -412,6 +414,17 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
                                           {getInitials(member.name)}
                                         </AvatarFallback>
                                       </Avatar>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenMemberEdit(member);
+                                        }}
+                                      >
+                                        <Settings size={14} />
+                                      </Button>
                                       <div>
                                         <p className="font-medium">{member.name}</p>
                                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -601,6 +614,7 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
                 key={member.id} 
                 member={member}
                 reportingTL={reportingTL}
+                onEdit={handleOpenMemberEdit}
                 className="animate-fade-in"
                 style={{ animationDelay: `${index * 30}ms` } as React.CSSProperties}
               />
@@ -621,6 +635,7 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
                 key={member.id} 
                 member={member} 
                 reportingTL={reportingTL}
+                onEdit={handleOpenMemberEdit}
                 compact 
                 className="hover:bg-secondary/30"
               />
@@ -636,12 +651,13 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
         </div>
       )}
 
-      {/* Member Edit Dialog */}
-      <MemberEditDialog
+      {/* Member Detail Dialog */}
+      <MemberDetailDialog
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         member={selectedMember}
         workLocations={workLocations}
+        allMembers={members}
         onUpdate={onMemberUpdate}
       />
     </div>
