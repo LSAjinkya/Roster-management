@@ -72,7 +72,7 @@ export function SetupMonthlyRosterDialog({
     warnings: any[];
   } | null>(null);
   const [publicHolidays, setPublicHolidays] = useState<string[]>([]);
-  const [selectedDepartment, setSelectedDepartment] = useState<string>('all');
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
 
   // 15-day rotation data
   const [rotationConfig, setRotationConfig] = useState<RotationConfig | null>(null);
@@ -80,11 +80,11 @@ export function SetupMonthlyRosterDialog({
   const [loadingRotation, setLoadingRotation] = useState(false);
   const [use15DayRotation, setUse15DayRotation] = useState(true);
 
-  // Filter team members by selected department
+  // Filter team members by selected departments
   const filteredTeamMembers = useMemo(() => {
-    if (selectedDepartment === 'all') return teamMembers;
-    return teamMembers.filter(m => m.department === selectedDepartment);
-  }, [teamMembers, selectedDepartment]);
+    if (selectedDepartments.length === 0) return teamMembers;
+    return teamMembers.filter(m => selectedDepartments.includes(m.department));
+  }, [teamMembers, selectedDepartments]);
 
   // Department shift configuration - Rotation order: Afternoon → Morning → Night
   const [deptConfigs, setDeptConfigs] = useState<DepartmentShiftConfig[]>(() => DEPARTMENTS.map(dept => ({
@@ -154,8 +154,16 @@ export function SetupMonthlyRosterDialog({
           // Sort by date descending to get most recent first
           assignments.sort((a, b) => b.date.localeCompare(a.date));
 
-          // Find the most recent non-off shift to determine current shift type
-          const lastWorkShift = assignments.find(a => 
+          // IMPORTANT: Exclude leave types (paid-leave, sick-leave) from continuity calculation
+          // Only consider actual work shifts and scheduled offs
+          const workableAssignments = assignments.filter(a => 
+            a.shift_type !== 'paid-leave' && 
+            a.shift_type !== 'sick-leave' &&
+            a.shift_type !== 'casual-leave'
+          );
+
+          // Find the most recent actual work shift (not OFF or leave)
+          const lastWorkShift = workableAssignments.find(a => 
             a.shift_type !== 'week-off' && 
             a.shift_type !== 'public-off' && 
             a.shift_type !== 'comp-off'
@@ -165,7 +173,7 @@ export function SetupMonthlyRosterDialog({
           let workDaysInCurrent = 0;
           let offDaysUsed = 0;
           
-          for (const a of assignments) {
+          for (const a of workableAssignments) {
             if (a.shift_type === 'week-off' || a.shift_type === 'public-off' || a.shift_type === 'comp-off') {
               offDaysUsed++;
               if (workDaysInCurrent > 0) {
@@ -747,30 +755,58 @@ export function SetupMonthlyRosterDialog({
         </DialogHeader>
 
         {step === 'config' ? <>
-            {/* Department Selector */}
+            {/* Department Multi-Selector */}
             <div className="rounded-lg border p-4 mb-4">
-              <div className="flex items-center justify-between">
+              <div className="space-y-3">
                 <div>
-                  <Label className="text-base">Select Department</Label>
+                  <Label className="text-base">Select Departments</Label>
                   <p className="text-sm text-muted-foreground">
-                    Choose which department to set up roster for
+                    Choose which departments to set up roster for (leave empty for all)
                   </p>
                 </div>
-                <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="All Departments" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {departments.map(dept => <SelectItem key={dept.id} value={dept.name}>
+                <div className="flex flex-wrap gap-2">
+                  {departments.map(dept => {
+                    const isSelected = selectedDepartments.includes(dept.name);
+                    const memberCount = teamMembers.filter(m => m.department === dept.name).length;
+                    if (memberCount === 0) return null;
+                    return (
+                      <Button
+                        key={dept.id}
+                        variant={isSelected ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedDepartments(prev => prev.filter(d => d !== dept.name));
+                          } else {
+                            setSelectedDepartments(prev => [...prev, dept.name]);
+                          }
+                        }}
+                        className="gap-1"
+                      >
                         {dept.name}
-                      </SelectItem>)}
-                  </SelectContent>
-                </Select>
+                        <Badge variant="secondary" className="ml-1 text-xs">
+                          {memberCount}
+                        </Badge>
+                      </Button>
+                    );
+                  })}
+                </div>
+                {selectedDepartments.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-primary">
+                      Roster will be generated for {filteredTeamMembers.length} member(s) in {selectedDepartments.length} department(s)
+                    </p>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setSelectedDepartments([])}
+                      className="text-xs h-6"
+                    >
+                      Clear selection
+                    </Button>
+                  </div>
+                )}
               </div>
-              {selectedDepartment !== 'all' && <p className="text-sm text-primary mt-2">
-                  Roster will be generated for {filteredTeamMembers.length} member(s) in {selectedDepartment}
-                </p>}
             </div>
 
             <Tabs defaultValue="rotation" className="w-full">
@@ -968,7 +1004,7 @@ export function SetupMonthlyRosterDialog({
                     <span className="text-muted-foreground">Total Days:</span>
                     <span>{totalDays}</span>
                     <span className="text-muted-foreground">Department:</span>
-                    <span>{selectedDepartment === 'all' ? 'All Departments' : selectedDepartment}</span>
+                    <span>{selectedDepartments.length === 0 ? 'All Departments' : selectedDepartments.join(', ')}</span>
                     <span className="text-muted-foreground">Team Members:</span>
                     <span>{filteredTeamMembers.length}</span>
                     <span className="text-muted-foreground">Rotation:</span>
