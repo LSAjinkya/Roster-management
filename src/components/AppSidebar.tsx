@@ -40,7 +40,8 @@ const navItems: NavItem[] = [
   { icon: Building2, label: 'Departments', path: '/departments', requiredRoles: ['admin', 'hr', 'tl'] },
   { icon: Network, label: 'Org Chart', path: '/org-chart' },
   { icon: Shield, label: 'Users & Roles', path: '/admin/roles', requiredRoles: ['admin', 'hr'] },
-  { icon: Grid3X3, label: 'Permissions', path: '/admin/permissions', requiredRoles: ['admin', 'hr'] },
+  // Permissions menu hidden per user request
+  // { icon: Grid3X3, label: 'Permissions', path: '/admin/permissions', requiredRoles: ['admin', 'hr'] },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
