@@ -10,7 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search, FileUp, Users, UserCheck, Trash2, Plus, Link2, Unlink, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, Shield, UserCog, LogIn, Upload, Clock, Filter, Search, FileUp, Users, UserCheck, Trash2, Plus, Link2, Unlink, RefreshCw, CheckCircle2, XCircle, Settings } from 'lucide-react';
+import { MemberDetailDialog } from '@/components/MemberDetailDialog';
+import { TeamMember as FullTeamMember, WorkLocation, Role as RosterRole, Department as RosterDepartment } from '@/types/roster';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -131,6 +133,11 @@ export default function RoleManagement() {
   const [syncing, setSyncing] = useState(false);
   const [linkingUser, setLinkingUser] = useState<string | null>(null);
   const [initializingAll, setInitializingAll] = useState(false);
+  
+  // Member detail dialog state
+  const [selectedMemberDetail, setSelectedMemberDetail] = useState<FullTeamMember | null>(null);
+  const [memberDetailOpen, setMemberDetailOpen] = useState(false);
+  const [workLocations, setWorkLocations] = useState<WorkLocation[]>([]);
 
   const canAccess = isAdmin || isHR;
 
@@ -148,8 +155,54 @@ export default function RoleManagement() {
       fetchUsers();
       fetchTeamMembers();
       fetchStatusHistory();
+      fetchWorkLocations();
     }
   }, [canAccess]);
+
+  const fetchWorkLocations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('work_locations')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) throw error;
+      const locations: WorkLocation[] = (data || []).map(loc => ({
+        id: loc.id,
+        name: loc.name,
+        code: loc.code,
+        address: loc.address,
+        min_night_shift_count: loc.min_night_shift_count,
+        work_from_home_if_below_min: loc.work_from_home_if_below_min,
+        is_active: loc.is_active,
+        location_type: loc.location_type as WorkLocation['location_type'],
+        city: loc.city || undefined,
+      }));
+      setWorkLocations(locations);
+    } catch (error) {
+      console.error('Error fetching work locations:', error);
+    }
+  };
+
+  const handleOpenMemberDetail = (member: TeamMember) => {
+    const fullMember: FullTeamMember = {
+      id: member.id,
+      name: member.name,
+      email: member.email,
+      role: member.role as RosterRole,
+      department: member.department as RosterDepartment,
+      team: member.team as FullTeamMember['team'],
+      status: (member.status as 'available' | 'on-leave' | 'unavailable') || 'available',
+      reportingTLId: member.reporting_tl_id || undefined,
+      weekOffEntitlement: 2,
+      isHybrid: false,
+      hybridOfficeDays: 5,
+      hybridWfhDays: 0,
+    };
+    setSelectedMemberDetail(fullMember);
+    setMemberDetailOpen(true);
+  };
 
   const fetchUsers = async () => {
     try {
@@ -1145,14 +1198,24 @@ export default function RoleManagement() {
                           </Select>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:bg-destructive/10"
-                            onClick={() => handleDeleteMemberClick(member)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenMemberDetail(member)}
+                              title="View Details"
+                            >
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteMemberClick(member)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1831,6 +1894,31 @@ export default function RoleManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Member Detail Dialog */}
+      {selectedMemberDetail && (
+        <MemberDetailDialog
+          member={selectedMemberDetail}
+          open={memberDetailOpen}
+          onOpenChange={setMemberDetailOpen}
+          workLocations={workLocations}
+          allMembers={teamMembers.map(m => ({
+            id: m.id,
+            name: m.name,
+            email: m.email,
+            role: m.role as RosterRole,
+            department: m.department as RosterDepartment,
+            team: m.team as FullTeamMember['team'],
+            status: (m.status as 'available' | 'on-leave' | 'unavailable') || 'available',
+            reportingTLId: m.reporting_tl_id || undefined,
+            weekOffEntitlement: 2,
+            isHybrid: false,
+            hybridOfficeDays: 5,
+            hybridWfhDays: 0,
+          }))}
+          onUpdate={fetchTeamMembers}
+        />
+      )}
     </div>
   );
 }

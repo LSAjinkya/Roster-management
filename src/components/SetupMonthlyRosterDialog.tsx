@@ -121,14 +121,19 @@ export function SetupMonthlyRosterDialog({
       const prevMonthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
       const prevMonthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
 
-      // Get last 7 days of previous month to understand cycle position
+      // Get last 14 days of previous month to understand cycle position (longer window for accuracy)
+      const lastDaysStart = format(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 14), 'yyyy-MM-dd');
+      
       const {
         data: lastAssignments,
         error
-      } = await supabase.from('shift_assignments').select('member_id, date, shift_type').gte('date', prevMonthStart).lte('date', prevMonthEnd).order('date', {
-        ascending: false
-      });
+      } = await supabase.from('shift_assignments').select('member_id, date, shift_type')
+        .gte('date', lastDaysStart)
+        .lte('date', prevMonthEnd)
+        .order('date', { ascending: false });
+
       if (error) throw error;
+      
       if (lastAssignments && lastAssignments.length > 0) {
         // Group by member and calculate their end-of-month state
         const stateMap: Record<string, {
@@ -141,34 +146,44 @@ export function SetupMonthlyRosterDialog({
           if (!memberAssignments[a.member_id]) memberAssignments[a.member_id] = [];
           memberAssignments[a.member_id].push(a);
         });
+        
         Object.entries(memberAssignments).forEach(([memberId, assignments]) => {
-          // Sort by date descending to get most recent
+          // Sort by date descending to get most recent first
           assignments.sort((a, b) => b.date.localeCompare(a.date));
 
           // Find the most recent non-off shift to determine current shift type
-          const lastWorkShift = assignments.find(a => a.shift_type !== 'week-off' && a.shift_type !== 'public-off' && a.shift_type !== 'comp-off');
+          const lastWorkShift = assignments.find(a => 
+            a.shift_type !== 'week-off' && 
+            a.shift_type !== 'public-off' && 
+            a.shift_type !== 'comp-off'
+          );
 
-          // Count consecutive work days at end of month (for cycle position)
+          // Count consecutive work days at end of month (not interrupted by OFF)
           let workDaysInCurrent = 0;
           let offDaysUsed = 0;
-          for (const a of assignments.slice(0, 7)) {
-            // Check last 7 days
-            if (a.shift_type === 'week-off') {
+          
+          for (const a of assignments) {
+            if (a.shift_type === 'week-off' || a.shift_type === 'public-off' || a.shift_type === 'comp-off') {
               offDaysUsed++;
-              break; // Reset work day count after finding OFF
-            } else if (a.shift_type !== 'public-off' && a.shift_type !== 'comp-off') {
+              if (workDaysInCurrent > 0) {
+                break; // We've counted consecutive work days before hitting OFF
+              }
+            } else {
               workDaysInCurrent++;
             }
           }
+          
           if (lastWorkShift) {
             stateMap[memberId] = {
               shift: lastWorkShift.shift_type as ShiftType,
               workDaysInCurrent,
-              offDaysUsed
+              offDaysUsed: Math.min(offDaysUsed, 2) // Cap at 2 for calculation purposes
             };
           }
         });
+        
         setPreviousMonthState(stateMap);
+        console.log('Previous month state loaded:', Object.keys(stateMap).length, 'members');
       }
     } catch (error) {
       console.error('Error fetching previous month state:', error);
@@ -620,9 +635,64 @@ export function SetupMonthlyRosterDialog({
         } = await supabase.from('shift_assignments').insert(batch);
         if (insertError) throw insertError;
       }
-      const weekOffsCount = processedAssignments.filter(a => a.shift_type === 'comp-off').length;
+
+      // UPDATE MEMBER ROTATION STATE for seamless month-to-month continuity
+      // This ensures the next month's roster picks up from the correct shift and cycle position
+      const lastDayStr = format(monthEnd, 'yyyy-MM-dd');
+      const memberLastShifts: Record<string, { shift: ShiftType; workDays: number }> = {};
+
+      // Group assignments by member and find their end-of-month state
+      const memberAssignments: Record<string, PreviewAssignment[]> = {};
+      processedAssignments.forEach(a => {
+        if (!memberAssignments[a.member_id]) memberAssignments[a.member_id] = [];
+        memberAssignments[a.member_id].push(a);
+      });
+
+      // Calculate each member's state at end of month
+      Object.entries(memberAssignments).forEach(([memberId, assignments]) => {
+        // Sort by date descending
+        assignments.sort((a, b) => b.date.localeCompare(a.date));
+        
+        // Find last non-off shift to determine current shift type
+        const lastWorkShift = assignments.find(a => 
+          a.shift_type !== 'week-off' && 
+          a.shift_type !== 'public-off' && 
+          a.shift_type !== 'comp-off'
+        );
+
+        // Count consecutive work days at end of month
+        let consecutiveWorkDays = 0;
+        for (const a of assignments) {
+          if (a.shift_type === 'week-off' || a.shift_type === 'public-off' || a.shift_type === 'comp-off') {
+            break; // Stop counting when we hit an off day
+          }
+          consecutiveWorkDays++;
+        }
+
+        if (lastWorkShift) {
+          memberLastShifts[memberId] = {
+            shift: lastWorkShift.shift_type,
+            workDays: consecutiveWorkDays
+          };
+        }
+      });
+
+      // Update member_rotation_state for each member
+      const updatePromises = Object.entries(memberLastShifts).map(async ([memberId, state]) => {
+        // Use upsert to handle both existing and new records
+        return supabase.from('member_rotation_state').upsert({
+          member_id: memberId,
+          current_shift_type: state.shift,
+          cycle_start_date: lastDayStr, // Use last day as reference for next month
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'member_id' });
+      });
+
+      await Promise.all(updatePromises);
+
+      const weekOffsCount = processedAssignments.filter(a => a.shift_type === 'week-off').length;
       toast.success(`Monthly roster for ${monthName} saved!`, {
-        description: `${processedAssignments.length} assignments (${weekOffsCount} week-offs).`
+        description: `${processedAssignments.length} assignments (${weekOffsCount} week-offs). Rotation state updated for ${Object.keys(memberLastShifts).length} members.`
       });
       setOpen(false);
       setStep('config');

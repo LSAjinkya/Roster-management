@@ -1,11 +1,14 @@
-import { useState, useMemo } from 'react';
-import { ShiftAssignment, TeamMember, ShiftType, TEAM_GROUPS, TeamGroup } from '@/types/roster';
+import { useState, useMemo, useEffect } from 'react';
+import { ShiftAssignment, TeamMember, ShiftType, TEAM_GROUPS, TeamGroup, WorkLocation } from '@/types/roster';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Search, Mail, MapPin, Users } from 'lucide-react';
+import { Search, Mail, MapPin, Users, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { MemberDetailDialog } from './MemberDetailDialog';
+import { Button } from '@/components/ui/button';
 
 interface TeamRosterViewProps {
   assignments: ShiftAssignment[];
@@ -40,7 +43,46 @@ const TEAM_SHIFT_TODAY: Record<TeamGroup, ShiftType> = {
 export function TeamRosterView({ assignments, teamMembers }: TeamRosterViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTeam, setSelectedTeam] = useState<TeamGroup | 'all'>('all');
+  const [workLocations, setWorkLocations] = useState<WorkLocation[]>([]);
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+  const [memberDetailOpen, setMemberDetailOpen] = useState(false);
   const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+  // Fetch work locations
+  useEffect(() => {
+    const fetchWorkLocations = async () => {
+      const { data, error } = await supabase
+        .from('work_locations')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+
+      if (error) {
+        console.error('Error fetching work locations:', error);
+        return;
+      }
+
+      const locations: WorkLocation[] = (data || []).map(loc => ({
+        id: loc.id,
+        name: loc.name,
+        code: loc.code,
+        address: loc.address,
+        min_night_shift_count: loc.min_night_shift_count,
+        work_from_home_if_below_min: loc.work_from_home_if_below_min,
+        is_active: loc.is_active,
+        location_type: loc.location_type as WorkLocation['location_type'],
+        city: loc.city || undefined,
+      }));
+      setWorkLocations(locations);
+    };
+
+    fetchWorkLocations();
+  }, []);
+
+  const handleOpenMemberDetail = (member: TeamMember) => {
+    setSelectedMember(member);
+    setMemberDetailOpen(true);
+  };
 
   // Get today's shift for each member
   const getMemberTodayShift = (memberId: string): ShiftType | null => {
@@ -191,8 +233,18 @@ export function TeamRosterView({ assignments, teamMembers }: TeamRosterViewProps
           return (
             <div 
               key={member.id}
-              className="bg-card rounded-xl border border-border/50 p-6 flex flex-col items-center text-center hover:shadow-lg transition-shadow"
+              className="bg-card rounded-xl border border-border/50 p-6 flex flex-col items-center text-center hover:shadow-lg transition-shadow relative group"
             >
+              {/* Settings Button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => handleOpenMemberDetail(member)}
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+
               {/* Avatar with status indicator */}
               <div className="relative mb-4">
                 <Avatar className="h-20 w-20">
@@ -256,6 +308,17 @@ export function TeamRosterView({ assignments, teamMembers }: TeamRosterViewProps
             Try adjusting your search or filter criteria
           </p>
         </div>
+      )}
+
+      {/* Member Detail Dialog */}
+      {selectedMember && (
+        <MemberDetailDialog
+          member={selectedMember}
+          open={memberDetailOpen}
+          onOpenChange={setMemberDetailOpen}
+          workLocations={workLocations}
+          allMembers={teamMembers}
+        />
       )}
     </div>
   );
