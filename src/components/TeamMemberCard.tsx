@@ -1,8 +1,9 @@
 import { TeamMember } from '@/types/roster';
 import { RoleBadge } from './RoleBadge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { UserCheck } from 'lucide-react';
+import { UserCheck, Settings } from 'lucide-react';
 
 interface TeamMemberCardProps {
   member: TeamMember;
@@ -10,9 +11,10 @@ interface TeamMemberCardProps {
   className?: string;
   style?: React.CSSProperties;
   reportingTL?: TeamMember;
+  onEdit?: (member: TeamMember) => void;
 }
 
-export function TeamMemberCard({ member, compact = false, className, style, reportingTL }: TeamMemberCardProps) {
+export function TeamMemberCard({ member, compact = false, className, style, reportingTL, onEdit }: TeamMemberCardProps) {
   const initials = member.name
     .split(' ')
     .map(n => n[0])
@@ -44,6 +46,16 @@ export function TeamMemberCard({ member, compact = false, className, style, repo
           <p className="text-xs text-muted-foreground truncate">{member.department}</p>
         </div>
         <RoleBadge role={member.role} />
+        {onEdit && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0"
+            onClick={() => onEdit(member)}
+          >
+            <Settings size={14} />
+          </Button>
+        )}
       </div>
     );
   }
@@ -76,6 +88,16 @@ export function TeamMemberCard({ member, compact = false, className, style, repo
           <p className="text-sm text-muted-foreground">{member.department}</p>
           <p className="text-xs text-muted-foreground mt-1 truncate">{member.email}</p>
         </div>
+        {onEdit && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0"
+            onClick={() => onEdit(member)}
+          >
+            <Settings size={16} />
+          </Button>
+        )}
       </div>
       <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
         <div className="flex items-center justify-between text-sm">
