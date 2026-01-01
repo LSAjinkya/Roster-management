@@ -12,13 +12,15 @@ import { RotationPreview } from '@/components/RotationPreview';
 import { RosterImportDialog } from '@/components/RosterImportDialog';
 import { teamMembers as mockTeamMembers } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, CheckCircle2, AlertCircle, Clock, Loader2 } from 'lucide-react';
+import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, CheckCircle2, AlertCircle, Clock, Loader2, Upload } from 'lucide-react';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { TeamMember, Department, Role, TeamGroup, ShiftAssignment, ShiftType } from '@/types/roster';
 import { useAuth } from '@/hooks/useAuth';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { toast } from 'sonner';
 
 type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member' | 'department' | 'rotation';
 type RosterStatus = 'no-data' | 'draft' | 'published';
@@ -126,6 +128,7 @@ export default function Roster() {
         date: a.date,
         shiftType: a.shift_type as ShiftType,
         department: a.department as Department,
+        status: a.status || 'published',
       }));
 
       setAssignments(shiftAssignments);
@@ -152,8 +155,12 @@ export default function Roster() {
       return 'no-data';
     }
     
-    // For now, if there are assignments, consider it published
-    // In a full implementation, you'd have a separate status field in the database
+    // Check if any assignments are draft
+    const hasDraft = currentMonthAssignments.some(a => (a as any).status === 'draft');
+    if (hasDraft) {
+      return 'draft';
+    }
+    
     return 'published';
   }, [assignments, currentDate]);
 
@@ -170,7 +177,7 @@ export default function Roster() {
         return (
           <Badge variant="outline" className="gap-1 text-amber-600 border-amber-300 bg-amber-50">
             <Clock size={12} />
-            Draft (Unsaved)
+            Draft (Unpublished)
           </Badge>
         );
       case 'published':
@@ -203,6 +210,30 @@ export default function Roster() {
     fetchAssignments();
   };
 
+  const handlePublishDraft = async () => {
+    const currentMonthStart = format(startOfMonth(currentDate), 'yyyy-MM-dd');
+    const currentMonthEnd = format(endOfMonth(currentDate), 'yyyy-MM-dd');
+    
+    try {
+      const { error, count } = await supabase
+        .from('shift_assignments')
+        .update({ status: 'published' })
+        .gte('date', currentMonthStart)
+        .lte('date', currentMonthEnd)
+        .eq('status', 'draft');
+
+      if (error) throw error;
+      
+      toast.success('Roster published!', {
+        description: `${format(currentDate, 'MMMM yyyy')} roster is now live.`
+      });
+      fetchAssignments();
+    } catch (error) {
+      console.error('Error publishing roster:', error);
+      toast.error('Failed to publish roster');
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <DashboardHeader 
@@ -219,12 +250,20 @@ export default function Roster() {
               <TooltipContent>
                 <p>
                   {rosterStatus === 'no-data' && 'No roster has been created for this month yet'}
-                  {rosterStatus === 'draft' && 'Roster changes are not yet saved'}
+                  {rosterStatus === 'draft' && 'Roster is saved as draft. Click Publish to make it live.'}
                   {rosterStatus === 'published' && 'Roster is saved and published'}
                 </p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
+          {/* Publish button for draft rosters */}
+          {canEditShifts && rosterStatus === 'draft' && (
+            <Button onClick={handlePublishDraft} className="gap-2" size="sm">
+              <Upload size={14} />
+              Publish Roster
+            </Button>
+          )}
 
           {canEditShifts && (
             <>

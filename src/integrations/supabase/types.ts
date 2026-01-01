@@ -439,6 +439,7 @@ export type Database = {
           id: string
           member_id: string
           shift_type: string
+          status: string
           updated_at: string
           work_location_id: string | null
         }
@@ -450,6 +451,7 @@ export type Database = {
           id?: string
           member_id: string
           shift_type: string
+          status?: string
           updated_at?: string
           work_location_id?: string | null
         }
@@ -461,6 +463,7 @@ export type Database = {
           id?: string
           member_id?: string
           shift_type?: string
+          status?: string
           updated_at?: string
           work_location_id?: string | null
         }

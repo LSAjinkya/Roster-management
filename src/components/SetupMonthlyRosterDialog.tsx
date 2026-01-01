@@ -6,16 +6,18 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarPlus, Loader2, Settings2, Eye, Save, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import { CalendarPlus, Loader2, Settings2, Eye, Save, ChevronLeft, ChevronRight, AlertTriangle, FileCheck, Upload } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { TeamMember, ShiftType, Department, DEPARTMENTS, TeamGroup } from '@/types/roster';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RosterPreviewTable } from './RosterPreviewTable';
+import { RotationContinuityPreview } from './RotationContinuityPreview';
 import { MemberRotationState, RotationConfig, getWeekOffDaysInCycle, getMemberShiftForDate, ROTATING_DEPARTMENTS, GENERAL_SHIFT_DEPARTMENTS, WORK_DAYS_IN_CYCLE, OFF_DAYS_IN_CYCLE, CYCLE_LENGTH, SHIFT_STABILITY_WORK_DAYS, SHIFT_ROTATION_ORDER, REST_DAYS_BEFORE_NIGHT, isOffDay, requiresRestBeforeNight } from '@/types/shiftRules';
 import { validateRoster, autoFixRosterViolations } from '@/utils/rosterValidation';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
 interface SetupMonthlyRosterDialogProps {
   teamMembers: TeamMember[];
   departments: {
@@ -53,7 +55,8 @@ const SHIFT_OPTIONS: {
   label: 'General (10:00-19:00)'
 }];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-type Step = 'config' | 'preview';
+type Step = 'config' | 'continuity' | 'preview';
+type RosterSaveStatus = 'draft' | 'published';
 export function SetupMonthlyRosterDialog({
   teamMembers,
   departments,
@@ -547,7 +550,7 @@ export function SetupMonthlyRosterDialog({
   const handleGeneratePreview = () => {
     const assignments = generateAssignments();
     setPreviewAssignments(assignments);
-    setStep('preview');
+    setStep('continuity'); // First show continuity preview
   };
   const handleEditPreviewCell = (memberId: string, date: string, currentShift: ShiftType | null) => {
     // Cycle through shifts: M -> A -> N -> CO -> off -> M
@@ -614,7 +617,7 @@ export function SetupMonthlyRosterDialog({
     return assignments;
   };
 
-  const handleSaveRoster = async () => {
+  const handleSaveRoster = async (saveStatus: RosterSaveStatus = 'draft') => {
     setLoading(true);
     try {
       // Apply single-person night WFH rule
@@ -626,10 +629,13 @@ export function SetupMonthlyRosterDialog({
       } = await supabase.from('shift_assignments').delete().gte('date', format(monthStart, 'yyyy-MM-dd')).lte('date', format(monthEnd, 'yyyy-MM-dd'));
       if (deleteError) throw deleteError;
 
-      // Insert new assignments in batches
+      // Insert new assignments with status in batches
       const batchSize = 100;
       for (let i = 0; i < processedAssignments.length; i += batchSize) {
-        const batch = processedAssignments.slice(i, i + batchSize);
+        const batch = processedAssignments.slice(i, i + batchSize).map(a => ({
+          ...a,
+          status: saveStatus
+        }));
         const {
           error: insertError
         } = await supabase.from('shift_assignments').insert(batch);
@@ -691,7 +697,8 @@ export function SetupMonthlyRosterDialog({
       await Promise.all(updatePromises);
 
       const weekOffsCount = processedAssignments.filter(a => a.shift_type === 'week-off').length;
-      toast.success(`Monthly roster for ${monthName} saved!`, {
+      const statusLabel = saveStatus === 'draft' ? 'saved as draft' : 'published';
+      toast.success(`Monthly roster for ${monthName} ${statusLabel}!`, {
         description: `${processedAssignments.length} assignments (${weekOffsCount} week-offs). Rotation state updated for ${Object.keys(memberLastShifts).length} members.`
       });
       setOpen(false);
@@ -720,14 +727,22 @@ export function SetupMonthlyRosterDialog({
           Setup {format(nextMonth, 'MMM')} Roster
         </Button>
       </DialogTrigger>
-      <DialogContent className={step === 'preview' ? "max-w-[95vw] max-h-[95vh]" : "max-w-2xl max-h-[90vh]"}>
+      <DialogContent className={step === 'preview' || step === 'continuity' ? "max-w-[95vw] max-h-[95vh]" : "max-w-2xl max-h-[90vh]"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {step === 'config' ? <Settings2 size={20} /> : <Eye size={20} />}
-            {step === 'config' ? 'Setup Monthly Roster' : 'Preview & Edit Roster'}
+            {step === 'config' 
+              ? 'Setup Monthly Roster' 
+              : step === 'continuity'
+                ? 'Rotation Continuity Preview'
+                : 'Preview & Edit Roster'}
           </DialogTitle>
           <DialogDescription>
-            {step === 'config' ? `Configure shift assignments for ${monthName}` : `Review and edit shifts before saving. Click any cell to change shift.`}
+            {step === 'config' 
+              ? `Configure shift assignments for ${monthName}` 
+              : step === 'continuity'
+                ? 'Review how shifts will continue from the previous month before viewing full roster.'
+                : `Review and edit shifts before saving. Click any cell to change shift.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -983,7 +998,26 @@ export function SetupMonthlyRosterDialog({
               </Button>
               <Button onClick={handleGeneratePreview} className="gap-2">
                 <Eye size={16} />
-                Preview Roster
+                Preview Continuity & Roster
+              </Button>
+            </DialogFooter>
+          </> : step === 'continuity' ? <>
+            {/* Continuity Preview Step */}
+            <ScrollArea className="h-[60vh]">
+              <RotationContinuityPreview 
+                teamMembers={filteredTeamMembers} 
+                previousMonthState={previousMonthState} 
+              />
+            </ScrollArea>
+
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => setStep('config')} className="gap-2">
+                <ChevronLeft size={16} />
+                Back to Config
+              </Button>
+              <Button onClick={() => setStep('preview')} className="gap-2">
+                <Eye size={16} />
+                View Full Roster
               </Button>
             </DialogFooter>
           </> : <>
@@ -994,24 +1028,40 @@ export function SetupMonthlyRosterDialog({
             <div className="flex items-center justify-between text-sm text-muted-foreground border-t pt-4">
               <span>
                 {previewAssignments.length} assignments • 
-                {previewAssignments.filter(a => a.shift_type === 'comp-off').length} week-offs
+                {previewAssignments.filter(a => a.shift_type === 'week-off').length} week-offs
               </span>
               <span>Click any cell to cycle through shifts</span>
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setStep('config')} className="gap-2">
+              <Button variant="outline" onClick={() => setStep('continuity')} className="gap-2">
                 <ChevronLeft size={16} />
-                Back to Config
+                Back to Continuity
               </Button>
-              <Button onClick={handleSaveRoster} disabled={loading} className="gap-2">
-                {loading ? <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Saving...
-                  </> : <>
-                    <Save size={16} />
-                    Save Roster
-                  </>}
+              <Button 
+                variant="secondary" 
+                onClick={() => handleSaveRoster('draft')} 
+                disabled={loading} 
+                className="gap-2"
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileCheck size={16} />
+                )}
+                Save as Draft
+              </Button>
+              <Button 
+                onClick={() => handleSaveRoster('published')} 
+                disabled={loading} 
+                className="gap-2"
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload size={16} />
+                )}
+                Publish Roster
               </Button>
             </DialogFooter>
           </>}
