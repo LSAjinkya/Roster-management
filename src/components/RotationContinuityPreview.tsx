@@ -220,6 +220,7 @@ export function RotationContinuityPreview({
     const ShiftIcon = SHIFT_CONFIG[data.currentShift]?.icon || Sun;
     const NextShiftIcon = SHIFT_CONFIG[data.nextShift]?.icon || Sun;
     const isEditing = editingMember === data.member.id;
+    const isEditingNext = editingMember === `${data.member.id}_next`;
     
     return (
       <div
@@ -292,18 +293,50 @@ export function RotationContinuityPreview({
 
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
 
-                {/* Feb 1 State */}
+                {/* Editable Upcoming/Next Shift */}
                 {data.startsWithOff ? (
                   <Badge variant="secondary" className="text-xs bg-gray-200">
                     OFF × {data.offDaysNeeded}
                   </Badge>
+                ) : editable && isEditingNext ? (
+                  <div className="flex items-center gap-2">
+                    <Select 
+                      value={data.nextShift} 
+                      onValueChange={(v) => {
+                        handleShiftChange(data.member.id, v as ShiftType);
+                        handleWorkDaysChange(data.member.id, 0);
+                        setEditingMember(null);
+                      }}
+                    >
+                      <SelectTrigger className="h-7 w-24 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SHIFT_TYPES.map(s => (
+                          <SelectItem key={s} value={s}>
+                            {SHIFT_CONFIG[s].label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <button 
+                      onClick={() => setEditingMember(null)}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Done
+                    </button>
+                  </div>
                 ) : (
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs border ${SHIFT_CONFIG[data.nextShift]?.color || ''}`}>
+                  <div 
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs border cursor-pointer hover:ring-2 ring-primary/50 ${SHIFT_CONFIG[data.nextShift]?.color || ''}`}
+                    onClick={() => editable && setEditingMember(`${data.member.id}_next`)}
+                  >
                     <NextShiftIcon className="h-3 w-3" />
                     <span>{SHIFT_CONFIG[data.nextShift]?.label}</span>
                     <span className="text-muted-foreground ml-1">
                       (Day {(data.workDaysCompleted || 0) + 1})
                     </span>
+                    {editable && <Edit2 className="h-3 w-3 ml-1 opacity-50" />}
                   </div>
                 )}
               </>
