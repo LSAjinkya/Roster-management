@@ -3,13 +3,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
-import { Eye, RefreshCw, Play, Users, Calendar } from 'lucide-react';
-import { TeamMember, Department, Role, ShiftType, TeamGroup, TEAM_GROUPS, getTeamShiftForCycle, getAllTeamShiftsForCycle } from '@/types/roster';
-import { MemberRotationState, getMemberShiftTypeForDate, getWeekOffDaysInCycle, RotationConfig, ROTATING_DEPARTMENTS } from '@/types/shiftRules';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, subMonths, addMonths } from 'date-fns';
+import { Eye, RefreshCw, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TeamMember, TeamGroup } from '@/types/roster';
 import { cn } from '@/lib/utils';
 
 const TEAM_COLORS: Record<TeamGroup, string> = {
@@ -30,6 +28,8 @@ const SHIFT_COLORS: Record<string, string> = {
   'week-off': 'bg-gray-300 text-gray-700',
   'public-off': 'bg-blue-200 text-blue-800',
   'paid-leave': 'bg-green-200 text-green-800',
+  'leave': 'bg-red-200 text-red-800',
+  'comp-off': 'bg-orange-200 text-orange-800',
 };
 
 const SHIFT_LABELS: Record<string, string> = {
@@ -40,174 +40,75 @@ const SHIFT_LABELS: Record<string, string> = {
   'week-off': 'OFF',
   'public-off': 'PH',
   'paid-leave': 'PL',
+  'leave': 'L',
+  'comp-off': 'CO',
 };
 
+interface ShiftAssignment {
+  id: string;
+  member_id: string;
+  date: string;
+  shift_type: string;
+  department: string;
+}
+
 export function RotationPreview({ teamMembers }: RotationPreviewProps) {
-  const [rotationStates, setRotationStates] = useState<MemberRotationState[]>([]);
-  const [rotationConfig, setRotationConfig] = useState<RotationConfig | null>(null);
+  const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [initializing, setInitializing] = useState(false);
   const [previewMonth, setPreviewMonth] = useState<Date>(new Date());
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchAssignments();
+  }, [previewMonth]);
 
-  const fetchData = async () => {
+  const fetchAssignments = async () => {
     setLoading(true);
     try {
-      const [statesRes, configRes] = await Promise.all([
-        supabase.from('member_rotation_state').select('*'),
-        supabase.from('rotation_config').select('*').eq('is_active', true).maybeSingle()
-      ]);
+      const monthStart = startOfMonth(previewMonth);
+      const monthEnd = endOfMonth(previewMonth);
 
-      if (statesRes.error) throw statesRes.error;
-      if (configRes.error) throw configRes.error;
+      const { data, error } = await supabase
+        .from('shift_assignments')
+        .select('*')
+        .gte('date', format(monthStart, 'yyyy-MM-dd'))
+        .lte('date', format(monthEnd, 'yyyy-MM-dd'))
+        .order('date');
 
-      setRotationStates(statesRes.data || []);
-      
-      // Handle shift_sequence type
-      if (configRes.data) {
-        const config = configRes.data as any;
-        setRotationConfig({
-          ...config,
-          shift_sequence: config.shift_sequence || ['afternoon', 'morning', 'night']
-        });
-      }
+      if (error) throw error;
+      setAssignments(data || []);
     } catch (error) {
-      console.error('Error fetching rotation data:', error);
-      toast.error('Failed to load rotation data');
+      console.error('Error fetching assignments:', error);
+      toast.error('Failed to load shift assignments');
     } finally {
       setLoading(false);
     }
   };
 
-  const rotatingMembers = useMemo(() => 
-    teamMembers.filter(m => 
-      ROTATING_DEPARTMENTS.includes(m.department) && m.role !== 'TL'
-    ), [teamMembers]
-  );
-
-  const uninitializedMembers = useMemo(() => {
-    const initializedIds = new Set(rotationStates.map(s => s.member_id));
-    return rotatingMembers.filter(m => !initializedIds.has(m.id));
-  }, [rotatingMembers, rotationStates]);
-
-  const handleInitializeAll = async () => {
-    if (!rotationConfig) {
-      toast.error('No rotation config found');
-      return;
-    }
-
-    setInitializing(true);
-    try {
-      const shiftSequence = rotationConfig.shift_sequence || ['afternoon', 'morning', 'night'];
-      const today = new Date();
-      const cycleStartDate = startOfMonth(today);
-
-      // Create rotation states for uninitialized members
-      // Stagger starting shifts across the sequence
-      const newStates = uninitializedMembers.map((member, index) => ({
-        member_id: member.id,
-        current_shift_type: shiftSequence[index % shiftSequence.length],
-        cycle_start_date: format(cycleStartDate, 'yyyy-MM-dd'),
-      }));
-
-      if (newStates.length === 0) {
-        toast.info('All members already initialized');
-        return;
-      }
-
-      const { error } = await supabase
-        .from('member_rotation_state')
-        .insert(newStates);
-
-      if (error) throw error;
-
-      toast.success(`Initialized ${newStates.length} member(s)`, {
-        description: 'Members have been assigned starting shifts'
-      });
-      
-      fetchData();
-    } catch (error) {
-      console.error('Error initializing members:', error);
-      toast.error('Failed to initialize members');
-    } finally {
-      setInitializing(false);
-    }
-  };
-
-  // Generate preview for the selected month
+  // Generate preview data from imported shifts
   const previewData = useMemo(() => {
-    if (!rotationConfig || rotationStates.length === 0) return [];
+    if (assignments.length === 0) return [];
 
     const monthStart = startOfMonth(previewMonth);
     const monthEnd = endOfMonth(previewMonth);
     const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-    const shiftSequence = rotationConfig.shift_sequence || ['afternoon', 'morning', 'night'];
 
-    // Get Alpha team reference state for team-based rotation
-    const alphaRefState = rotationStates.find(s => {
-      const member = rotatingMembers.find(m => m.id === s.member_id);
-      return member && member.team === 'Alpha';
-    });
-    
-    const alphaStartDate = alphaRefState 
-      ? new Date(alphaRefState.cycle_start_date) 
-      : monthStart;
-    const alphaCurrentShift = alphaRefState?.current_shift_type || shiftSequence[0];
+    // Filter to rotating department members (Infra)
+    const rotatingMembers = teamMembers.filter(m => 
+      m.department === 'Infra' && m.role !== 'TL'
+    );
 
-    // Group members by team
-    const membersByTeam = rotatingMembers.reduce((acc, m) => {
-      const team = (m.team as TeamGroup) || 'Alpha';
-      if (!acc[team]) acc[team] = [];
-      acc[team].push(m);
-      return acc;
-    }, {} as Record<TeamGroup, TeamMember[]>);
-
-    return rotatingMembers.map((member, memberIndex) => {
+    return rotatingMembers.map((member) => {
       const memberTeam = (member.team as TeamGroup) || 'Alpha';
-      
-      // Get team-specific offset for week-offs (within their team)
-      const teamMembers = membersByTeam[memberTeam] || [];
-      const memberOffsetInTeam = teamMembers.findIndex(m => m.id === member.id) % 7;
 
       const shifts = days.map(day => {
-        // Calculate Alpha's shift for this day
-        const alphaShiftForDay = getMemberShiftTypeForDate(
-          alphaStartDate,
-          day,
-          alphaCurrentShift,
-          rotationConfig.rotation_cycle_days,
-          shiftSequence
-        );
-
-        // Get this member's shift based on their team
-        // Calculate which cycle we're in based on days since start
-        const daysSinceStart = Math.floor((day.getTime() - alphaStartDate.getTime()) / (1000 * 60 * 60 * 24));
-        const cycleNumber = Math.floor(daysSinceStart / rotationConfig.rotation_cycle_days);
-        const teamShifts = getAllTeamShiftsForCycle(cycleNumber);
-        const shiftType = teamShifts[memberTeam] || alphaShiftForDay;
-
-        // Check for week-off
-        const daysSinceCycleStart = Math.floor(
-          (day.getTime() - alphaStartDate.getTime()) / (1000 * 60 * 60 * 24)
-        );
-        const dayInCycle = ((daysSinceCycleStart % rotationConfig.rotation_cycle_days) + rotationConfig.rotation_cycle_days) % rotationConfig.rotation_cycle_days;
+        const dateStr = format(day, 'yyyy-MM-dd');
+        const assignment = assignments.find(a => a.member_id === member.id && a.date === dateStr);
         
-        const weekOffDays = getWeekOffDaysInCycle(
-          alphaStartDate,
-          memberOffsetInTeam,
-          rotationConfig.rotation_cycle_days
-        );
-
-        const isWeekOff = weekOffDays.includes(dayInCycle);
-
         return {
-          date: format(day, 'yyyy-MM-dd'),
+          date: dateStr,
           dayNum: format(day, 'd'),
           dayName: format(day, 'EEE'),
-          shiftType: isWeekOff ? 'week-off' : shiftType,
+          shiftType: assignment?.shift_type || null,
         };
       });
 
@@ -215,13 +116,38 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
         member,
         team: memberTeam,
         shifts,
-        currentCycleShift: alphaCurrentShift,
       };
     });
-  }, [previewMonth, rotationStates, rotationConfig, rotatingMembers]);
+  }, [previewMonth, assignments, teamMembers]);
+
+  // Calculate shift summary for the month
+  const shiftSummary = useMemo(() => {
+    const summary = {
+      morning: 0,
+      afternoon: 0,
+      night: 0,
+      general: 0,
+      leave: 0,
+      weekOff: 0,
+    };
+
+    assignments.forEach(a => {
+      if (a.shift_type === 'morning') summary.morning++;
+      else if (a.shift_type === 'afternoon') summary.afternoon++;
+      else if (a.shift_type === 'night') summary.night++;
+      else if (a.shift_type === 'general') summary.general++;
+      else if (a.shift_type === 'leave') summary.leave++;
+      else if (a.shift_type === 'week-off') summary.weekOff++;
+    });
+
+    return summary;
+  }, [assignments]);
+
+  const goToPreviousMonth = () => setPreviewMonth(prev => subMonths(prev, 1));
+  const goToNextMonth = () => setPreviewMonth(prev => addMonths(prev, 1));
 
   if (loading) {
-    return <div className="flex items-center justify-center p-8">Loading rotation data...</div>;
+    return <div className="flex items-center justify-center p-8">Loading shift data...</div>;
   }
 
   return (
@@ -231,32 +157,23 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
           <div>
             <CardTitle className="flex items-center gap-2">
               <Eye size={20} />
-              15-Day Rotation Preview
+              Imported Roster Preview
             </CardTitle>
             <CardDescription>
-              Preview how shifts are assigned based on rotation rules
+              View imported shifts for the selected month (from CSV/Setup)
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Select
-              value={format(previewMonth, 'yyyy-MM')}
-              onValueChange={(v) => setPreviewMonth(new Date(v + '-01'))}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[-1, 0, 1, 2].map(offset => {
-                  const month = addDays(startOfMonth(new Date()), offset * 30);
-                  return (
-                    <SelectItem key={offset} value={format(month, 'yyyy-MM')}>
-                      {format(month, 'MMMM yyyy')}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="sm" onClick={fetchData} className="gap-2">
+            <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
+              <ChevronLeft size={18} />
+            </Button>
+            <div className="min-w-[140px] text-center font-medium">
+              {format(previewMonth, 'MMMM yyyy')}
+            </div>
+            <Button variant="outline" size="icon" onClick={goToNextMonth}>
+              <ChevronRight size={18} />
+            </Button>
+            <Button variant="outline" size="sm" onClick={fetchAssignments} className="gap-2 ml-2">
               <RefreshCw size={14} />
               Refresh
             </Button>
@@ -264,44 +181,33 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Initialization Status */}
-        {uninitializedMembers.length > 0 && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Users className="text-amber-600" size={20} />
-                <div>
-                  <p className="font-medium text-amber-800 dark:text-amber-200">
-                    {uninitializedMembers.length} member(s) not initialized
-                  </p>
-                  <p className="text-sm text-amber-600 dark:text-amber-400">
-                    These members need rotation states before auto-assignment works
-                  </p>
-                </div>
-              </div>
-              <Button 
-                onClick={handleInitializeAll} 
-                disabled={initializing}
-                className="gap-2"
-              >
-                <Play size={14} />
-                {initializing ? 'Initializing...' : 'Initialize All'}
-              </Button>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-1">
-              {uninitializedMembers.slice(0, 10).map(m => (
-                <Badge key={m.id} variant="outline" className="text-xs">
-                  {m.name}
-                </Badge>
-              ))}
-              {uninitializedMembers.length > 10 && (
-                <Badge variant="outline" className="text-xs">
-                  +{uninitializedMembers.length - 10} more
-                </Badge>
-              )}
-            </div>
+        {/* Shift Summary Cards */}
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+          <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg text-center">
+            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{shiftSummary.morning}</p>
+            <p className="text-xs text-muted-foreground">Morning</p>
           </div>
-        )}
+          <div className="bg-amber-50 dark:bg-amber-950/30 p-3 rounded-lg text-center">
+            <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{shiftSummary.afternoon}</p>
+            <p className="text-xs text-muted-foreground">Afternoon</p>
+          </div>
+          <div className="bg-purple-50 dark:bg-purple-950/30 p-3 rounded-lg text-center">
+            <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">{shiftSummary.night}</p>
+            <p className="text-xs text-muted-foreground">Night</p>
+          </div>
+          <div className="bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded-lg text-center">
+            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{shiftSummary.general}</p>
+            <p className="text-xs text-muted-foreground">General</p>
+          </div>
+          <div className="bg-red-50 dark:bg-red-950/30 p-3 rounded-lg text-center">
+            <p className="text-2xl font-bold text-red-700 dark:text-red-300">{shiftSummary.leave}</p>
+            <p className="text-xs text-muted-foreground">Leave</p>
+          </div>
+          <div className="bg-gray-50 dark:bg-gray-950/30 p-3 rounded-lg text-center">
+            <p className="text-2xl font-bold text-gray-700 dark:text-gray-300">{shiftSummary.weekOff}</p>
+            <p className="text-xs text-muted-foreground">Week Off</p>
+          </div>
+        </div>
 
         {/* Preview Table */}
         {previewData.length > 0 ? (
@@ -316,9 +222,6 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
                     <th className="p-2 text-left font-medium min-w-[60px]">
                       Team
                     </th>
-                    <th className="p-2 text-left font-medium min-w-[50px]">
-                      Shift
-                    </th>
                     {previewData[0]?.shifts.map(s => (
                       <th key={s.date} className="p-1 text-center min-w-[28px]">
                         <div className="text-muted-foreground text-[10px]">{s.dayName?.charAt(0) || ''}</div>
@@ -328,7 +231,7 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {previewData.map(({ member, team, shifts, currentCycleShift }) => (
+                  {previewData.map(({ member, team, shifts }) => (
                     <tr key={member.id} className="border-b border-border/20 hover:bg-muted/10">
                       <td className="sticky left-0 z-10 bg-card p-2 font-medium truncate">
                         <div>{member.name}</div>
@@ -339,19 +242,20 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
                           {team}
                         </Badge>
                       </td>
-                      <td className="p-1">
-                        <Badge className={cn("text-[10px]", SHIFT_COLORS[getTeamShiftForCycle(team, 0) || 'general'])}>
-                          {(getTeamShiftForCycle(team, 0) || 'G').charAt(0).toUpperCase()}
-                        </Badge>
-                      </td>
                       {shifts.map(s => (
                         <td key={s.date} className="p-0.5 text-center">
-                          <span className={cn(
-                            "inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold",
-                            SHIFT_COLORS[s.shiftType] || 'bg-muted text-muted-foreground'
-                          )}>
-                            {SHIFT_LABELS[s.shiftType] || '-'}
-                          </span>
+                          {s.shiftType ? (
+                            <span className={cn(
+                              "inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold",
+                              SHIFT_COLORS[s.shiftType] || 'bg-muted text-muted-foreground'
+                            )}>
+                              {SHIFT_LABELS[s.shiftType] || '-'}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center justify-center w-5 h-4 text-[9px] text-muted-foreground">
+                              -
+                            </span>
+                          )}
                         </td>
                       ))}
                     </tr>
@@ -363,8 +267,8 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
         ) : (
           <div className="text-center py-8 text-muted-foreground">
             <Calendar className="mx-auto mb-2 h-10 w-10 opacity-50" />
-            <p>No rotation data to preview</p>
-            <p className="text-sm">Initialize members to see the rotation pattern</p>
+            <p>No shift data for this month</p>
+            <p className="text-sm">Import a roster CSV or use Setup to create shifts</p>
           </div>
         )}
 
@@ -379,33 +283,6 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
             </div>
           ))}
         </div>
-
-        {/* Summary */}
-        {rotationConfig && (
-          <div className="rounded-lg bg-muted/50 p-4 text-sm">
-            <h4 className="font-medium mb-2">Current Configuration</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <span className="text-muted-foreground">Cycle Length:</span>
-                <span className="ml-2 font-medium">{rotationConfig.rotation_cycle_days} days</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Sequence:</span>
-                <span className="ml-2 font-medium">
-                  {(rotationConfig.shift_sequence || []).map(s => s?.charAt(0)?.toUpperCase() || '').join(' → ')}
-                </span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Initialized:</span>
-                <span className="ml-2 font-medium">{rotationStates.length}/{rotatingMembers.length}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Weekly Offs:</span>
-                <span className="ml-2 font-medium">2+2 pattern</span>
-              </div>
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

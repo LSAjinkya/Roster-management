@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
-import { ShiftAssignment, TeamMember, ShiftType, Department, DEPARTMENTS } from '@/types/roster';
+import { useState, useMemo, useEffect } from 'react';
+import { ShiftAssignment, TeamMember, ShiftType, Department, DEPARTMENTS, WorkLocation } from '@/types/roster';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Calendar, Edit2, Building2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Edit2, Building2, MapPin, Filter } from 'lucide-react';
 import { 
   format, 
   startOfMonth, 
@@ -21,7 +21,9 @@ import { ShiftSwapDialog } from './ShiftSwapDialog';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/integrations/supabase/client';
 
 interface DepartmentSheetViewProps {
   assignments: ShiftAssignment[];
@@ -63,8 +65,27 @@ export function DepartmentSheetView({ assignments, teamMembers, onShiftChange, o
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [editingDate, setEditingDate] = useState<Date | null>(null);
   const [editingShift, setEditingShift] = useState<ShiftType | null>(null);
+  const [workLocations, setWorkLocations] = useState<WorkLocation[]>([]);
+  const [locationFilter, setLocationFilter] = useState<string>('all');
+  const [datacenterFilter, setDatacenterFilter] = useState<string>('all');
   
   const { canEditShifts } = useAuth();
+
+  // Fetch work locations for filtering
+  useEffect(() => {
+    const fetchLocations = async () => {
+      const { data } = await supabase
+        .from('work_locations')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+      
+      if (data) {
+        setWorkLocations(data as WorkLocation[]);
+      }
+    };
+    fetchLocations();
+  }, []);
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -76,14 +97,30 @@ export function DepartmentSheetView({ assignments, teamMembers, onShiftChange, o
 
   const isCurrentMonth = isSameMonth(currentMonth, new Date());
 
+  // Get offices and datacenters for filters
+  const offices = workLocations.filter(l => l.location_type === 'office');
+  const datacenters = workLocations.filter(l => l.location_type === 'datacenter');
+
   // Group members by department
   const membersByDepartment = useMemo(() => {
     const grouped: Record<Department, TeamMember[]> = {} as Record<Department, TeamMember[]>;
     DEPARTMENTS.forEach(dept => {
-      grouped[dept] = teamMembers.filter(m => m.department === dept);
+      let members = teamMembers.filter(m => m.department === dept);
+      
+      // Apply location filter
+      if (locationFilter !== 'all') {
+        members = members.filter(m => m.workLocationId === locationFilter);
+      }
+      
+      // Apply datacenter filter (for Infra department)
+      if (datacenterFilter !== 'all' && dept === 'Infra') {
+        members = members.filter(m => m.workLocationId === datacenterFilter);
+      }
+      
+      grouped[dept] = members;
     });
     return grouped;
-  }, [teamMembers]);
+  }, [teamMembers, locationFilter, datacenterFilter]);
 
   // Get department stats
   const getDepartmentStats = (dept: Department) => {
@@ -192,6 +229,44 @@ export function DepartmentSheetView({ assignments, teamMembers, onShiftChange, o
         </div>
         
         <div className="flex items-center gap-3 flex-wrap">
+          {/* Location Filter */}
+          <div className="flex items-center gap-2">
+            <MapPin size={14} className="text-muted-foreground" />
+            <Select value={locationFilter} onValueChange={setLocationFilter}>
+              <SelectTrigger className="w-[140px] h-8">
+                <SelectValue placeholder="Location" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover">
+                <SelectItem value="all">All Locations</SelectItem>
+                {offices.map(loc => (
+                  <SelectItem key={loc.id} value={loc.id}>
+                    {loc.name} {loc.city && `(${loc.city})`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Datacenter Filter - Only show for Infra */}
+          {selectedDepartment === 'Infra' && datacenters.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Building2 size={14} className="text-muted-foreground" />
+              <Select value={datacenterFilter} onValueChange={setDatacenterFilter}>
+                <SelectTrigger className="w-[140px] h-8">
+                  <SelectValue placeholder="Datacenter" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  <SelectItem value="all">All DCs</SelectItem>
+                  {datacenters.map(dc => (
+                    <SelectItem key={dc.id} value={dc.id}>
+                      {dc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {!isCurrentMonth && (
             <Button variant="outline" onClick={goToCurrentMonth} className="gap-2">
               <Calendar size={16} />
