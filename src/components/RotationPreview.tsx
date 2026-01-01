@@ -321,7 +321,7 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
                     </th>
                     {previewData[0]?.shifts.map(s => (
                       <th key={s.date} className="p-1 text-center min-w-[28px]">
-                        <div className="text-muted-foreground text-[10px]">{s.dayName.charAt(0)}</div>
+                        <div className="text-muted-foreground text-[10px]">{s.dayName?.charAt(0) || ''}</div>
                         <div className="font-semibold">{s.dayNum}</div>
                       </th>
                     ))}
@@ -340,8 +340,8 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
                         </Badge>
                       </td>
                       <td className="p-1">
-                        <Badge className={cn("text-[10px]", SHIFT_COLORS[getTeamShiftForCycle(team, 0)])}>
-                          {getTeamShiftForCycle(team, 0).charAt(0).toUpperCase()}
+                        <Badge className={cn("text-[10px]", SHIFT_COLORS[getTeamShiftForCycle(team, 0) || 'general'])}>
+                          {(getTeamShiftForCycle(team, 0) || 'G').charAt(0).toUpperCase()}
                         </Badge>
                       </td>
                       {shifts.map(s => (
@@ -392,7 +392,7 @@ export function RotationPreview({ teamMembers }: RotationPreviewProps) {
               <div>
                 <span className="text-muted-foreground">Sequence:</span>
                 <span className="ml-2 font-medium">
-                  {(rotationConfig.shift_sequence || []).map(s => s.charAt(0).toUpperCase()).join(' → ')}
+                  {(rotationConfig.shift_sequence || []).map(s => s?.charAt(0)?.toUpperCase() || '').join(' → ')}
                 </span>
               </div>
               <div>
