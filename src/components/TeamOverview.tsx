@@ -4,7 +4,7 @@ import { TeamMemberCard } from './TeamMemberCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Users, Grid, List, LayoutGrid, Building2, ChevronDown, ChevronUp, Mail, Circle, GripVertical, MapPin, Home } from 'lucide-react';
+import { Search, Users, Grid, List, LayoutGrid, Building2, ChevronDown, ChevronUp, Mail, Circle, GripVertical, MapPin, Settings } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -17,7 +17,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { HybridWorkSettings } from './HybridWorkSettings';
+import { MemberEditDialog } from './MemberEditDialog';
 
 interface TeamOverviewProps {
   members: TeamMember[];
@@ -61,6 +61,13 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'roles' | 'departments'>('roles');
   const [expandedRoles, setExpandedRoles] = useState<Set<Role>>(new Set());
   const [expandedDepts, setExpandedDepts] = useState<Set<Department>>(new Set());
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+
+  const handleOpenMemberEdit = (member: TeamMember) => {
+    setSelectedMember(member);
+    setEditDialogOpen(true);
+  };
 
   const getLocationName = (locationId?: string) => {
     if (!locationId) return 'Unassigned';
@@ -417,31 +424,18 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
                                       <Badge variant="outline" className="text-xs">
                                         {member.department}
                                       </Badge>
-                                      {workLocations.length > 0 && (
-                                        <Select 
-                                          value={member.workLocationId || 'unassigned'} 
-                                          onValueChange={(v) => handleLocationChange(member.id, v === 'unassigned' ? null : v)}
-                                        >
-                                          <SelectTrigger className="h-7 w-[120px] text-xs">
-                                            <MapPin size={12} className="mr-1" />
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent className="bg-popover">
-                                            <SelectItem value="unassigned">Unassigned</SelectItem>
-                                            {workLocations.map(loc => (
-                                              <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      )}
-                                      <HybridWorkSettings
-                                        memberId={member.id}
-                                        memberName={member.name}
-                                        isHybrid={member.isHybrid}
-                                        officeDays={member.hybridOfficeDays}
-                                        wfhDays={member.hybridWfhDays}
-                                        onUpdate={onMemberUpdate}
-                                      />
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenMemberEdit(member);
+                                        }}
+                                        title="Edit member settings"
+                                      >
+                                        <Settings size={14} />
+                                      </Button>
                                       <div className="flex items-center gap-1.5">
                                         <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
                                         <span className={`text-xs capitalize ${STATUS_COLORS[member.status]}`}>
@@ -641,6 +635,15 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
           <p className="text-muted-foreground">No team members found matching your filters</p>
         </div>
       )}
+
+      {/* Member Edit Dialog */}
+      <MemberEditDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        member={selectedMember}
+        workLocations={workLocations}
+        onUpdate={onMemberUpdate}
+      />
     </div>
   );
 }

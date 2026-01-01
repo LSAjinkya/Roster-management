@@ -50,14 +50,18 @@ export default function Roster() {
       if (data && data.length > 0) {
         const members: TeamMember[] = data.map(member => ({
           id: member.id,
-          name: member.name,
-          email: member.email,
-          role: member.role as Role,
-          department: member.department as Department,
+          name: member.name || '',
+          email: member.email || '',
+          role: (member.role as Role) || 'L1',
+          department: (member.department as Department) || 'Infra',
           team: member.team as TeamGroup | undefined,
           status: (member.status as 'available' | 'on-leave' | 'unavailable') || 'available',
           reportingTLId: member.reporting_tl_id || undefined,
           weekOffEntitlement: (member.week_off_entitlement as 1 | 2) || 2,
+          isHybrid: member.is_hybrid || false,
+          hybridOfficeDays: member.hybrid_office_days || 5,
+          hybridWfhDays: member.hybrid_wfh_days || 0,
+          workLocationId: member.work_location_id || undefined,
         }));
         setTeamMembers(members);
       }

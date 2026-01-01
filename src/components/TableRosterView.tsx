@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
-import { ShiftAssignment, TeamMember, ShiftType, Department, DEPARTMENTS, TeamGroup, TEAM_GROUPS } from '@/types/roster';
+import { useState, useMemo, useEffect } from 'react';
+import { ShiftAssignment, TeamMember, ShiftType, Department, DEPARTMENTS, TeamGroup, TEAM_GROUPS, WorkLocation } from '@/types/roster';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Calendar, Edit2, ArrowLeftRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Edit2, ArrowLeftRight, Home } from 'lucide-react';
 import { 
   format, 
   startOfMonth, 
@@ -27,6 +27,8 @@ import { ShiftSwapDialog } from './ShiftSwapDialog';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TableRosterViewProps {
   assignments: ShiftAssignment[];
@@ -65,13 +67,43 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'all'>('all');
   const [teamFilter, setTeamFilter] = useState<TeamGroup | 'all'>('all');
   const [tlFilter, setTlFilter] = useState<string>('all');
+  const [shiftFilter, setShiftFilter] = useState<ShiftType | 'all'>('all');
+  const [locationFilter, setLocationFilter] = useState<string>('all');
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [editingDate, setEditingDate] = useState<Date | null>(null);
   const [editingShift, setEditingShift] = useState<ShiftType | null>(null);
+  const [workLocations, setWorkLocations] = useState<WorkLocation[]>([]);
   
   const { canEditShifts, isTL, user } = useAuth();
+
+  // Fetch work locations
+  useEffect(() => {
+    const fetchWorkLocations = async () => {
+      const { data, error } = await supabase
+        .from('work_locations')
+        .select('*')
+        .eq('is_active', true)
+        .order('location_type', { ascending: true })
+        .order('city', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (!error && data) {
+        setWorkLocations(data.map(l => ({
+          id: l.id,
+          name: l.name,
+          code: l.code,
+          is_active: l.is_active,
+          min_night_shift_count: l.min_night_shift_count,
+          work_from_home_if_below_min: l.work_from_home_if_below_min,
+          location_type: l.location_type as 'office' | 'datacenter' | 'remote' | undefined,
+          city: l.city || undefined,
+        })));
+      }
+    };
+    fetchWorkLocations();
+  }, []);
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -107,7 +139,7 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
     return null;
   }, [teamMembers, tlFilter]);
 
-  // Filter members by department, team and TL (show only members reporting to selected TL)
+  // Filter members by department, team, TL, shift and location
   const filteredMembers = useMemo(() => {
     let members = teamMembers;
     if (departmentFilter !== 'all') {
@@ -119,8 +151,80 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
     if (tlFilter !== 'all') {
       members = members.filter(m => m.reportingTLId === tlFilter);
     }
+    if (locationFilter !== 'all') {
+      if (locationFilter === 'unassigned') {
+        members = members.filter(m => !m.workLocationId);
+      } else {
+        members = members.filter(m => m.workLocationId === locationFilter);
+      }
+    }
+    // Filter by shift: only show members who have the selected shift type in the current month
+    if (shiftFilter !== 'all') {
+      const monthStartStr = format(monthStart, 'yyyy-MM-dd');
+      const monthEndStr = format(monthEnd, 'yyyy-MM-dd');
+      const memberIdsWithShift = new Set(
+        assignments
+          .filter(a => a.date >= monthStartStr && a.date <= monthEndStr && a.shiftType === shiftFilter)
+          .map(a => a.memberId)
+      );
+      members = members.filter(m => memberIdsWithShift.has(m.id));
+    }
     return members;
-  }, [teamMembers, departmentFilter, teamFilter, tlFilter]);
+  }, [teamMembers, departmentFilter, teamFilter, tlFilter, locationFilter, shiftFilter, assignments, monthStart, monthEnd]);
+
+  // Calculate single-person night shift WFH situations
+  const singlePersonNightWfh = useMemo(() => {
+    const wfhCells: Map<string, boolean> = new Map(); // key: `${memberId}-${date}`
+    
+    monthDays.forEach(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const nightAssignments = assignments.filter(a => a.date === dateStr && a.shiftType === 'night');
+      
+      // Group by location
+      const locationGroups: Map<string, string[]> = new Map();
+      nightAssignments.forEach(a => {
+        const member = teamMembers.find(m => m.id === a.memberId);
+        const locationId = member?.workLocationId || 'unassigned';
+        if (!locationGroups.has(locationId)) {
+          locationGroups.set(locationId, []);
+        }
+        locationGroups.get(locationId)!.push(a.memberId);
+      });
+
+      // Check each location for single-person situations
+      locationGroups.forEach((memberIds, locationId) => {
+        if (memberIds.length === 1 && locationId !== 'unassigned') {
+          const location = workLocations.find(l => l.id === locationId);
+          if (location && location.location_type === 'office' && location.work_from_home_if_below_min) {
+            wfhCells.set(`${memberIds[0]}-${dateStr}`, true);
+          }
+        }
+      });
+    });
+    
+    return wfhCells;
+  }, [assignments, teamMembers, monthDays, workLocations]);
+
+  const isSinglePersonWfh = (memberId: string, date: Date): boolean => {
+    return singlePersonNightWfh.has(`${memberId}-${format(date, 'yyyy-MM-dd')}`);
+  };
+
+  // Group office locations by city for filters
+  const officeLocationsByCity = useMemo(() => {
+    const grouped: Map<string, WorkLocation[]> = new Map();
+    workLocations.filter(l => l.location_type === 'office').forEach(loc => {
+      const city = loc.city || 'Other';
+      if (!grouped.has(city)) {
+        grouped.set(city, []);
+      }
+      grouped.get(city)!.push(loc);
+    });
+    return grouped;
+  }, [workLocations]);
+
+  const dcLocations = useMemo(() => {
+    return workLocations.filter(l => l.location_type === 'datacenter');
+  }, [workLocations]);
 
   // Group members by department for display
   const membersByDepartment = useMemo(() => {
@@ -259,6 +363,47 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
               {tlMembers.map(tl => (
                 <SelectItem key={tl.id} value={tl.id}>{tl.name}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+
+          {/* Shift Filter */}
+          <Select value={shiftFilter} onValueChange={(v) => setShiftFilter(v as ShiftType | 'all')}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="All Shifts" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Shifts</SelectItem>
+              <SelectItem value="morning">Morning</SelectItem>
+              <SelectItem value="afternoon">Afternoon</SelectItem>
+              <SelectItem value="night">Night</SelectItem>
+              <SelectItem value="general">General</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Location Filter */}
+          <Select value={locationFilter} onValueChange={setLocationFilter}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="All Locations" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Locations</SelectItem>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {Array.from(officeLocationsByCity.entries()).map(([city, locs]) => (
+                locs.map(loc => (
+                  <SelectItem key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </SelectItem>
+                ))
+              ))}
+              {dcLocations.length > 0 && (
+                <>
+                  {dcLocations.map(loc => (
+                    <SelectItem key={loc.id} value={loc.id}>
+                      DC: {loc.name}
+                    </SelectItem>
+                  ))}
+                </>
+              )}
             </SelectContent>
           </Select>
 
@@ -444,41 +589,55 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
                         const shift = getMemberShift(member.id, day);
                         const weekend = isWeekend(day);
                         const today = isToday(day);
+                        const isWfhSinglePerson = shift === 'night' && isSinglePersonWfh(member.id, day);
                         
                         return (
-                          <td 
-                            key={format(day, 'yyyy-MM-dd')}
-                            className={cn(
-                              "p-0.5 text-center",
-                              weekend && !shift && "bg-muted/30",
-                              today && "ring-1 ring-primary ring-inset",
-                              canEditShifts && "cursor-pointer hover:bg-primary/10"
-                            )}
-                            onClick={() => canEditShifts && handleCellClick(member, day, false)}
-                            onContextMenu={(e) => {
-                              if (canEditShifts && shift) {
-                                e.preventDefault();
-                                handleCellClick(member, day, true);
-                              }
-                            }}
-                            title={canEditShifts ? "Click to edit, Right-click to swap" : undefined}
-                          >
-                            {shift ? (
-                              <span className={cn(
-                                "inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-bold",
-                                shiftCellColors[shift]
-                              )}>
-                                {shiftLetters[shift]}
-                              </span>
-                            ) : (
-                              <span className={cn(
-                                "inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-medium",
-                                shiftCellColors.off
-                              )}>
-                                -
-                              </span>
-                            )}
-                          </td>
+                          <TooltipProvider key={format(day, 'yyyy-MM-dd')}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <td 
+                                  className={cn(
+                                    "p-0.5 text-center relative",
+                                    weekend && !shift && "bg-muted/30",
+                                    today && "ring-1 ring-primary ring-inset",
+                                    canEditShifts && "cursor-pointer hover:bg-primary/10",
+                                    isWfhSinglePerson && "bg-cyan-100/50"
+                                  )}
+                                  onClick={() => canEditShifts && handleCellClick(member, day, false)}
+                                  onContextMenu={(e) => {
+                                    if (canEditShifts && shift) {
+                                      e.preventDefault();
+                                      handleCellClick(member, day, true);
+                                    }
+                                  }}
+                                >
+                                  {shift ? (
+                                    <span className={cn(
+                                      "inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-bold",
+                                      shiftCellColors[shift]
+                                    )}>
+                                      {shiftLetters[shift]}
+                                      {isWfhSinglePerson && (
+                                        <Home size={8} className="absolute -top-0.5 -right-0.5 text-cyan-600" />
+                                      )}
+                                    </span>
+                                  ) : (
+                                    <span className={cn(
+                                      "inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-medium",
+                                      shiftCellColors.off
+                                    )}>
+                                      -
+                                    </span>
+                                  )}
+                                </td>
+                              </TooltipTrigger>
+                              {isWfhSinglePerson && (
+                                <TooltipContent>
+                                  <p className="text-xs">Single person at location - WFH</p>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
                         );
                       })}
                       {/* Summary columns */}
@@ -534,6 +693,10 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
             <span className="text-muted-foreground">Right-click to swap</span>
           </div>
         )}
+        <div className="flex items-center gap-1.5 border-l pl-4 ml-2">
+          <Home size={14} className="text-cyan-600" />
+          <span className="text-muted-foreground">Single person WFH</span>
+        </div>
       </div>
 
       {/* Edit Dialog */}
