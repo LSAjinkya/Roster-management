@@ -716,23 +716,6 @@ export default function Departments() {
                       </SelectContent>
                     </Select>
                     
-                    <Select
-                      value={String(member.week_off_entitlement || 2)}
-                      onValueChange={(value) => handleWeekOffEntitlementChange(member.id, parseInt(value))}
-                    >
-                      <SelectTrigger className="w-20" title="Week-off entitlement">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1" textValue="1 OFF">
-                          <span className="text-sm">1 OFF</span>
-                        </SelectItem>
-                        <SelectItem value="2" textValue="2 OFF">
-                          <span className="text-sm">2 OFF</span>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm">
