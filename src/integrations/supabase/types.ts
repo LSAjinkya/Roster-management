@@ -76,7 +76,10 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          off_days_per_cycle: number
+          rotation_enabled: boolean
           updated_at: string
+          work_days_per_cycle: number
         }
         Insert: {
           created_at?: string
@@ -85,7 +88,10 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          off_days_per_cycle?: number
+          rotation_enabled?: boolean
           updated_at?: string
+          work_days_per_cycle?: number
         }
         Update: {
           created_at?: string
@@ -94,7 +100,10 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          off_days_per_cycle?: number
+          rotation_enabled?: boolean
           updated_at?: string
+          work_days_per_cycle?: number
         }
         Relationships: []
       }

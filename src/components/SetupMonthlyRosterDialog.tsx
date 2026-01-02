@@ -26,11 +26,23 @@ interface SetupMonthlyRosterDialogProps {
   }[];
   onComplete?: () => void;
 }
+
+// Department configuration from database
+interface DepartmentRosterConfig {
+  id: string;
+  name: string;
+  work_days_per_cycle: number;
+  off_days_per_cycle: number;
+  rotation_enabled: boolean;
+}
+
 interface DepartmentShiftConfig {
   department: Department;
   defaultShift: ShiftType;
   rotateShifts: boolean;
   availableShifts: ShiftType[];
+  workDaysPerCycle: number;
+  offDaysPerCycle: number;
 }
 interface PreviewAssignment {
   member_id: string;
@@ -79,6 +91,9 @@ export function SetupMonthlyRosterDialog({
   const [rotationStates, setRotationStates] = useState<MemberRotationState[]>([]);
   const [loadingRotation, setLoadingRotation] = useState(false);
   const [use15DayRotation, setUse15DayRotation] = useState(true);
+  
+  // Department roster configs from database
+  const [departmentRosterConfigs, setDepartmentRosterConfigs] = useState<DepartmentRosterConfig[]>([]);
 
   // Filter team members by selected departments
   const filteredTeamMembers = useMemo(() => {
@@ -87,12 +102,36 @@ export function SetupMonthlyRosterDialog({
   }, [teamMembers, selectedDepartments]);
 
   // Department shift configuration - Rotation order: Afternoon → Morning → Night
-  const [deptConfigs, setDeptConfigs] = useState<DepartmentShiftConfig[]>(() => DEPARTMENTS.map(dept => ({
-    department: dept,
-    defaultShift: dept === 'HR' || dept === 'Vendor Coordinator' ? 'general' : 'afternoon',
-    rotateShifts: dept !== 'HR' && dept !== 'Vendor Coordinator',
-    availableShifts: dept === 'HR' || dept === 'Vendor Coordinator' ? ['general'] : ['afternoon', 'morning', 'night'] // Order: A → M → N
-  })));
+  // Now includes work_days_per_cycle and off_days_per_cycle from DB
+  const [deptConfigs, setDeptConfigs] = useState<DepartmentShiftConfig[]>([]);
+  
+  // Initialize dept configs when departmentRosterConfigs are loaded
+  useEffect(() => {
+    if (departmentRosterConfigs.length > 0) {
+      setDeptConfigs(DEPARTMENTS.map(dept => {
+        const dbConfig = departmentRosterConfigs.find(d => d.name === dept);
+        const isGeneralOnly = dept === 'HR' || dept === 'Vendor Coordinator';
+        return {
+          department: dept,
+          defaultShift: isGeneralOnly ? 'general' : 'afternoon',
+          rotateShifts: dbConfig?.rotation_enabled ?? !isGeneralOnly,
+          availableShifts: isGeneralOnly ? ['general'] : ['afternoon', 'morning', 'night'],
+          workDaysPerCycle: dbConfig?.work_days_per_cycle ?? 5,
+          offDaysPerCycle: dbConfig?.off_days_per_cycle ?? 2,
+        };
+      }));
+    } else {
+      // Default configs before DB loads
+      setDeptConfigs(DEPARTMENTS.map(dept => ({
+        department: dept,
+        defaultShift: dept === 'HR' || dept === 'Vendor Coordinator' ? 'general' : 'afternoon',
+        rotateShifts: dept !== 'HR' && dept !== 'Vendor Coordinator',
+        availableShifts: dept === 'HR' || dept === 'Vendor Coordinator' ? ['general'] : ['afternoon', 'morning', 'night'],
+        workDaysPerCycle: 5,
+        offDaysPerCycle: 2,
+      })));
+    }
+  }, [departmentRosterConfigs]);
   const nextMonth = addMonths(new Date(), 1);
   const monthStart = startOfMonth(nextMonth);
   const monthEnd = endOfMonth(nextMonth);
@@ -115,8 +154,26 @@ export function SetupMonthlyRosterDialog({
       fetchRotationData();
       fetchHolidays();
       fetchPreviousMonthState();
+      fetchDepartmentConfigs();
     }
   }, [open]);
+
+  // Fetch department roster configs
+  const fetchDepartmentConfigs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, name, work_days_per_cycle, off_days_per_cycle, rotation_enabled')
+        .eq('is_active', true);
+      
+      if (error) throw error;
+      if (data) {
+        setDepartmentRosterConfigs(data as DepartmentRosterConfig[]);
+      }
+    } catch (error) {
+      console.error('Error fetching department configs:', error);
+    }
+  };
 
   // Fetch last assignments from previous month for cross-month continuity
   const fetchPreviousMonthState = async () => {
@@ -258,6 +315,28 @@ export function SetupMonthlyRosterDialog({
     } : config));
   };
 
+  // Save department configs to database
+  const saveDepartmentConfigs = async () => {
+    try {
+      const updatePromises = deptConfigs.map(async config => {
+        const dbConfig = departmentRosterConfigs.find(d => d.name === config.department);
+        if (dbConfig) {
+          await supabase
+            .from('departments')
+            .update({
+              work_days_per_cycle: config.workDaysPerCycle,
+              off_days_per_cycle: config.offDaysPerCycle,
+              rotation_enabled: config.rotateShifts,
+            })
+            .eq('id', dbConfig.id);
+        }
+      });
+      await Promise.all(updatePromises);
+    } catch (error) {
+      console.error('Error saving department configs:', error);
+    }
+  };
+
   // Get uninitialized members
   const uninitializedMembers = useMemo(() => {
     const initializedIds = new Set(rotationStates.map(s => s.member_id));
@@ -291,8 +370,9 @@ export function SetupMonthlyRosterDialog({
     // Track each member's comprehensive state with cross-month continuity
     interface MemberCycleTracker {
       consecutiveWorkDays: number; // Must be 3-7
-      offDaysRemaining: number; // Based on user's week_off_entitlement (1 or 2)
-      weekOffEntitlement: 1 | 2; // User's configured OFF entitlement
+      offDaysRemaining: number; // Based on department or user's week_off_entitlement
+      weekOffEntitlement: number; // From department config or user setting
+      standardWorkDays: number; // From department config
       workDaysInCurrentShift: number; // For shift stability (rotate after 10)
       currentShift: ShiftType; // Current assigned shift type
       lastShiftType: ShiftType | null; // Previous shift for night transition check
@@ -302,13 +382,23 @@ export function SetupMonthlyRosterDialog({
     }
     const memberTrackers: Record<string, MemberCycleTracker> = {};
 
+    // Get department config lookup
+    const getDeptConfig = (dept: string) => deptConfigs.find(c => c.department === dept);
+
     // Initialize trackers using previous month state for MONTH BOUNDARY CONTINUITY
     allMembers.forEach(member => {
       const isRotating = ROTATING_DEPARTMENTS.includes(member.department) && member.role !== 'TL' && member.role !== 'Manager';
       const isGeneralShift = GENERAL_SHIFT_DEPARTMENTS.includes(member.department) || member.role === 'TL' || member.role === 'Manager';
 
-      // Get user's week-off entitlement (default: 2)
-      const weekOffEntitlement = ((member as any).weekOffEntitlement || 2) as 1 | 2;
+      // Get department-specific config
+      const deptConfig = getDeptConfig(member.department);
+      const deptWorkDays = deptConfig?.workDaysPerCycle ?? STANDARD_WORK_DAYS;
+      const deptOffDays = deptConfig?.offDaysPerCycle ?? 2;
+      
+      // Use department config, fallback to user's week-off entitlement, then default to 2
+      const weekOffEntitlement = deptOffDays || ((member as any).weekOffEntitlement || 2);
+      const standardWorkDays = deptWorkDays || STANDARD_WORK_DAYS;
+      
       const prevState = previousMonthState[member.id];
       const rotationState = stateMap[member.id];
 
@@ -316,11 +406,21 @@ export function SetupMonthlyRosterDialog({
       const lastShift = prevState?.shift || rotationState?.current_shift_type || SHIFT_ROTATION_ORDER[0];
       const nextShiftInRotation = SHIFT_ROTATION_ORDER[(SHIFT_ROTATION_ORDER.indexOf(lastShift as any) + 1) % 3];
       const pendingNightTransition = lastShift === 'morning' && nextShiftInRotation === 'night' && prevState?.workDaysInCurrent >= MIN_CONSECUTIVE_WORK_DAYS;
+      
+      // IMPORTANT: Check last month's week-off usage for continuity
+      // If member had OFF days at end of last month, they should continue work cycle
+      // If member was working at end of last month, check if they're due for OFF
+      const wasOnOffAtMonthEnd = prevState?.offDaysUsed && prevState.offDaysUsed > 0;
+      const continuingOffDays = wasOnOffAtMonthEnd 
+        ? Math.max(0, weekOffEntitlement - prevState.offDaysUsed) 
+        : weekOffEntitlement;
+      
       memberTrackers[member.id] = {
         // MONTH BOUNDARY CONTINUITY: Continue from previous month's work day count
         consecutiveWorkDays: prevState?.workDaysInCurrent || 0,
-        offDaysRemaining: weekOffEntitlement,
+        offDaysRemaining: continuingOffDays,
         weekOffEntitlement,
+        standardWorkDays,
         workDaysInCurrentShift: 0,
         currentShift: (prevState?.shift || rotationState?.current_shift_type || SHIFT_ROTATION_ORDER[0]) as ShiftType,
         lastShiftType: null,
@@ -366,11 +466,16 @@ export function SetupMonthlyRosterDialog({
           const tracker = memberTrackers[member.id];
           if (!tracker) {
             // Initialize tracker for general shift workers
-            const weekOffEntitlement = ((member as any).weekOffEntitlement || 2) as 1 | 2;
+            const deptConfig = getDeptConfig(member.department);
+            const deptWorkDays = deptConfig?.workDaysPerCycle ?? STANDARD_WORK_DAYS;
+            const deptOffDays = deptConfig?.offDaysPerCycle ?? 2;
+            const weekOffEntitlement = deptOffDays || ((member as any).weekOffEntitlement || 2);
+            
             memberTrackers[member.id] = {
               consecutiveWorkDays: 0,
               offDaysRemaining: weekOffEntitlement,
               weekOffEntitlement,
+              standardWorkDays: deptWorkDays,
               workDaysInCurrentShift: 0,
               currentShift: 'general',
               lastShiftType: null,
@@ -385,8 +490,8 @@ export function SetupMonthlyRosterDialog({
           // HARD LIMIT: Max 7 consecutive work days
           let shouldBeOff = t.consecutiveWorkDays >= MAX_CONSECUTIVE_WORK_DAYS;
 
-          // Standard pattern: 5 work + 2 off (or 1 off based on entitlement)
-          if (!shouldBeOff && t.consecutiveWorkDays >= STANDARD_WORK_DAYS && t.offDaysRemaining > 0) {
+          // Use department-specific standard work days (default: 5 work + configured off days)
+          if (!shouldBeOff && t.consecutiveWorkDays >= t.standardWorkDays && t.offDaysRemaining > 0) {
             shouldBeOff = true;
           }
 
@@ -453,8 +558,8 @@ export function SetupMonthlyRosterDialog({
             tracker.pendingNightTransition = false;
           }
 
-          // RULE 3: Standard pattern (5 work + OFF based on entitlement)
-          else if (tracker.consecutiveWorkDays >= STANDARD_WORK_DAYS && tracker.offDaysRemaining > 0) {
+          // RULE 3: Department-specific work pattern (use configured work days + OFF based on entitlement)
+          else if (tracker.consecutiveWorkDays >= tracker.standardWorkDays && tracker.offDaysRemaining > 0) {
             shouldBeOff = true;
             offReason = 'standard_cycle';
           }
@@ -628,6 +733,9 @@ export function SetupMonthlyRosterDialog({
   const handleSaveRoster = async (saveStatus: RosterSaveStatus = 'draft') => {
     setLoading(true);
     try {
+      // Save department configs first
+      await saveDepartmentConfigs();
+      
       // Apply single-person night WFH rule
       const processedAssignments = applySinglePersonNightWfhRule(previewAssignments);
       
@@ -956,12 +1064,49 @@ export function SetupMonthlyRosterDialog({
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-3">
+                          {/* Work Days and Off Days Configuration */}
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Work Days/Cycle</Label>
+                              <Select 
+                                value={String(config.workDaysPerCycle)} 
+                                onValueChange={v => updateDeptConfig(config.department, {
+                                  workDaysPerCycle: parseInt(v)
+                                })}
+                              >
+                                <SelectTrigger className="h-8">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {[3, 4, 5, 6, 7].map(d => (
+                                    <SelectItem key={d} value={String(d)}>{d} days</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Off Days/Cycle</Label>
+                              <Select 
+                                value={String(config.offDaysPerCycle)} 
+                                onValueChange={v => updateDeptConfig(config.department, {
+                                  offDaysPerCycle: parseInt(v)
+                                })}
+                              >
+                                <SelectTrigger className="h-8">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {[1, 2, 3].map(d => (
+                                    <SelectItem key={d} value={String(d)}>{d} day{d > 1 ? 's' : ''}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
                             <div className="space-y-1">
                               <Label className="text-xs">Default Shift</Label>
                               <Select value={config.defaultShift} onValueChange={v => updateDeptConfig(config.department, {
-                          defaultShift: v as ShiftType
-                        })}>
+                                defaultShift: v as ShiftType
+                              })}>
                                 <SelectTrigger className="h-8">
                                   <SelectValue />
                                 </SelectTrigger>
@@ -972,23 +1117,23 @@ export function SetupMonthlyRosterDialog({
                                 </SelectContent>
                               </Select>
                             </div>
-
-                            {config.rotateShifts && <div className="space-y-1">
-                                <Label className="text-xs">Rotate Through</Label>
-                                <div className="flex gap-1 flex-wrap">
-                                  {(['morning', 'afternoon', 'night'] as ShiftType[]).map(shift => <Button key={shift} variant={config.availableShifts.includes(shift) ? "default" : "outline"} size="sm" className="h-7 px-2 text-xs" onClick={() => {
-                            const newShifts = config.availableShifts.includes(shift) ? config.availableShifts.filter(s => s !== shift) : [...config.availableShifts, shift];
-                            if (newShifts.length > 0) {
-                              updateDeptConfig(config.department, {
-                                availableShifts: newShifts
-                              });
-                            }
-                          }}>
-                                      {shift.charAt(0).toUpperCase() + shift.slice(1, 3)}
-                                    </Button>)}
-                                </div>
-                              </div>}
                           </div>
+
+                          {config.rotateShifts && <div className="space-y-1">
+                              <Label className="text-xs">Rotate Through</Label>
+                              <div className="flex gap-1 flex-wrap">
+                                {(['morning', 'afternoon', 'night'] as ShiftType[]).map(shift => <Button key={shift} variant={config.availableShifts.includes(shift) ? "default" : "outline"} size="sm" className="h-7 px-2 text-xs" onClick={() => {
+                          const newShifts = config.availableShifts.includes(shift) ? config.availableShifts.filter(s => s !== shift) : [...config.availableShifts, shift];
+                          if (newShifts.length > 0) {
+                            updateDeptConfig(config.department, {
+                              availableShifts: newShifts
+                            });
+                          }
+                        }}>
+                                    {shift.charAt(0).toUpperCase() + shift.slice(1, 3)}
+                                  </Button>)}
+                              </div>
+                            </div>}
                         </div>;
                 })}
                   </div>
@@ -1015,14 +1160,19 @@ export function SetupMonthlyRosterDialog({
                 </div>
 
                 <div className="rounded-lg border p-4">
-                  <h4 className="font-medium mb-3">Department Shifts</h4>
-                  <div className="space-y-1 text-sm">
-                    {deptConfigs.filter(c => filteredTeamMembers.some(m => m.department === c.department)).map(config => <div key={config.department} className="flex justify-between">
-                        <span className="text-muted-foreground">{config.department}:</span>
-                        <span>
-                          {config.rotateShifts ? config.availableShifts.map(s => s.charAt(0).toUpperCase()).join('/') : config.defaultShift.charAt(0).toUpperCase() + config.defaultShift.slice(1)}
-                        </span>
-                      </div>)}
+                  <h4 className="font-medium mb-3">Department Configuration</h4>
+                  <div className="space-y-2 text-sm">
+                    {deptConfigs.filter(c => filteredTeamMembers.some(m => m.department === c.department)).map(config => (
+                      <div key={config.department} className="flex justify-between items-center py-1 border-b last:border-0">
+                        <span className="font-medium">{config.department}</span>
+                        <div className="flex items-center gap-3 text-muted-foreground">
+                          <span>{config.workDaysPerCycle} work + {config.offDaysPerCycle} off</span>
+                          <span className="text-xs px-2 py-0.5 bg-muted rounded">
+                            {config.rotateShifts ? config.availableShifts.map(s => s.charAt(0).toUpperCase()).join('/') : config.defaultShift.charAt(0).toUpperCase() + config.defaultShift.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </TabsContent>
