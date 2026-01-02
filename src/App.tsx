@@ -18,6 +18,7 @@ import RoleManagement from "./pages/RoleManagement";
 import LeaveRequests from "./pages/LeaveRequests";
 import OrgChartPage from "./pages/OrgChartPage";
 import PermissionsMatrix from "./pages/PermissionsMatrix";
+import RosterSettings from "./pages/RosterSettings";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,11 @@ const App = () => (
               <Route path="/admin/permissions" element={
                 <ProtectedRoute requiredRoles={['admin', 'hr']}>
                   <PermissionsMatrix />
+                </ProtectedRoute>
+              } />
+              <Route path="/roster-settings" element={
+                <ProtectedRoute requiredRoles={['admin', 'hr']}>
+                  <RosterSettings />
                 </ProtectedRoute>
               } />
               <Route path="/org-chart" element={<OrgChartPage />} />

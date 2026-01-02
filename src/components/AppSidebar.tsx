@@ -12,7 +12,8 @@ import {
   Shield,
   CalendarDays,
   Network,
-  Grid3X3
+  Grid3X3,
+  SlidersHorizontal
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -40,8 +41,7 @@ const navItems: NavItem[] = [
   { icon: Building2, label: 'Departments', path: '/departments', requiredRoles: ['admin', 'hr', 'tl'] },
   { icon: Network, label: 'Org Chart', path: '/org-chart' },
   { icon: Shield, label: 'Users & Roles', path: '/admin/roles', requiredRoles: ['admin', 'hr'] },
-  // Permissions menu hidden per user request
-  // { icon: Grid3X3, label: 'Permissions', path: '/admin/permissions', requiredRoles: ['admin', 'hr'] },
+  { icon: SlidersHorizontal, label: 'Roster Settings', path: '/roster-settings', requiredRoles: ['admin', 'hr'] },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
