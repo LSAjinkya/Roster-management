@@ -58,7 +58,7 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'all'>('all');
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
   const [locationFilter, setLocationFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'roles' | 'departments'>('roles');
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'roles' | 'departments' | 'locations'>('roles');
   const [expandedRoles, setExpandedRoles] = useState<Set<Role>>(new Set());
   const [expandedDepts, setExpandedDepts] = useState<Set<Department>>(new Set());
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -299,13 +299,13 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
               <Grid size={16} />
             </Button>
             <Button
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              variant={viewMode === 'locations' ? 'default' : 'ghost'}
               size="icon"
               className="h-8 w-8"
-              onClick={() => setViewMode('list')}
-              title="List View"
+              onClick={() => setViewMode('locations')}
+              title="Group by Location"
             >
-              <List size={16} />
+              <MapPin size={16} />
             </Button>
           </div>
         </div>
@@ -639,6 +639,63 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
                 compact 
                 className="hover:bg-secondary/30"
               />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Locations View */}
+      {viewMode === 'locations' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Unassigned */}
+          <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+            <div className="px-4 py-3 border-b border-border/50 bg-muted/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MapPin size={16} className="text-muted-foreground" />
+                  <span className="font-semibold">Unassigned</span>
+                </div>
+                <Badge variant="secondary">{filteredMembers.filter(m => !m.workLocationId).length}</Badge>
+              </div>
+            </div>
+            <div className="p-4 space-y-2">
+              {filteredMembers.filter(m => !m.workLocationId).map((member) => (
+                <div key={member.id} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/30 cursor-pointer hover:bg-secondary/50" onClick={() => handleOpenMemberEdit(member)}>
+                  <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
+                  <span className="text-sm font-medium">{member.name}</span>
+                </div>
+              ))}
+              {filteredMembers.filter(m => !m.workLocationId).length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-2">No members</p>
+              )}
+            </div>
+          </div>
+          {/* By Location */}
+          {workLocations.map((location) => {
+            const locationMembers = filteredMembers.filter(m => m.workLocationId === location.id);
+            return (
+              <div key={location.id} className="bg-card rounded-xl border border-border/50 overflow-hidden">
+                <div className="px-4 py-3 border-b border-border/50 bg-primary/5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <MapPin size={16} className="text-primary" />
+                      <span className="font-semibold">{location.name}</span>
+                    </div>
+                    <Badge variant="outline">{locationMembers.length}</Badge>
+                  </div>
+                </div>
+                <div className="p-4 space-y-2">
+                  {locationMembers.map((member) => (
+                    <div key={member.id} className="flex items-center gap-2 p-2 rounded-lg bg-secondary/30 cursor-pointer hover:bg-secondary/50" onClick={() => handleOpenMemberEdit(member)}>
+                      <Circle className={`h-2 w-2 fill-current ${STATUS_COLORS[member.status]}`} />
+                      <span className="text-sm font-medium">{member.name}</span>
+                    </div>
+                  ))}
+                  {locationMembers.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-2">No members</p>
+                  )}
+                </div>
+              </div>
             );
           })}
         </div>
