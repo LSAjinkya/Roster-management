@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { format, isWeekend, isToday, eachDayOfInterval, startOfMonth, endOfMonth } from 'date-fns';
-import { TeamMember, ShiftType, Department, TeamGroup, TEAM_GROUPS } from '@/types/roster';
+import { TeamMember, ShiftType, Department } from '@/types/roster';
 import { cn } from '@/lib/utils';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { Edit2, Users, Building2 } from 'lucide-react';
+import { Building2, MapPin } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '@/integrations/supabase/client';
 
 interface PreviewAssignment {
   member_id: string;
@@ -20,6 +20,13 @@ interface RosterPreviewTableProps {
   month: Date;
   onEditCell?: (memberId: string, date: string, currentShift: ShiftType | null) => void;
   editable?: boolean;
+}
+
+interface WorkLocation {
+  id: string;
+  name: string;
+  code: string;
+  city: string | null;
 }
 
 const shiftCellColors: Record<ShiftType | 'off', string> = {
@@ -47,11 +54,7 @@ const shiftLetters: Record<ShiftType, string> = {
   'paid-leave': 'PL',
 };
 
-const TEAM_COLORS: Record<TeamGroup, string> = {
-  'Alpha': 'bg-blue-500/20 text-blue-700 border-blue-500/30',
-  'Gamma': 'bg-green-500/20 text-green-700 border-green-500/30',
-  'Beta': 'bg-orange-500/20 text-orange-700 border-orange-500/30',
-};
+type WorkShiftType = 'morning' | 'afternoon' | 'night' | 'general';
 
 export function RosterPreviewTable({ 
   assignments, 
@@ -60,24 +63,24 @@ export function RosterPreviewTable({
   onEditCell,
   editable = false 
 }: RosterPreviewTableProps) {
-  const [viewMode, setViewMode] = useState<'team' | 'department'>('team');
+  const [viewMode, setViewMode] = useState<'department' | 'location'>('department');
+  const [workLocations, setWorkLocations] = useState<WorkLocation[]>([]);
   const monthStart = startOfMonth(month);
   const monthEnd = endOfMonth(month);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  // Group members by team
-  const membersByTeam = useMemo(() => {
-    const grouped: Record<string, TeamMember[]> = {};
-    TEAM_GROUPS.forEach(team => {
-      grouped[team] = teamMembers.filter(m => (m.team || 'Alpha') === team);
-    });
-    // Add "No Team" for members without team assignment
-    const noTeam = teamMembers.filter(m => !m.team);
-    if (noTeam.length > 0 && !grouped['Alpha']?.some(m => noTeam.includes(m))) {
-      // Members without team are already in Alpha
-    }
-    return grouped;
-  }, [teamMembers]);
+  // Fetch work locations
+  useEffect(() => {
+    const fetchLocations = async () => {
+      const { data } = await supabase
+        .from('work_locations')
+        .select('id, name, code, city')
+        .eq('is_active', true)
+        .order('name');
+      if (data) setWorkLocations(data);
+    };
+    fetchLocations();
+  }, []);
 
   // Group members by department
   const membersByDepartment = useMemo(() => {
@@ -90,6 +93,21 @@ export function RosterPreviewTable({
     });
     return grouped;
   }, [teamMembers]);
+
+  // Group members by location
+  const membersByLocation = useMemo(() => {
+    const grouped: Record<string, { location: WorkLocation | null; members: TeamMember[] }> = {};
+    
+    teamMembers.forEach(member => {
+      const locationId = member.workLocationId || 'unknown';
+      if (!grouped[locationId]) {
+        const location = workLocations.find(l => l.id === locationId) || null;
+        grouped[locationId] = { location, members: [] };
+      }
+      grouped[locationId].members.push(member);
+    });
+    return grouped;
+  }, [teamMembers, workLocations]);
 
   const getAssignment = (memberId: string, date: string): ShiftType | null => {
     const assignment = assignments.find(a => a.member_id === memberId && a.date === date);
@@ -112,28 +130,48 @@ export function RosterPreviewTable({
     };
   };
 
-  // Calculate team shift summary for today
-  const getTeamShiftSummary = (team: TeamGroup) => {
-    const members = membersByTeam[team] || [];
+  // Calculate department shift summary
+  const getDepartmentShiftSummary = (dept: string) => {
+    const members = membersByDepartment[dept] || [];
     const memberIds = new Set(members.map(m => m.id));
     
-    const summary = {
+    const summary: Record<WorkShiftType, number> = {
       morning: 0,
       afternoon: 0,
       night: 0,
       general: 0,
-      off: 0,
-      total: members.length,
     };
 
-    // Get all assignments for all days and aggregate
     assignments.forEach(a => {
       if (memberIds.has(a.member_id)) {
-        if (a.shift_type === 'morning') summary.morning++;
-        else if (a.shift_type === 'afternoon') summary.afternoon++;
-        else if (a.shift_type === 'night') summary.night++;
-        else if (a.shift_type === 'general') summary.general++;
-        else if (a.shift_type === 'week-off' || a.shift_type === 'public-off' || a.shift_type === 'comp-off') summary.off++;
+        const shiftType = a.shift_type as WorkShiftType;
+        if (shiftType in summary) {
+          summary[shiftType]++;
+        }
+      }
+    });
+
+    return summary;
+  };
+
+  // Calculate location shift summary
+  const getLocationShiftSummary = (locationId: string) => {
+    const { members } = membersByLocation[locationId] || { members: [] };
+    const memberIds = new Set(members.map(m => m.id));
+    
+    const summary: Record<WorkShiftType, number> = {
+      morning: 0,
+      afternoon: 0,
+      night: 0,
+      general: 0,
+    };
+
+    assignments.forEach(a => {
+      if (memberIds.has(a.member_id)) {
+        const shiftType = a.shift_type as WorkShiftType;
+        if (shiftType in summary) {
+          summary[shiftType]++;
+        }
       }
     });
 
@@ -141,19 +179,17 @@ export function RosterPreviewTable({
   };
 
   // Helper to render member row
-  const renderMemberRow = (member: TeamMember) => {
+  const renderMemberRow = (member: TeamMember, showLocation = false) => {
     const stats = getMemberStats(member.id);
+    const location = workLocations.find(l => l.id === member.workLocationId);
     return (
       <tr key={member.id} className="border-b border-border/20 hover:bg-muted/10">
         <td className="sticky left-0 z-10 bg-card p-1.5 font-medium truncate">
           <div className="flex items-center gap-1">
             <span>{member.name}</span>
-            {viewMode === 'department' && member.team && (
-              <span className={cn(
-                "px-1 py-0.5 rounded text-[8px] font-medium border",
-                TEAM_COLORS[member.team as TeamGroup] || TEAM_COLORS['Alpha']
-              )}>
-                {member.team?.charAt(0)}
+            {showLocation && location && (
+              <span className="px-1 py-0.5 rounded text-[8px] font-medium border bg-muted/50">
+                {location.code}
               </span>
             )}
           </div>
@@ -207,66 +243,127 @@ export function RosterPreviewTable({
     );
   };
 
+  // Render shift distribution badge
+  const renderShiftDistribution = (summary: Record<WorkShiftType, number>) => (
+    <div className="flex gap-2 text-xs">
+      <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-shift-morning">
+        <span className="font-bold text-amber-900">M</span>
+        <span className="text-amber-700">: {summary.morning}</span>
+      </div>
+      <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-shift-afternoon">
+        <span className="font-bold text-sky-900">A</span>
+        <span className="text-sky-700">: {summary.afternoon}</span>
+      </div>
+      <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-shift-night">
+        <span className="font-bold text-violet-900">N</span>
+        <span className="text-violet-700">: {summary.night}</span>
+      </div>
+      {summary.general > 0 && (
+        <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-shift-general">
+          <span className="font-bold text-emerald-900">G</span>
+          <span className="text-emerald-700">: {summary.general}</span>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-3">
-      {/* Team Shift Summary Cards */}
-      <div className="grid grid-cols-3 gap-3">
-        {TEAM_GROUPS.map(team => {
-          const summary = getTeamShiftSummary(team);
-          const members = membersByTeam[team] || [];
-          return (
-            <div 
-              key={team}
-              className={cn(
-                "rounded-lg border p-3",
-                team === 'Alpha' && "bg-blue-50 dark:bg-blue-950/30 border-blue-300",
-                team === 'Gamma' && "bg-green-50 dark:bg-green-950/30 border-green-300",
-                team === 'Beta' && "bg-orange-50 dark:bg-orange-950/30 border-orange-300"
-              )}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className={cn(
-                  "px-2 py-0.5 rounded border font-bold text-sm",
-                  TEAM_COLORS[team]
-                )}>
-                  Team {team}
-                </span>
-                <span className="text-xs text-muted-foreground">{members.length} members</span>
-              </div>
-              <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                <div className="rounded bg-shift-morning p-1.5">
-                  <div className="font-bold text-amber-900">{summary.morning}</div>
-                  <div className="text-amber-700 text-[10px]">Morning</div>
+      {/* Department-wise and Location-wise Shift Summary Cards */}
+      {viewMode === 'department' ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {Object.entries(membersByDepartment).map(([dept, members]) => {
+            const summary = getDepartmentShiftSummary(dept);
+            return (
+              <div 
+                key={dept}
+                className="rounded-lg border p-3 bg-muted/20"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Building2 size={14} className="text-primary" />
+                    <span className="font-semibold text-sm">{dept}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{members.length} members</span>
                 </div>
-                <div className="rounded bg-shift-afternoon p-1.5">
-                  <div className="font-bold text-sky-900">{summary.afternoon}</div>
-                  <div className="text-sky-700 text-[10px]">Afternoon</div>
-                </div>
-                <div className="rounded bg-shift-night p-1.5">
-                  <div className="font-bold text-violet-900">{summary.night}</div>
-                  <div className="text-violet-700 text-[10px]">Night</div>
-                </div>
-                <div className="rounded bg-gray-200 p-1.5">
-                  <div className="font-bold text-gray-700">{summary.off}</div>
-                  <div className="text-gray-600 text-[10px]">Offs</div>
+                <div className="grid grid-cols-4 gap-1 text-center text-xs">
+                  <div className="rounded bg-shift-morning p-1">
+                    <div className="font-bold text-amber-900">{summary.morning}</div>
+                    <div className="text-amber-700 text-[9px]">M</div>
+                  </div>
+                  <div className="rounded bg-shift-afternoon p-1">
+                    <div className="font-bold text-sky-900">{summary.afternoon}</div>
+                    <div className="text-sky-700 text-[9px]">A</div>
+                  </div>
+                  <div className="rounded bg-shift-night p-1">
+                    <div className="font-bold text-violet-900">{summary.night}</div>
+                    <div className="text-violet-700 text-[9px]">N</div>
+                  </div>
+                  <div className="rounded bg-shift-general p-1">
+                    <div className="font-bold text-emerald-900">{summary.general}</div>
+                    <div className="text-emerald-700 text-[9px]">G</div>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {Object.entries(membersByLocation).map(([locId, { location, members }]) => {
+            const summary = getLocationShiftSummary(locId);
+            const locationName = location?.name || 'Unknown Location';
+            const locationCity = location?.city || '';
+            return (
+              <div 
+                key={locId}
+                className="rounded-lg border p-3 bg-muted/20"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <MapPin size={14} className="text-primary" />
+                    <div>
+                      <span className="font-semibold text-sm">{locationName}</span>
+                      {locationCity && <span className="text-xs text-muted-foreground ml-1">({locationCity})</span>}
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{members.length}</span>
+                </div>
+                <div className="grid grid-cols-4 gap-1 text-center text-xs">
+                  <div className="rounded bg-shift-morning p-1">
+                    <div className="font-bold text-amber-900">{summary.morning}</div>
+                    <div className="text-amber-700 text-[9px]">M</div>
+                  </div>
+                  <div className="rounded bg-shift-afternoon p-1">
+                    <div className="font-bold text-sky-900">{summary.afternoon}</div>
+                    <div className="text-sky-700 text-[9px]">A</div>
+                  </div>
+                  <div className="rounded bg-shift-night p-1">
+                    <div className="font-bold text-violet-900">{summary.night}</div>
+                    <div className="text-violet-700 text-[9px]">N</div>
+                  </div>
+                  <div className="rounded bg-shift-general p-1">
+                    <div className="font-bold text-emerald-900">{summary.general}</div>
+                    <div className="text-emerald-700 text-[9px]">G</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* View Mode Toggle */}
       <div className="flex justify-end">
-        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'team' | 'department')}>
+        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'department' | 'location')}>
           <TabsList className="h-8">
-            <TabsTrigger value="team" className="text-xs gap-1 h-7">
-              <Users size={12} />
-              Team View
-            </TabsTrigger>
             <TabsTrigger value="department" className="text-xs gap-1 h-7">
               <Building2 size={12} />
               Department View
+            </TabsTrigger>
+            <TabsTrigger value="location" className="text-xs gap-1 h-7">
+              <MapPin size={12} />
+              Location View
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -298,51 +395,56 @@ export function RosterPreviewTable({
             </tr>
           </thead>
           <tbody>
-            {viewMode === 'team' ? (
-              // Team-based view
+            {viewMode === 'department' ? (
+              // Department-based view
               <>
-                {TEAM_GROUPS.map(team => {
-                  const members = membersByTeam[team] || [];
-                  if (members.length === 0) return null;
-                  
+                {Object.entries(membersByDepartment).map(([department, members]) => {
+                  const summary = getDepartmentShiftSummary(department);
                   return (
-                    <>
-                      <tr key={`team-${team}`} className={cn(
-                        "border-t-2",
-                        team === 'Alpha' && "bg-blue-50 dark:bg-blue-950/30 border-blue-300",
-                        team === 'Gamma' && "bg-green-50 dark:bg-green-950/30 border-green-300",
-                        team === 'Beta' && "bg-orange-50 dark:bg-orange-950/30 border-orange-300"
-                      )}>
+                    <React.Fragment key={`dept-${department}`}>
+                      <tr className="bg-muted/20 border-t-2">
                         <td colSpan={monthDays.length + 6} className="p-2 font-semibold text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className={cn(
-                              "px-2 py-0.5 rounded border font-bold",
-                              TEAM_COLORS[team]
-                            )}>
-                              Team {team}
-                            </span>
-                            <span className="text-muted-foreground">({members.length} members)</span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Building2 size={14} className="text-primary" />
+                              <span>{department}</span>
+                              <span className="text-muted-foreground">({members.length} members)</span>
+                            </div>
+                            {renderShiftDistribution(summary)}
                           </div>
                         </td>
                       </tr>
-                      {members.map(member => renderMemberRow(member))}
-                    </>
+                      {members.map(member => renderMemberRow(member, false))}
+                    </React.Fragment>
                   );
                 })}
               </>
             ) : (
-              // Department-based view
+              // Location-based view
               <>
-                {Object.entries(membersByDepartment).map(([department, members]) => (
-                  <>
-                    <tr key={`dept-${department}`} className="bg-muted/20">
-                      <td colSpan={monthDays.length + 6} className="p-2 font-semibold text-xs">
-                        {department} ({members.length})
-                      </td>
-                    </tr>
-                    {members.map(member => renderMemberRow(member))}
-                  </>
-                ))}
+                {Object.entries(membersByLocation).map(([locId, { location, members }]) => {
+                  const summary = getLocationShiftSummary(locId);
+                  const locationName = location?.name || 'Unknown Location';
+                  const locationCity = location?.city || '';
+                  return (
+                    <React.Fragment key={`loc-${locId}`}>
+                      <tr className="bg-muted/20 border-t-2">
+                        <td colSpan={monthDays.length + 6} className="p-2 font-semibold text-xs">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <MapPin size={14} className="text-primary" />
+                              <span>{locationName}</span>
+                              {locationCity && <span className="text-muted-foreground">({locationCity})</span>}
+                              <span className="text-muted-foreground">- {members.length} members</span>
+                            </div>
+                            {renderShiftDistribution(summary)}
+                          </div>
+                        </td>
+                      </tr>
+                      {members.map(member => renderMemberRow(member, true))}
+                    </React.Fragment>
+                  );
+                })}
               </>
             )}
           </tbody>
