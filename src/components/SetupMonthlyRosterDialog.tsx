@@ -315,8 +315,13 @@ export function SetupMonthlyRosterDialog({
     } : config));
   };
 
+  // State to track if configs have unsaved changes
+  const [configsModified, setConfigsModified] = useState(false);
+  const [savingConfigs, setSavingConfigs] = useState(false);
+
   // Save department configs to database
-  const saveDepartmentConfigs = async () => {
+  const saveDepartmentConfigs = async (showToast = true) => {
+    setSavingConfigs(true);
     try {
       const updatePromises = deptConfigs.map(async config => {
         const dbConfig = departmentRosterConfigs.find(d => d.name === config.department);
@@ -332,9 +337,25 @@ export function SetupMonthlyRosterDialog({
         }
       });
       await Promise.all(updatePromises);
+      setConfigsModified(false);
+      if (showToast) {
+        toast.success('Department configurations saved successfully');
+      }
     } catch (error) {
       console.error('Error saving department configs:', error);
+      toast.error('Failed to save department configurations');
+    } finally {
+      setSavingConfigs(false);
     }
+  };
+
+  // Track modifications when dept configs change
+  const updateDeptConfigWithTracking = (dept: Department, updates: Partial<DepartmentShiftConfig>) => {
+    setDeptConfigs(prev => prev.map(config => config.department === dept ? {
+      ...config,
+      ...updates
+    } : config));
+    setConfigsModified(true);
   };
 
   // Get uninitialized members
@@ -1058,7 +1079,7 @@ export function SetupMonthlyRosterDialog({
                             </div>
                             <div className="flex items-center gap-2">
                               <Label className="text-sm">Rotate</Label>
-                              <Switch checked={config.rotateShifts} onCheckedChange={rotate => updateDeptConfig(config.department, {
+                              <Switch checked={config.rotateShifts} onCheckedChange={rotate => updateDeptConfigWithTracking(config.department, {
                           rotateShifts: rotate
                         })} />
                             </div>
@@ -1070,7 +1091,7 @@ export function SetupMonthlyRosterDialog({
                               <Label className="text-xs">Work Days/Cycle</Label>
                               <Select 
                                 value={String(config.workDaysPerCycle)} 
-                                onValueChange={v => updateDeptConfig(config.department, {
+                                onValueChange={v => updateDeptConfigWithTracking(config.department, {
                                   workDaysPerCycle: parseInt(v)
                                 })}
                               >
@@ -1088,7 +1109,7 @@ export function SetupMonthlyRosterDialog({
                               <Label className="text-xs">Off Days/Cycle</Label>
                               <Select 
                                 value={String(config.offDaysPerCycle)} 
-                                onValueChange={v => updateDeptConfig(config.department, {
+                                onValueChange={v => updateDeptConfigWithTracking(config.department, {
                                   offDaysPerCycle: parseInt(v)
                                 })}
                               >
@@ -1104,7 +1125,7 @@ export function SetupMonthlyRosterDialog({
                             </div>
                             <div className="space-y-1">
                               <Label className="text-xs">Default Shift</Label>
-                              <Select value={config.defaultShift} onValueChange={v => updateDeptConfig(config.department, {
+                              <Select value={config.defaultShift} onValueChange={v => updateDeptConfigWithTracking(config.department, {
                                 defaultShift: v as ShiftType
                               })}>
                                 <SelectTrigger className="h-8">
@@ -1125,7 +1146,7 @@ export function SetupMonthlyRosterDialog({
                                 {(['morning', 'afternoon', 'night'] as ShiftType[]).map(shift => <Button key={shift} variant={config.availableShifts.includes(shift) ? "default" : "outline"} size="sm" className="h-7 px-2 text-xs" onClick={() => {
                           const newShifts = config.availableShifts.includes(shift) ? config.availableShifts.filter(s => s !== shift) : [...config.availableShifts, shift];
                           if (newShifts.length > 0) {
-                            updateDeptConfig(config.department, {
+                            updateDeptConfigWithTracking(config.department, {
                               availableShifts: newShifts
                             });
                           }
@@ -1138,6 +1159,31 @@ export function SetupMonthlyRosterDialog({
                 })}
                   </div>
                 </ScrollArea>
+                
+                {/* Save Config Button */}
+                <div className="mt-4 pt-4 border-t flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {configsModified ? (
+                      <span className="text-amber-600 font-medium">• Unsaved changes</span>
+                    ) : (
+                      <span>Configuration in sync with database</span>
+                    )}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => saveDepartmentConfigs(true)}
+                    disabled={!configsModified || savingConfigs}
+                    className="gap-2"
+                  >
+                    {savingConfigs ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save size={14} />
+                    )}
+                    Save Config
+                  </Button>
+                </div>
               </TabsContent>
 
               <TabsContent value="summary" className="mt-4 space-y-4">

@@ -222,18 +222,60 @@ export function RotationContinuityPreview({
     const isEditing = editingMember === data.member.id;
     const isEditingNext = editingMember === `${data.member.id}_next`;
     
+    // Determine continuity status for visual indicator
+    const isContinuing = data.hasPreviousData && data.workDaysCompleted > 0;
+    const isStartingFresh = !data.hasPreviousData || data.workDaysCompleted === 0;
+    const isTransitioning = data.startsWithOff;
+    
     return (
       <div
         key={data.member.id}
         className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
       >
         <div className="flex items-center gap-3 min-w-[200px]">
+          {/* Continuity Status Indicator */}
+          <div className="flex-shrink-0">
+            {isContinuing && !isTransitioning && (
+              <div 
+                className="w-2 h-2 rounded-full bg-blue-500" 
+                title="Continuing from last month"
+              />
+            )}
+            {isTransitioning && (
+              <div 
+                className="w-2 h-2 rounded-full bg-amber-500" 
+                title="Transitioning (week-off then new shift)"
+              />
+            )}
+            {isStartingFresh && !isTransitioning && (
+              <div 
+                className="w-2 h-2 rounded-full bg-emerald-500" 
+                title="Starting fresh cycle"
+              />
+            )}
+          </div>
           <div className="w-32 truncate font-medium text-sm">
             {data.member.name}
           </div>
           <Badge variant="outline" className="text-xs">
             {data.member.role}
           </Badge>
+          {/* Status Badge */}
+          {isContinuing && !isTransitioning && (
+            <Badge variant="secondary" className="text-[10px] h-5 bg-blue-100 text-blue-700 border-blue-200">
+              Continuing
+            </Badge>
+          )}
+          {isTransitioning && (
+            <Badge variant="secondary" className="text-[10px] h-5 bg-amber-100 text-amber-700 border-amber-200">
+              Transitioning
+            </Badge>
+          )}
+          {isStartingFresh && !isTransitioning && (
+            <Badge variant="secondary" className="text-[10px] h-5 bg-emerald-100 text-emerald-700 border-emerald-200">
+              Fresh Start
+            </Badge>
+          )}
         </div>
 
         {data.hasPreviousData ? (
@@ -396,6 +438,23 @@ export function RotationContinuityPreview({
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Continuity Status Legend */}
+          <div className="flex items-center gap-4 mb-4 p-2 bg-muted/50 rounded-lg text-xs">
+            <span className="font-medium text-muted-foreground">Status:</span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-blue-500" />
+              <span>Continuing (mid-cycle)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-amber-500" />
+              <span>Transitioning (week-off → new shift)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span>Fresh Start (new cycle)</span>
+            </div>
+          </div>
+
           <Tabs defaultValue="department" className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-4">
               <TabsTrigger value="department" className="gap-2">
