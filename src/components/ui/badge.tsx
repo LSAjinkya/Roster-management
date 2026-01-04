@@ -20,6 +20,6 @@ function Badge({
   variant,
   ...props
 }: BadgeProps) {
-  return <div className="text-secondary" />;
+  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
 export { Badge, badgeVariants };
