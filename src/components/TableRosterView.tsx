@@ -432,11 +432,11 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="sticky top-0 z-30">
-              {/* Day names row */}
+              {/* Header row with Manager, Name, Level - spanning 2 rows */}
               <tr className="border-b border-border/50 bg-muted">
-                <th className="sticky left-0 z-40 bg-muted p-2 text-left font-medium w-[120px] min-w-[120px] max-w-[120px] border-r border-border/30">Manager</th>
-                <th className="sticky left-[120px] z-40 bg-muted p-2 text-left font-medium w-[140px] min-w-[140px] max-w-[140px] border-r border-border/30">Name</th>
-                <th className="sticky left-[260px] z-40 bg-muted p-2 text-left font-medium w-[80px] min-w-[80px] max-w-[80px] border-r border-border/30">Level</th>
+                <th rowSpan={2} className="sticky left-0 z-40 bg-muted p-2 text-left font-medium w-[120px] min-w-[120px] max-w-[120px] border-r border-border/30 align-middle">Manager</th>
+                <th rowSpan={2} className="sticky left-[120px] z-40 bg-muted p-2 text-left font-medium w-[140px] min-w-[140px] max-w-[140px] border-r border-border/30 align-middle">Name</th>
+                <th rowSpan={2} className="sticky left-[260px] z-40 bg-muted p-2 text-left font-medium w-[80px] min-w-[80px] max-w-[80px] border-r border-border/30 align-middle">Level</th>
                 {monthDays.map(day => (
                   <th 
                     key={format(day, 'yyyy-MM-dd')} 
@@ -449,19 +449,16 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
                     <div className="text-muted-foreground text-[10px]">{format(day, 'EEE').charAt(0)}</div>
                   </th>
                 ))}
-                <th className="p-1 text-center font-medium bg-shift-morning w-[28px] min-w-[28px]">M</th>
-                <th className="p-1 text-center font-medium bg-shift-afternoon w-[28px] min-w-[28px]">A</th>
-                <th className="p-1 text-center font-medium bg-shift-night w-[28px] min-w-[28px]">N</th>
-                <th className="p-1 text-center font-medium bg-shift-general w-[28px] min-w-[28px]">G</th>
-                <th className="p-1 text-center font-medium bg-red-100 w-[28px] min-w-[28px]">L</th>
-                <th className="p-1 text-center font-medium bg-muted w-[32px] min-w-[32px]">Off</th>
-                <th className="p-1 text-center font-medium w-[40px] min-w-[40px]">Total</th>
+                <th rowSpan={2} className="p-1 text-center font-medium bg-shift-morning w-[28px] min-w-[28px] align-middle">M</th>
+                <th rowSpan={2} className="p-1 text-center font-medium bg-shift-afternoon w-[28px] min-w-[28px] align-middle">A</th>
+                <th rowSpan={2} className="p-1 text-center font-medium bg-shift-night w-[28px] min-w-[28px] align-middle">N</th>
+                <th rowSpan={2} className="p-1 text-center font-medium bg-shift-general w-[28px] min-w-[28px] align-middle">G</th>
+                <th rowSpan={2} className="p-1 text-center font-medium bg-red-100 w-[28px] min-w-[28px] align-middle">L</th>
+                <th rowSpan={2} className="p-1 text-center font-medium bg-muted w-[32px] min-w-[32px] align-middle">Off</th>
+                <th rowSpan={2} className="p-1 text-center font-medium w-[40px] min-w-[40px] align-middle">Total</th>
               </tr>
               {/* Day numbers row */}
               <tr className="border-b border-border bg-muted/80">
-                <th className="sticky left-0 z-40 bg-muted/80 p-2 border-r border-border/30"></th>
-                <th className="sticky left-[120px] z-40 bg-muted/80 p-2 border-r border-border/30"></th>
-                <th className="sticky left-[260px] z-40 bg-muted/80 p-2 border-r border-border/30"></th>
                 {monthDays.map(day => (
                   <th 
                     key={format(day, 'yyyy-MM-dd')} 
@@ -474,7 +471,6 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
                     {format(day, 'd')}
                   </th>
                 ))}
-                <th colSpan={7} className="bg-muted/80"></th>
               </tr>
             </thead>
             <tbody>
