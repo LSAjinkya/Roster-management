@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Slider } from '@/components/ui/slider';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Save, Loader2, Home, Info } from 'lucide-react';
@@ -138,51 +137,51 @@ export function WfhPolicySettings() {
           {policy.enabled && (
             <>
               {/* Default WFH Days */}
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Default WFH Days per Week</Label>
-                  <Badge variant="outline">{policy.defaultWfhDays} days</Badge>
+                  <Input
+                    type="number"
+                    value={policy.defaultWfhDays}
+                    onChange={(e) => setPolicy({ ...policy, defaultWfhDays: parseInt(e.target.value) || 0 })}
+                    min={0}
+                    max={5}
+                    className="w-20 h-8"
+                  />
                 </div>
-                <Slider
-                  value={[policy.defaultWfhDays]}
-                  onValueChange={([value]) => setPolicy({ ...policy, defaultWfhDays: value })}
-                  max={5}
-                  step={1}
-                  className="w-full"
-                />
                 <p className="text-xs text-muted-foreground">
                   Default number of WFH days assigned to new team members
                 </p>
               </div>
 
               {/* Max WFH Days */}
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Maximum WFH Days per Week</Label>
-                  <Badge variant="outline">{policy.maxWfhDays} days</Badge>
+                  <Input
+                    type="number"
+                    value={policy.maxWfhDays}
+                    onChange={(e) => setPolicy({ ...policy, maxWfhDays: parseInt(e.target.value) || 0 })}
+                    min={0}
+                    max={5}
+                    className="w-20 h-8"
+                  />
                 </div>
-                <Slider
-                  value={[policy.maxWfhDays]}
-                  onValueChange={([value]) => setPolicy({ ...policy, maxWfhDays: value })}
-                  max={5}
-                  step={1}
-                  className="w-full"
-                />
               </div>
 
               {/* Min Office Days */}
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Minimum Office Days per Week</Label>
-                  <Badge variant="outline">{policy.minOfficeDays} days</Badge>
+                  <Input
+                    type="number"
+                    value={policy.minOfficeDays}
+                    onChange={(e) => setPolicy({ ...policy, minOfficeDays: parseInt(e.target.value) || 0 })}
+                    min={0}
+                    max={5}
+                    className="w-20 h-8"
+                  />
                 </div>
-                <Slider
-                  value={[policy.minOfficeDays]}
-                  onValueChange={([value]) => setPolicy({ ...policy, minOfficeDays: value })}
-                  max={5}
-                  step={1}
-                  className="w-full"
-                />
               </div>
 
               {/* Night Shift WFH */}

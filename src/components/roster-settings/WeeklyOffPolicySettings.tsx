@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Slider } from '@/components/ui/slider';
+import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -139,35 +139,33 @@ export function WeeklyOffPolicySettings() {
           {policy.enabled && (
             <>
               {/* Default Off Days */}
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Default Weekly Off Days</Label>
-                  <Badge variant="outline">{policy.defaultOffDays} days</Badge>
+                  <Input
+                    type="number"
+                    value={policy.defaultOffDays}
+                    onChange={(e) => setPolicy({ ...policy, defaultOffDays: parseInt(e.target.value) || 1 })}
+                    min={1}
+                    max={3}
+                    className="w-20 h-8"
+                  />
                 </div>
-                <Slider
-                  value={[policy.defaultOffDays]}
-                  onValueChange={([value]) => setPolicy({ ...policy, defaultOffDays: value })}
-                  max={3}
-                  min={1}
-                  step={1}
-                  className="w-full"
-                />
               </div>
 
               {/* Max Off Days */}
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Maximum Weekly Off Days</Label>
-                  <Badge variant="outline">{policy.maxOffDays} days</Badge>
+                  <Input
+                    type="number"
+                    value={policy.maxOffDays}
+                    onChange={(e) => setPolicy({ ...policy, maxOffDays: parseInt(e.target.value) || 1 })}
+                    min={1}
+                    max={3}
+                    className="w-20 h-8"
+                  />
                 </div>
-                <Slider
-                  value={[policy.maxOffDays]}
-                  onValueChange={([value]) => setPolicy({ ...policy, maxOffDays: value })}
-                  max={3}
-                  min={1}
-                  step={1}
-                  className="w-full"
-                />
               </div>
 
               {/* Rotating Off */}
