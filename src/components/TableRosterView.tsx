@@ -431,50 +431,50 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
       <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead>
+            <thead className="sticky top-0 z-30">
               {/* Day names row */}
-              <tr className="border-b border-border/50 bg-muted/30">
-                <th className="sticky left-0 z-20 bg-muted/50 p-2 text-left font-medium min-w-[120px]">Manager</th>
-                <th className="sticky left-[120px] z-20 bg-muted/50 p-2 text-left font-medium min-w-[140px]">Name</th>
-                <th className="sticky left-[260px] z-20 bg-muted/50 p-2 text-left font-medium min-w-[80px]">Level</th>
+              <tr className="border-b border-border/50 bg-muted">
+                <th className="sticky left-0 z-40 bg-muted p-2 text-left font-medium w-[120px] min-w-[120px] max-w-[120px] border-r border-border/30">Manager</th>
+                <th className="sticky left-[120px] z-40 bg-muted p-2 text-left font-medium w-[140px] min-w-[140px] max-w-[140px] border-r border-border/30">Name</th>
+                <th className="sticky left-[260px] z-40 bg-muted p-2 text-left font-medium w-[80px] min-w-[80px] max-w-[80px] border-r border-border/30">Level</th>
                 {monthDays.map(day => (
                   <th 
                     key={format(day, 'yyyy-MM-dd')} 
                     className={cn(
-                      "p-1 text-center font-normal min-w-[32px]",
-                      isWeekend(day) && "bg-muted/50",
-                      isToday(day) && "bg-primary/10"
+                      "p-1 text-center font-normal w-[32px] min-w-[32px] max-w-[32px] bg-muted",
+                      isWeekend(day) && "bg-muted/80",
+                      isToday(day) && "bg-primary/20"
                     )}
                   >
-                    <div className="text-muted-foreground">{format(day, 'EEE').charAt(0)}</div>
+                    <div className="text-muted-foreground text-[10px]">{format(day, 'EEE').charAt(0)}</div>
                   </th>
                 ))}
-                <th className="p-1 text-center font-medium bg-shift-morning min-w-[28px]">M</th>
-                <th className="p-1 text-center font-medium bg-shift-afternoon min-w-[28px]">A</th>
-                <th className="p-1 text-center font-medium bg-shift-night min-w-[28px]">N</th>
-                <th className="p-1 text-center font-medium bg-shift-general min-w-[28px]">G</th>
-                <th className="p-1 text-center font-medium bg-red-100 min-w-[28px]">L</th>
-                <th className="p-1 text-center font-medium bg-muted min-w-[32px]">Off</th>
-                <th className="p-1 text-center font-medium min-w-[40px]">Total</th>
+                <th className="p-1 text-center font-medium bg-shift-morning w-[28px] min-w-[28px]">M</th>
+                <th className="p-1 text-center font-medium bg-shift-afternoon w-[28px] min-w-[28px]">A</th>
+                <th className="p-1 text-center font-medium bg-shift-night w-[28px] min-w-[28px]">N</th>
+                <th className="p-1 text-center font-medium bg-shift-general w-[28px] min-w-[28px]">G</th>
+                <th className="p-1 text-center font-medium bg-red-100 w-[28px] min-w-[28px]">L</th>
+                <th className="p-1 text-center font-medium bg-muted w-[32px] min-w-[32px]">Off</th>
+                <th className="p-1 text-center font-medium w-[40px] min-w-[40px]">Total</th>
               </tr>
               {/* Day numbers row */}
-              <tr className="border-b border-border bg-muted/20">
-                <th className="sticky left-0 z-20 bg-muted/30 p-2"></th>
-                <th className="sticky left-[120px] z-20 bg-muted/30 p-2"></th>
-                <th className="sticky left-[260px] z-20 bg-muted/30 p-2"></th>
+              <tr className="border-b border-border bg-muted/80">
+                <th className="sticky left-0 z-40 bg-muted/80 p-2 border-r border-border/30"></th>
+                <th className="sticky left-[120px] z-40 bg-muted/80 p-2 border-r border-border/30"></th>
+                <th className="sticky left-[260px] z-40 bg-muted/80 p-2 border-r border-border/30"></th>
                 {monthDays.map(day => (
                   <th 
                     key={format(day, 'yyyy-MM-dd')} 
                     className={cn(
-                      "p-1 text-center font-semibold",
-                      isWeekend(day) && "bg-muted/50 text-muted-foreground",
+                      "p-1 text-center font-semibold bg-muted/80 w-[32px] min-w-[32px] max-w-[32px]",
+                      isWeekend(day) && "bg-muted text-muted-foreground",
                       isToday(day) && "bg-primary text-primary-foreground rounded"
                     )}
                   >
                     {format(day, 'd')}
                   </th>
                 ))}
-                <th colSpan={7}></th>
+                <th colSpan={7} className="bg-muted/80"></th>
               </tr>
             </thead>
             <tbody>
