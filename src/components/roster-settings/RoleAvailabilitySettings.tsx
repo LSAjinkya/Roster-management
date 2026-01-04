@@ -142,7 +142,7 @@ export function RoleAvailabilitySettings() {
             <Users size={20} />
             Role-Based Shift Availability
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-muted-foreground">
             Configure which roles can work which shifts and rotation settings
           </CardDescription>
         </CardHeader>
