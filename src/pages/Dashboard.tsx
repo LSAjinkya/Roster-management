@@ -9,6 +9,7 @@ import { LeaveBalanceTracker } from '@/components/LeaveBalanceTracker';
 import { LowLeaveBalanceAlert } from '@/components/LowLeaveBalanceAlert';
 import { RolePermissionBadge } from '@/components/PermissionIndicator';
 import { SwapRequestsManager } from '@/components/SwapRequestsManager';
+import { WfhStaffWidget } from '@/components/WfhStaffWidget';
 import { SHIFT_DEFINITIONS, TeamMember, Department, Role } from '@/types/roster';
 import { Users, Calendar, Building2, TrendingUp, ArrowRightLeft, Plus, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -262,9 +263,12 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Who's Out Today Widget */}
+              {/* Who's Out Today + WFH Staff */}
               <WhosOutToday />
             </div>
+
+            {/* WFH Staff Widget */}
+            <WfhStaffWidget />
 
             {/* Leave Summary & Balance Widgets */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
