@@ -180,7 +180,7 @@ export function RoleAvailabilitySettings() {
                   return (
                     <tr key={role} className="border-b hover:bg-muted/50">
                       <td className="py-3 px-2">
-                        <Badge variant="outline">{role}</Badge>
+                        <span className="font-medium text-foreground">{role}</span>
                       </td>
                       <td className="text-center py-3 px-2">
                         <Checkbox
