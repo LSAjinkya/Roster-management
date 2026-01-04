@@ -1112,18 +1112,15 @@ export default function RoleManagement() {
                             onValueChange={(value) => handleTeamMemberTeamChange(member.id, value === 'none' ? null : value)}
                           >
                             <SelectTrigger className="w-28">
-                              <SelectValue>
-                                {member.team ? (
-                                  <Badge variant="outline" className={
-                                    member.team === 'Alpha' ? 'bg-blue-500/20 text-blue-700 border-blue-500/30' :
-                                    member.team === 'Gamma' ? 'bg-green-500/20 text-green-700 border-green-500/30' :
-                                    'bg-orange-500/20 text-orange-700 border-orange-500/30'
-                                  }>
-                                    {member.team}
-                                  </Badge>
-                                ) : (
-                                  <span className="text-muted-foreground">None</span>
-                                )}
+                              <SelectValue placeholder="Select team">
+                                <span className={
+                                  member.team === 'Alpha' ? 'text-blue-700 dark:text-blue-400 font-medium' :
+                                  member.team === 'Gamma' ? 'text-green-700 dark:text-green-400 font-medium' :
+                                  member.team === 'Beta' ? 'text-orange-700 dark:text-orange-400 font-medium' :
+                                  'text-muted-foreground'
+                                }>
+                                  {member.team || 'None'}
+                                </span>
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent className="bg-popover border shadow-md">
@@ -1148,10 +1145,8 @@ export default function RoleManagement() {
                             onValueChange={(value) => handleTeamMemberRoleChange(member.id, value)}
                           >
                             <SelectTrigger className="w-24">
-                              <SelectValue>
-                                <Badge variant="outline" className={TEAM_ROLE_COLORS[member.role] || ''}>
-                                  {member.role}
-                                </Badge>
+                              <SelectValue placeholder="Select role">
+                                <span className="text-foreground font-medium">{member.role}</span>
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent className="bg-popover border shadow-md">
@@ -1182,10 +1177,14 @@ export default function RoleManagement() {
                             onValueChange={(value) => handleTeamMemberStatusChange(member.id, value)}
                           >
                             <SelectTrigger className="w-36">
-                              <SelectValue>
-                                <Badge variant="outline" className={STATUS_COLORS[member.status as UserStatus] || ''}>
+                              <SelectValue placeholder="Select status">
+                                <span className={
+                                  member.status === 'available' ? 'text-green-700 dark:text-green-400 font-medium' :
+                                  member.status === 'on-leave' ? 'text-amber-700 dark:text-amber-400 font-medium' :
+                                  'text-red-700 dark:text-red-400 font-medium'
+                                }>
                                   {STATUS_LABELS[member.status as UserStatus] || member.status}
-                                </Badge>
+                                </span>
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent className="bg-popover">
