@@ -47,6 +47,7 @@ interface TeamMember {
   status: string;
   reporting_tl_id: string | null;
   isInitialized?: boolean;
+  work_location_id: string | null;
 }
 
 interface StatusHistoryLog {
@@ -244,7 +245,7 @@ export default function RoleManagement() {
     try {
       const { data, error } = await supabase
         .from('team_members')
-        .select('id, name, email, role, department, team, status, reporting_tl_id')
+        .select('id, name, email, role, department, team, status, reporting_tl_id, work_location_id')
         .order('name');
 
       if (error) throw error;
@@ -647,8 +648,25 @@ export default function RoleManagement() {
       toast.success('Team assignment updated');
       fetchTeamMembers();
     } catch (error) {
-      console.error('Error updating team:', error);
+      console.error('Error updating team assignment:', error);
       toast.error('Failed to update team');
+    }
+  };
+
+  const handleTeamMemberLocationChange = async (memberId: string, locationId: string | null) => {
+    try {
+      const { error } = await supabase
+        .from('team_members')
+        .update({ work_location_id: locationId })
+        .eq('id', memberId);
+
+      if (error) throw error;
+
+      toast.success('Work location updated');
+      fetchTeamMembers();
+    } catch (error) {
+      console.error('Error updating location:', error);
+      toast.error('Failed to update location');
     }
   };
 
@@ -1070,7 +1088,7 @@ export default function RoleManagement() {
                       <TableHead>Department</TableHead>
                       <TableHead>Team</TableHead>
                       <TableHead>Role</TableHead>
-                      <TableHead>Initialized</TableHead>
+                      <TableHead>Location</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="w-20">Actions</TableHead>
                     </TableRow>
@@ -1159,17 +1177,28 @@ export default function RoleManagement() {
                           </Select>
                         </TableCell>
                         <TableCell>
-                          {member.isInitialized ? (
-                            <Badge variant="outline" className="bg-green-500/20 text-green-700 border-green-500/30">
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
-                              Yes
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-amber-500/20 text-amber-700 border-amber-500/30">
-                              <XCircle className="h-3 w-3 mr-1" />
-                              No
-                            </Badge>
-                          )}
+                          <Select
+                            value={member.work_location_id || 'none'}
+                            onValueChange={(value) => handleTeamMemberLocationChange(member.id, value === 'none' ? null : value)}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue placeholder="Select location">
+                                <span className="text-foreground">
+                                  {member.work_location_id 
+                                    ? workLocations.find(l => l.id === member.work_location_id)?.name || 'Unknown'
+                                    : 'None'}
+                                </span>
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover">
+                              <SelectItem value="none">None</SelectItem>
+                              {workLocations.map((loc) => (
+                                <SelectItem key={loc.id} value={loc.id}>
+                                  {loc.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
                           <Select
