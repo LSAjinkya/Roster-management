@@ -10,6 +10,7 @@ import { ExportDropdown } from '@/components/ExportDropdown';
 import { SetupMonthlyRosterDialog } from '@/components/SetupMonthlyRosterDialog';
 import { RotationPreview } from '@/components/RotationPreview';
 import { RosterImportDialog } from '@/components/RosterImportDialog';
+import { RosterDCTransferButton } from '@/components/RosterDCTransferButton';
 import { teamMembers as mockTeamMembers } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, CheckCircle2, AlertCircle, Clock, Loader2, Upload } from 'lucide-react';
@@ -267,6 +268,7 @@ export default function Roster() {
 
           {canEditShifts && (
             <>
+              <RosterDCTransferButton />
               <RosterImportDialog onImportComplete={handleRefresh} />
               <SetupMonthlyRosterDialog 
                 teamMembers={teamMembers} 

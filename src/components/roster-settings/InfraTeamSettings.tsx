@@ -8,16 +8,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Save, CalendarDays, Users, RefreshCw, Building2, ArrowRightLeft, Info } from 'lucide-react';
+import { Loader2, Save, CalendarDays, Users, RefreshCw, Building2, ArrowRightLeft, Info, History } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { DCStaffTransferDialog } from './DCStaffTransferDialog';
+import { DCTransferHistory } from './DCTransferHistory';
 
 interface WeekoffRules {
   min_weekoff_per_month: number;
   max_weekoff_per_month: number;
   consecutive_weekoff_allowed: boolean;
   max_consecutive_weekoff: number;
+  split_weekoff_allowed: boolean;
+  split_weekoff_days: number[];
 }
 
 interface StaffPerShift {
@@ -60,7 +63,9 @@ export function InfraTeamSettings() {
     min_weekoff_per_month: 4,
     max_weekoff_per_month: 8,
     consecutive_weekoff_allowed: true,
-    max_consecutive_weekoff: 2
+    max_consecutive_weekoff: 2,
+    split_weekoff_allowed: false,
+    split_weekoff_days: [1, 1]
   });
   
   const [minStaff, setMinStaff] = useState<StaffPerShift>({ morning: 2, afternoon: 2, night: 2 });
@@ -244,7 +249,7 @@ export function InfraTeamSettings() {
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-2 md:grid-cols-5 h-auto gap-2 bg-muted/50 p-1">
+        <TabsList className="grid grid-cols-2 md:grid-cols-6 h-auto gap-2 bg-muted/50 p-1">
           <TabsTrigger value="weekoff" className="flex items-center gap-2">
             <CalendarDays size={16} />
             <span className="hidden sm:inline">Week-Off Rules</span>
@@ -269,6 +274,11 @@ export function InfraTeamSettings() {
             <ArrowRightLeft size={16} />
             <span className="hidden sm:inline">DC Transfers</span>
             <span className="sm:hidden">Transfers</span>
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center gap-2">
+            <History size={16} />
+            <span className="hidden sm:inline">Transfer History</span>
+            <span className="sm:hidden">History</span>
           </TabsTrigger>
         </TabsList>
 
@@ -346,6 +356,58 @@ export function InfraTeamSettings() {
                 </div>
               )}
               
+              {/* Split Week-Off Option */}
+              <div className="flex items-center justify-between border rounded-lg p-4">
+                <div>
+                  <Label>Allow Split Week-Offs</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Allow week-offs to be split across non-consecutive days (e.g., 1 day + 1 day instead of 2 consecutive)
+                  </p>
+                </div>
+                <Switch
+                  checked={weekoffRules.split_weekoff_allowed}
+                  onCheckedChange={(checked) => setWeekoffRules(prev => ({ 
+                    ...prev, 
+                    split_weekoff_allowed: checked 
+                  }))}
+                />
+              </div>
+              
+              {weekoffRules.split_weekoff_allowed && (
+                <div className="space-y-2">
+                  <Label>Split Pattern (days per week-off block)</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={3}
+                      className="w-20"
+                      value={weekoffRules.split_weekoff_days?.[0] || 1}
+                      onChange={(e) => setWeekoffRules(prev => ({ 
+                        ...prev, 
+                        split_weekoff_days: [parseInt(e.target.value) || 1, prev.split_weekoff_days?.[1] || 1]
+                      }))}
+                    />
+                    <span className="text-muted-foreground">+</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={3}
+                      className="w-20"
+                      value={weekoffRules.split_weekoff_days?.[1] || 1}
+                      onChange={(e) => setWeekoffRules(prev => ({ 
+                        ...prev, 
+                        split_weekoff_days: [prev.split_weekoff_days?.[0] || 1, parseInt(e.target.value) || 1]
+                      }))}
+                    />
+                    <span className="text-muted-foreground">days</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Example: 1 + 1 means one day off, then work days, then another day off
+                  </p>
+                </div>
+              )}
+              
               <Button 
                 onClick={() => saveSetting('weekoff_rules', weekoffRules)}
                 disabled={saving}
@@ -383,9 +445,7 @@ export function InfraTeamSettings() {
                   {['morning', 'afternoon', 'night'].map((shift) => (
                     <TableRow key={shift}>
                       <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {shift}
-                        </Badge>
+                        <span className="font-medium text-foreground capitalize">{shift}</span>
                       </TableCell>
                       <TableCell>
                         <Input
@@ -652,6 +712,11 @@ export function InfraTeamSettings() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Transfer History Tab */}
+        <TabsContent value="history" className="space-y-4">
+          <DCTransferHistory />
         </TabsContent>
       </Tabs>
     </div>
