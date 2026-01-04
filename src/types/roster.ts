@@ -94,6 +94,8 @@ export interface TeamMember {
   workLocationId?: string; // Default work location
   workLocation?: WorkLocation; // Populated work location data
   datacenterId?: string; // Assigned datacenter for Infra team members
+  datacenterCode?: string; // Datacenter code for display (e.g., 'LNT', 'YOTTA')
+  datacenterName?: string; // Datacenter name for display
   // Hybrid working settings
   isHybrid?: boolean;
   hybridOfficeDays?: number; // e.g., 3 days in office

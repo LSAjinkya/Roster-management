@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,11 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Save, CalendarDays, Users, RefreshCw, Building2, ArrowRightLeft, Info, History } from 'lucide-react';
+import { Loader2, Save, CalendarDays, Users, RefreshCw, Building2, ArrowRightLeft, Info, History, Check, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { DCStaffTransferDialog } from './DCStaffTransferDialog';
 import { DCTransferHistory } from './DCTransferHistory';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 
 interface WeekoffRules {
   min_weekoff_per_month: number;
@@ -59,6 +61,15 @@ export function InfraTeamSettings() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('weekoff');
   
+  // Track unsaved changes
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [originalSettings, setOriginalSettings] = useState<{
+    weekoffRules: WeekoffRules;
+    minStaff: StaffPerShift;
+    maxStaff: StaffPerShift;
+    rotationRules: RotationRules;
+  } | null>(null);
+  
   // Settings state
   const [weekoffRules, setWeekoffRules] = useState<WeekoffRules>({
     min_weekoff_per_month: 4,
@@ -84,6 +95,20 @@ export function InfraTeamSettings() {
   const [selectedDCs, setSelectedDCs] = useState<string[]>([]);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
 
+  // Check for unsaved changes
+  const checkUnsavedChanges = useCallback(() => {
+    if (!originalSettings) return false;
+    const weekoffChanged = JSON.stringify(weekoffRules) !== JSON.stringify(originalSettings.weekoffRules);
+    const minStaffChanged = JSON.stringify(minStaff) !== JSON.stringify(originalSettings.minStaff);
+    const maxStaffChanged = JSON.stringify(maxStaff) !== JSON.stringify(originalSettings.maxStaff);
+    const rotationChanged = JSON.stringify(rotationRules) !== JSON.stringify(originalSettings.rotationRules);
+    return weekoffChanged || minStaffChanged || maxStaffChanged || rotationChanged;
+  }, [weekoffRules, minStaff, maxStaff, rotationRules, originalSettings]);
+
+  useEffect(() => {
+    setHasUnsavedChanges(checkUnsavedChanges());
+  }, [checkUnsavedChanges]);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -98,22 +123,39 @@ export function InfraTeamSettings() {
       
       if (settingsError) throw settingsError;
       
+      let loadedWeekoff = weekoffRules;
+      let loadedMinStaff = minStaff;
+      let loadedMaxStaff = maxStaff;
+      let loadedRotation = rotationRules;
+      
       settings?.forEach(setting => {
         const value = setting.setting_value as Record<string, unknown>;
         switch (setting.setting_key) {
           case 'weekoff_rules':
-            setWeekoffRules(value as unknown as WeekoffRules);
+            loadedWeekoff = value as unknown as WeekoffRules;
+            setWeekoffRules(loadedWeekoff);
             break;
           case 'min_staff_per_shift':
-            setMinStaff(value as unknown as StaffPerShift);
+            loadedMinStaff = value as unknown as StaffPerShift;
+            setMinStaff(loadedMinStaff);
             break;
           case 'max_staff_per_shift':
-            setMaxStaff(value as unknown as StaffPerShift);
+            loadedMaxStaff = value as unknown as StaffPerShift;
+            setMaxStaff(loadedMaxStaff);
             break;
           case 'rotation_rules':
-            setRotationRules(value as unknown as RotationRules);
+            loadedRotation = value as unknown as RotationRules;
+            setRotationRules(loadedRotation);
             break;
         }
+      });
+      
+      // Store original settings for comparison
+      setOriginalSettings({
+        weekoffRules: loadedWeekoff,
+        minStaff: loadedMinStaff,
+        maxStaff: loadedMaxStaff,
+        rotationRules: loadedRotation,
       });
       
       // Fetch datacenters
@@ -141,6 +183,66 @@ export function InfraTeamSettings() {
       toast.error('Failed to load settings');
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Save all unsaved changes
+  async function saveAllSettings() {
+    setSaving(true);
+    try {
+      const savePromises = [];
+      
+      if (originalSettings && JSON.stringify(weekoffRules) !== JSON.stringify(originalSettings.weekoffRules)) {
+        savePromises.push(saveSettingSilent('weekoff_rules', weekoffRules));
+      }
+      if (originalSettings && JSON.stringify(minStaff) !== JSON.stringify(originalSettings.minStaff)) {
+        savePromises.push(saveSettingSilent('min_staff_per_shift', minStaff));
+      }
+      if (originalSettings && JSON.stringify(maxStaff) !== JSON.stringify(originalSettings.maxStaff)) {
+        savePromises.push(saveSettingSilent('max_staff_per_shift', maxStaff));
+      }
+      if (originalSettings && JSON.stringify(rotationRules) !== JSON.stringify(originalSettings.rotationRules)) {
+        savePromises.push(saveSettingSilent('rotation_rules', rotationRules));
+      }
+      
+      await Promise.all(savePromises);
+      
+      // Update original settings
+      setOriginalSettings({
+        weekoffRules,
+        minStaff,
+        maxStaff,
+        rotationRules,
+      });
+      setHasUnsavedChanges(false);
+      toast.success('All settings saved successfully');
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast.error('Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Save setting without toast (for batch saves)
+  async function saveSettingSilent(key: string, value: unknown) {
+    const { data: existing } = await supabase
+      .from('infra_team_settings')
+      .select('id')
+      .eq('setting_key', key)
+      .maybeSingle();
+    
+    if (existing) {
+      const { error } = await supabase
+        .from('infra_team_settings')
+        .update({ setting_value: value as any })
+        .eq('setting_key', key);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('infra_team_settings')
+        .insert({ setting_key: key, setting_value: value } as any);
+      if (error) throw error;
     }
   }
 
@@ -305,6 +407,26 @@ export function InfraTeamSettings() {
 
   return (
     <div className="space-y-6">
+      {/* Unsaved Changes Alert & Save All Button */}
+      {hasUnsavedChanges && (
+        <Alert variant="default" className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="flex items-center justify-between">
+            <span className="text-amber-800 dark:text-amber-200">You have unsaved changes</span>
+            <Button 
+              onClick={saveAllSettings} 
+              disabled={saving}
+              size="sm"
+              className="ml-4"
+            >
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Save className="mr-2 h-4 w-4" />
+              Save All Changes
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid grid-cols-2 md:grid-cols-6 h-auto gap-2 bg-muted/50 p-1">
           <TabsTrigger value="weekoff" className="flex items-center gap-2">
@@ -661,16 +783,24 @@ export function InfraTeamSettings() {
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {datacenters.map(dc => (
-                    <Badge
-                      key={dc.id}
-                      variant={selectedDCs.includes(dc.id) ? 'default' : 'outline'}
-                      className="cursor-pointer px-3 py-1.5 text-sm"
-                      onClick={() => toggleDCSelection(dc.id)}
-                    >
-                      {dc.name} ({dc.code})
-                    </Badge>
-                  ))}
+                  {datacenters.map(dc => {
+                    const isSelected = selectedDCs.includes(dc.id);
+                    return (
+                      <Badge
+                        key={dc.id}
+                        variant={isSelected ? 'default' : 'outline'}
+                        className={cn(
+                          "cursor-pointer px-3 py-1.5 text-sm transition-all duration-200 select-none",
+                          isSelected && "ring-2 ring-primary/20 ring-offset-1 animate-scale-in",
+                          !isSelected && "hover:bg-muted"
+                        )}
+                        onClick={() => toggleDCSelection(dc.id)}
+                      >
+                        {isSelected && <Check className="mr-1.5 h-3 w-3" />}
+                        {dc.name} ({dc.code})
+                      </Badge>
+                    );
+                  })}
                 </div>
                 {selectedDCs.length > 1 && (
                   <p className="text-sm text-muted-foreground">

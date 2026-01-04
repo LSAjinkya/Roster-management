@@ -569,7 +569,14 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
                       </td>
                       {/* Member name */}
                       <td className="sticky left-[120px] z-10 bg-card p-2 font-medium">
-                        <div className="truncate">{member.name}</div>
+                        <div className="flex items-center gap-1">
+                          {member.datacenterCode && (
+                            <span className="px-1 py-0.5 rounded text-[9px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                              {member.datacenterCode}
+                            </span>
+                          )}
+                          <span className="truncate">{member.name}</span>
+                        </div>
                         <div className="text-muted-foreground text-[10px] truncate">{member.department}</div>
                       </td>
                       {/* Level */}
