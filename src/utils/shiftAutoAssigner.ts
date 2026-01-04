@@ -234,9 +234,24 @@ export function autoAssignShifts(
   });
   
   // Calculate member offsets for staggering week-offs
+  // Group members by department, then assign different starting offsets within each group
   const memberOffsets: Record<string, number> = {};
-  teamMembers.forEach((member, index) => {
-    memberOffsets[member.id] = index % 7;
+  const departmentGroups: Record<string, TeamMember[]> = {};
+  
+  teamMembers.forEach(member => {
+    if (!departmentGroups[member.department]) {
+      departmentGroups[member.department] = [];
+    }
+    departmentGroups[member.department].push(member);
+  });
+  
+  // Within each department, stagger members across different days
+  Object.values(departmentGroups).forEach(members => {
+    members.forEach((member, index) => {
+      // Offset determines which day in the cycle they start their week-off
+      // This ensures not everyone has off on the same day
+      memberOffsets[member.id] = index % 7;
+    });
   });
   
   // Process each day
@@ -312,6 +327,14 @@ export function autoAssignShifts(
       
       let shouldAssignWeekOff = false;
       
+      // Get member's stagger offset to distribute week-offs across different days
+      const memberOffset = memberOffsets[member.id] || 0;
+      
+      // Calculate effective work days considering the stagger offset
+      // This makes different members reach their week-off threshold on different days
+      const effectiveWorkDays = state.consecutiveWorkDays;
+      const staggeredThreshold = STANDARD_WORK_DAYS + (memberOffset % 3); // 5, 6, or 7 days
+      
       // Rule 1: MUST give week-off if reached max consecutive work days (HARD LIMIT)
       if (state.consecutiveWorkDays >= MAX_CONSECUTIVE_WORK_DAYS) {
         shouldAssignWeekOff = true;
@@ -324,8 +347,9 @@ export function autoAssignShifts(
         state.pendingNightTransition = false;
       }
       
-      // Rule 3: Standard pattern (5 work + 2 off) with entitlement
-      else if (state.consecutiveWorkDays >= STANDARD_WORK_DAYS && state.offDaysRemaining > 0) {
+      // Rule 3: Staggered pattern - different members get offs on different days
+      // Uses the member's offset to determine when they should get their week-off
+      else if (state.consecutiveWorkDays >= staggeredThreshold && state.offDaysRemaining > 0) {
         shouldAssignWeekOff = true;
       }
       
