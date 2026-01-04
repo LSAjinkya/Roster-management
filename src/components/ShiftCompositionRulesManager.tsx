@@ -548,14 +548,18 @@ export function ShiftCompositionRulesManager() {
         <CardContent className="pt-6">
           <div className="flex gap-3">
             <Info size={20} className="text-blue-500 shrink-0" />
-            <div className="space-y-2 text-sm">
-              <p className="font-medium text-blue-700 dark:text-blue-400">How Shift Composition Works</p>
-              <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                <li><strong>Shift-wise view:</strong> Quickly set minimum staff per shift for each department</li>
-                <li><strong>Advanced rules:</strong> Add datacenter-specific or role-filtered rules</li>
-                <li>These rules are validated when generating rosters</li>
-                <li>Warnings shown if minimum staffing cannot be met</li>
-              </ul>
+            <div className="space-y-3 text-sm">
+              <p className="font-medium text-blue-700 dark:text-blue-400">Shift-wise vs Advanced Rules</p>
+              <div className="space-y-2 text-muted-foreground">
+                <p><strong className="text-foreground">Shift-wise Staff Count:</strong> A simple, quick way to set the minimum number of staff needed per shift for each department. This applies globally across all locations.</p>
+                <p><strong className="text-foreground">Advanced Rules:</strong> Use these for more granular control when you need:</p>
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  <li><strong>Datacenter-specific rules:</strong> Different staffing requirements for specific datacenters (e.g., Yotta needs 3 night staff, LnT needs 2)</li>
+                  <li><strong>Role-based filtering:</strong> Require specific roles for certain shifts (e.g., Night shift must have at least 1 TL or Manager)</li>
+                  <li><strong>Override global rules:</strong> Create exceptions to the shift-wise defaults for special cases</li>
+                </ul>
+                <p className="mt-2 text-xs italic">Note: Advanced rules with datacenter or role filters take precedence over shift-wise rules for matching conditions.</p>
+              </div>
             </div>
           </div>
         </CardContent>
