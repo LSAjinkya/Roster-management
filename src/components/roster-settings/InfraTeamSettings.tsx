@@ -27,6 +27,7 @@ interface StaffPerShift {
   morning: number;
   afternoon: number;
   night: number;
+  general: number;
 }
 
 interface RotationRules {
@@ -68,8 +69,8 @@ export function InfraTeamSettings() {
     split_weekoff_days: [1, 1]
   });
   
-  const [minStaff, setMinStaff] = useState<StaffPerShift>({ morning: 2, afternoon: 2, night: 2 });
-  const [maxStaff, setMaxStaff] = useState<StaffPerShift>({ morning: 10, afternoon: 10, night: 8 });
+  const [minStaff, setMinStaff] = useState<StaffPerShift>({ morning: 2, afternoon: 2, night: 2, general: 1 });
+  const [maxStaff, setMaxStaff] = useState<StaffPerShift>({ morning: 10, afternoon: 10, night: 8, general: 5 });
   
   const [rotationRules, setRotationRules] = useState<RotationRules>({
     rotation_enabled: true,
@@ -498,7 +499,7 @@ export function InfraTeamSettings() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {['morning', 'afternoon', 'night'].map((shift) => (
+                  {['morning', 'afternoon', 'night', 'general'].map((shift) => (
                     <TableRow key={shift}>
                       <TableCell>
                         <span className="font-medium text-foreground capitalize">{shift}</span>

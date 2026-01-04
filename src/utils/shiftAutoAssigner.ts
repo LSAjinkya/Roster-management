@@ -424,7 +424,7 @@ export function autoAssignShifts(
     // STAFFING VALIDATION
     // ========================
     
-    const shiftTypes: ShiftType[] = ['morning', 'afternoon', 'night'];
+    const shiftTypes: ShiftType[] = ['morning', 'afternoon', 'night', 'general'];
     
     for (const shiftType of shiftTypes) {
       const shiftRules = rules.filter(r => 

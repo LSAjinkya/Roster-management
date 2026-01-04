@@ -14,6 +14,7 @@ interface StaffPerShift {
   morning: number;
   afternoon: number;
   night: number;
+  general: number;
 }
 
 interface RotationRules {
@@ -50,8 +51,8 @@ const DEFAULT_WEEKOFF_RULES: WeekoffRules = {
   split_weekoff_days: [1, 1]
 };
 
-const DEFAULT_STAFF_MIN: StaffPerShift = { morning: 2, afternoon: 2, night: 2 };
-const DEFAULT_STAFF_MAX: StaffPerShift = { morning: 10, afternoon: 10, night: 8 };
+const DEFAULT_STAFF_MIN: StaffPerShift = { morning: 2, afternoon: 2, night: 2, general: 1 };
+const DEFAULT_STAFF_MAX: StaffPerShift = { morning: 10, afternoon: 10, night: 8, general: 5 };
 
 const DEFAULT_ROTATION_RULES: RotationRules = {
   rotation_enabled: true,
