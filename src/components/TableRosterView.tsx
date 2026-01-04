@@ -299,31 +299,51 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
   return (
     <div className="space-y-4">
       {/* Header Controls */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-card p-4 rounded-xl border border-border/50">
-        <div className="flex items-center gap-4">
+      <div className="bg-card p-4 rounded-xl border border-border/50 space-y-4">
+        {/* Top Row: Navigation and Month Info */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
+                <ChevronLeft size={18} />
+              </Button>
+              <Button variant="outline" size="icon" onClick={goToNextMonth}>
+                <ChevronRight size={18} />
+              </Button>
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">{format(currentMonth, 'MMMM yyyy')}</h2>
+              <p className="text-sm text-muted-foreground">{filteredMembers.length} members</p>
+            </div>
+            {canEditShifts && (
+              <Badge variant="outline" className="gap-1">
+                <Edit2 size={12} />
+                Edit Mode
+              </Badge>
+            )}
+          </div>
+          
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={goToPreviousMonth}>
-              <ChevronLeft size={18} />
-            </Button>
-            <Button variant="outline" size="icon" onClick={goToNextMonth}>
-              <ChevronRight size={18} />
-            </Button>
+            {!isCurrentMonth && (
+              <Button variant="outline" onClick={goToCurrentMonth} className="gap-2" size="sm">
+                <Calendar size={14} />
+                Today
+              </Button>
+            )}
+            <ExportDropdown
+              assignments={assignments}
+              teamMembers={filteredMembers}
+              startDate={monthStart}
+              endDate={monthEnd}
+              viewType="monthly"
+            />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold">{format(currentMonth, 'MMMM yyyy')}</h2>
-            <p className="text-sm text-muted-foreground">{filteredMembers.length} members</p>
-          </div>
-          {canEditShifts && (
-            <Badge variant="outline" className="gap-1">
-              <Edit2 size={12} />
-              Edit Mode
-            </Badge>
-          )}
         </div>
         
-        <div className="flex items-center gap-3 flex-wrap">
+        {/* Filter Row */}
+        <div className="flex items-center gap-2 flex-wrap">
           <Select value={departmentFilter} onValueChange={(v) => setDepartmentFilter(v as Department | 'all')}>
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-[140px] h-9 text-sm">
               <SelectValue placeholder="All Departments" />
             </SelectTrigger>
             <SelectContent>
@@ -335,7 +355,7 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
           </Select>
 
           <Select value={teamFilter} onValueChange={(v) => setTeamFilter(v as TeamGroup | 'all')}>
-            <SelectTrigger className="w-[130px]">
+            <SelectTrigger className="w-[110px] h-9 text-sm">
               <SelectValue placeholder="All Teams" />
             </SelectTrigger>
             <SelectContent>
@@ -355,7 +375,7 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
           </Select>
 
           <Select value={tlFilter} onValueChange={setTlFilter}>
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-[130px] h-9 text-sm">
               <SelectValue placeholder="All TLs" />
             </SelectTrigger>
             <SelectContent>
@@ -366,9 +386,8 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
             </SelectContent>
           </Select>
 
-          {/* Shift Filter */}
           <Select value={shiftFilter} onValueChange={(v) => setShiftFilter(v as ShiftType | 'all')}>
-            <SelectTrigger className="w-[130px]">
+            <SelectTrigger className="w-[110px] h-9 text-sm">
               <SelectValue placeholder="All Shifts" />
             </SelectTrigger>
             <SelectContent>
@@ -380,9 +399,8 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
             </SelectContent>
           </Select>
 
-          {/* Location Filter */}
           <Select value={locationFilter} onValueChange={setLocationFilter}>
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-[130px] h-9 text-sm">
               <SelectValue placeholder="All Locations" />
             </SelectTrigger>
             <SelectContent>
@@ -406,21 +424,6 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
               )}
             </SelectContent>
           </Select>
-
-          {!isCurrentMonth && (
-            <Button variant="outline" onClick={goToCurrentMonth} className="gap-2">
-              <Calendar size={16} />
-              Today
-            </Button>
-          )}
-
-          <ExportDropdown
-            assignments={assignments}
-            teamMembers={filteredMembers}
-            startDate={monthStart}
-            endDate={monthEnd}
-            viewType="monthly"
-          />
         </div>
       </div>
 
