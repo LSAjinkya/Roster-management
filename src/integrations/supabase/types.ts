@@ -68,6 +68,107 @@ export type Database = {
         }
         Relationships: []
       }
+      dc_role_shift_availability: {
+        Row: {
+          afternoon_shift: boolean
+          created_at: string
+          datacenter_id: string
+          general_shift: boolean
+          id: string
+          morning_shift: boolean
+          night_shift: boolean
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          afternoon_shift?: boolean
+          created_at?: string
+          datacenter_id: string
+          general_shift?: boolean
+          id?: string
+          morning_shift?: boolean
+          night_shift?: boolean
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          afternoon_shift?: boolean
+          created_at?: string
+          datacenter_id?: string
+          general_shift?: boolean
+          id?: string
+          morning_shift?: boolean
+          night_shift?: boolean
+          role?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dc_role_shift_availability_datacenter_id_fkey"
+            columns: ["datacenter_id"]
+            isOneToOne: false
+            referencedRelation: "datacenters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dc_staff_transfers: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          member_id: string
+          reason: string
+          shift_type: string
+          source_datacenter_id: string | null
+          status: string
+          target_datacenter_id: string
+          transfer_date: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          member_id: string
+          reason: string
+          shift_type: string
+          source_datacenter_id?: string | null
+          status?: string
+          target_datacenter_id: string
+          transfer_date: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          member_id?: string
+          reason?: string
+          shift_type?: string
+          source_datacenter_id?: string | null
+          status?: string
+          target_datacenter_id?: string
+          transfer_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dc_staff_transfers_source_datacenter_id_fkey"
+            columns: ["source_datacenter_id"]
+            isOneToOne: false
+            referencedRelation: "datacenters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dc_staff_transfers_target_datacenter_id_fkey"
+            columns: ["target_datacenter_id"]
+            isOneToOne: false
+            referencedRelation: "datacenters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           created_at: string
@@ -140,6 +241,33 @@ export type Database = {
           target_email?: string
           target_user_id?: string
           user_agent?: string | null
+        }
+        Relationships: []
+      }
+      infra_team_settings: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          setting_key: string
+          setting_value: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          setting_key: string
+          setting_value: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          setting_key?: string
+          setting_value?: Json
+          updated_at?: string
         }
         Relationships: []
       }

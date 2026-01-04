@@ -10,7 +10,8 @@ import {
   Building2, 
   Settings2, 
   MapPin,
-  Briefcase
+  Briefcase,
+  Server
 } from 'lucide-react';
 import { ShiftCompositionRulesManager } from '@/components/ShiftCompositionRulesManager';
 import { RotationConfigManager } from '@/components/RotationConfigManager';
@@ -19,6 +20,7 @@ import { WfhPolicySettings } from '@/components/roster-settings/WfhPolicySetting
 import { WeeklyOffPolicySettings } from '@/components/roster-settings/WeeklyOffPolicySettings';
 import { RoleAvailabilitySettings } from '@/components/roster-settings/RoleAvailabilitySettings';
 import { DepartmentRosterSettings } from '@/components/roster-settings/DepartmentRosterSettings';
+import { InfraTeamSettings } from '@/components/roster-settings/InfraTeamSettings';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 
@@ -39,7 +41,7 @@ export default function RosterSettings() {
 
       <div className="flex-1 overflow-auto p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 h-auto gap-2 bg-transparent p-0">
+          <TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 h-auto gap-2 bg-transparent p-0">
             <TabsTrigger 
               value="wfh" 
               className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -95,6 +97,14 @@ export default function RosterSettings() {
               <MapPin size={16} />
               <span className="hidden sm:inline">Locations</span>
               <span className="sm:hidden">Loc</span>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="infra" 
+              className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <Server size={16} />
+              <span className="hidden sm:inline">Infra/DC Team</span>
+              <span className="sm:hidden">Infra</span>
             </TabsTrigger>
           </TabsList>
 
@@ -159,6 +169,15 @@ export default function RosterSettings() {
               <Badge variant="outline">Office & Site Management</Badge>
             </div>
             <WorkLocationManager />
+          </TabsContent>
+
+          <TabsContent value="infra" className="space-y-4">
+            <div className="flex items-center gap-2 mb-4">
+              <Server size={20} className="text-primary" />
+              <h2 className="text-xl font-semibold">Infra/Datacenter Team Settings</h2>
+              <Badge variant="outline">DC-Specific Rules & Transfers</Badge>
+            </div>
+            <InfraTeamSettings />
           </TabsContent>
         </Tabs>
       </div>
