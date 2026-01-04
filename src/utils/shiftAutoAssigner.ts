@@ -33,6 +33,15 @@ interface MemberState {
   workDaysInCurrentShift: number;
 }
 
+export type WeekOffPattern = 'fixed' | 'staggered';
+
+export interface WeeklyOffPolicyConfig {
+  enabled: boolean;
+  weekOffPattern: WeekOffPattern;
+  fixedDays: string[];  // e.g., ['Saturday', 'Sunday']
+  defaultOffDays: number;
+}
+
 interface AssignmentContext {
   teamMembers: TeamMember[];
   rules: ShiftCompositionRule[];
@@ -43,6 +52,7 @@ interface AssignmentContext {
   config: AutoAssignmentConfig;
   memberRotationStates: MemberRotationState[];
   previousMonthAssignments?: ShiftAssignment[];
+  weeklyOffPolicy?: WeeklyOffPolicyConfig;
 }
 
 // ========================
@@ -210,7 +220,19 @@ export function autoAssignShifts(
     config,
     memberRotationStates,
     previousMonthAssignments = [],
+    weeklyOffPolicy,
   } = context;
+  
+  // Determine week-off pattern (default to staggered for 24/7 operations)
+  const weekOffPattern: WeekOffPattern = weeklyOffPolicy?.weekOffPattern || 'staggered';
+  const fixedOffDays = weeklyOffPolicy?.fixedDays || ['Saturday', 'Sunday'];
+  
+  // Helper to check if a day is a fixed off day
+  const isFixedOffDay = (date: Date): boolean => {
+    if (weekOffPattern !== 'fixed') return false;
+    const dayName = format(date, 'EEEE'); // e.g., "Saturday"
+    return fixedOffDays.includes(dayName);
+  };
   
   const assignments: ShiftAssignment[] = [];
   const shortages: ShiftViolation[] = [];
@@ -327,39 +349,51 @@ export function autoAssignShifts(
       
       let shouldAssignWeekOff = false;
       
-      // Get member's stagger offset to distribute week-offs across different days
-      const memberOffset = memberOffsets[member.id] || 0;
-      
-      // Calculate effective work days considering the stagger offset
-      // This makes different members reach their week-off threshold on different days
-      const effectiveWorkDays = state.consecutiveWorkDays;
-      const staggeredThreshold = STANDARD_WORK_DAYS + (memberOffset % 3); // 5, 6, or 7 days
-      
-      // Rule 1: MUST give week-off if reached max consecutive work days (HARD LIMIT)
-      if (state.consecutiveWorkDays >= MAX_CONSECUTIVE_WORK_DAYS) {
-        shouldAssignWeekOff = true;
-      }
-      
-      // Rule 2: Night shift transition safety
-      else if (needsNightShiftRest(state, config) && 
-               state.consecutiveWorkDays >= MIN_CONSECUTIVE_WORK_DAYS) {
-        shouldAssignWeekOff = true;
-        state.pendingNightTransition = false;
-      }
-      
-      // Rule 3: Staggered pattern - different members get offs on different days
-      // Uses the member's offset to determine when they should get their week-off
-      else if (state.consecutiveWorkDays >= staggeredThreshold && state.offDaysRemaining > 0) {
-        shouldAssignWeekOff = true;
-      }
-      
-      // Rule 4: Rolling 7-day compliance check
-      else {
-        // Look ahead: if we don't give off today, will we violate 7-day rule?
-        const currentAssignmentsForMember = assignments.filter(a => a.memberId === member.id);
-        if (!validateRolling7DayCompliance(member.id, addDays(day, 1), currentAssignmentsForMember, weekOffEntitlement) &&
-            state.consecutiveWorkDays >= MIN_CONSECUTIVE_WORK_DAYS) {
+      // FIXED PATTERN: Everyone gets specific days off (e.g., weekends)
+      if (weekOffPattern === 'fixed') {
+        if (isFixedOffDay(day)) {
           shouldAssignWeekOff = true;
+        }
+        // Still respect max consecutive work days as safety
+        else if (state.consecutiveWorkDays >= MAX_CONSECUTIVE_WORK_DAYS) {
+          shouldAssignWeekOff = true;
+        }
+      }
+      // STAGGERED PATTERN: Distributed offs across team
+      else {
+        // Get member's stagger offset to distribute week-offs across different days
+        const memberOffset = memberOffsets[member.id] || 0;
+        
+        // Calculate staggered threshold - different members have different thresholds
+        // This makes different members reach their week-off threshold on different days
+        const staggeredThreshold = STANDARD_WORK_DAYS + (memberOffset % 3); // 5, 6, or 7 days
+        
+        // Rule 1: MUST give week-off if reached max consecutive work days (HARD LIMIT)
+        if (state.consecutiveWorkDays >= MAX_CONSECUTIVE_WORK_DAYS) {
+          shouldAssignWeekOff = true;
+        }
+        
+        // Rule 2: Night shift transition safety
+        else if (needsNightShiftRest(state, config) && 
+                 state.consecutiveWorkDays >= MIN_CONSECUTIVE_WORK_DAYS) {
+          shouldAssignWeekOff = true;
+          state.pendingNightTransition = false;
+        }
+        
+        // Rule 3: Staggered pattern - different members get offs on different days
+        // Uses the member's offset to determine when they should get their week-off
+        else if (state.consecutiveWorkDays >= staggeredThreshold && state.offDaysRemaining > 0) {
+          shouldAssignWeekOff = true;
+        }
+        
+        // Rule 4: Rolling 7-day compliance check
+        else {
+          // Look ahead: if we don't give off today, will we violate 7-day rule?
+          const currentAssignmentsForMember = assignments.filter(a => a.memberId === member.id);
+          if (!validateRolling7DayCompliance(member.id, addDays(day, 1), currentAssignmentsForMember, weekOffEntitlement) &&
+              state.consecutiveWorkDays >= MIN_CONSECUTIVE_WORK_DAYS) {
+            shouldAssignWeekOff = true;
+          }
         }
       }
       

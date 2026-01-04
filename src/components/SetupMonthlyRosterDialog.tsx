@@ -86,6 +86,17 @@ export function SetupMonthlyRosterDialog({
   } | null>(null);
   const [publicHolidays, setPublicHolidays] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [weeklyOffPolicy, setWeeklyOffPolicy] = useState<{
+    enabled: boolean;
+    weekOffPattern: 'fixed' | 'staggered';
+    fixedDays: string[];
+    defaultOffDays: number;
+  }>({
+    enabled: true,
+    weekOffPattern: 'staggered',
+    fixedDays: ['Saturday', 'Sunday'],
+    defaultOffDays: 2,
+  });
 
   // 15-day rotation data
   const [rotationConfig, setRotationConfig] = useState<RotationConfig | null>(null);
@@ -159,8 +170,33 @@ export function SetupMonthlyRosterDialog({
       fetchHolidays();
       fetchPreviousMonthState();
       fetchDepartmentConfigs();
+      fetchWeeklyOffPolicy();
     }
   }, [open]);
+
+  // Fetch weekly off policy
+  const fetchWeeklyOffPolicy = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'weekly_off_policy')
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data?.value) {
+        const policy = data.value as any;
+        setWeeklyOffPolicy({
+          enabled: policy.enabled ?? true,
+          weekOffPattern: policy.weekOffPattern ?? 'staggered',
+          fixedDays: policy.fixedDays ?? ['Saturday', 'Sunday'],
+          defaultOffDays: policy.defaultOffDays ?? 2,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching weekly off policy:', error);
+    }
+  };
 
   // Fetch department roster configs
   const fetchDepartmentConfigs = async () => {
@@ -461,6 +497,13 @@ export function SetupMonthlyRosterDialog({
     rotatingMembers.forEach((member, index) => {
       memberOffsets[member.id] = index % 7;
     });
+    
+    // Helper to check if a day is a fixed off day based on policy
+    const isFixedOffDay = (date: Date): boolean => {
+      if (weeklyOffPolicy.weekOffPattern !== 'fixed') return false;
+      const dayName = format(date, 'EEEE'); // e.g., "Saturday"
+      return weeklyOffPolicy.fixedDays.includes(dayName);
+    };
     days.forEach((day, dayIndex) => {
       const dateStr = format(day, 'yyyy-MM-dd');
       const isPublicHoliday = publicHolidays.includes(dateStr);
@@ -568,34 +611,53 @@ export function SetupMonthlyRosterDialog({
           let shouldBeOff = false;
           let offReason = '';
 
-          // RULE 1 (HARD LIMIT): MUST give week-off if reached max consecutive work days (7)
-          if (tracker.consecutiveWorkDays >= MAX_CONSECUTIVE_WORK_DAYS) {
-            shouldBeOff = true;
-            offReason = 'max_work_days_exceeded';
-          }
-
-          // RULE 2: Night shift transition safety (mandatory rest before night)
-          else if (tracker.pendingNightTransition && tracker.consecutiveWorkDays >= MIN_CONSECUTIVE_WORK_DAYS) {
-            // PREFERRED: 2 consecutive OFF days before night
-            // FALLBACK: 1 OFF day minimum, then 1 more after 3 work days
-            shouldBeOff = true;
-            offReason = 'pre_night_safety';
-            tracker.pendingNightTransition = false;
-          }
-
-          // RULE 3: Department-specific work pattern (use configured work days + OFF based on entitlement)
-          else if (tracker.consecutiveWorkDays >= tracker.standardWorkDays && tracker.offDaysRemaining > 0) {
-            shouldBeOff = true;
-            offReason = 'standard_cycle';
-          }
-
-          // RULE 4: Rolling 7-day compliance (must get entitlement within any 7-day window)
-          else {
-            const offDaysInWindow = tracker.offDaysInRolling7.filter(d => d > dayIndex - 7).length;
-            if (offDaysInWindow < tracker.weekOffEntitlement && tracker.consecutiveWorkDays >= MIN_CONSECUTIVE_WORK_DAYS) {
-              // We're at risk of violating 7-day rule if we don't take OFF now
+          // Check if using FIXED week-off pattern (e.g., weekends)
+          if (weeklyOffPolicy.weekOffPattern === 'fixed') {
+            // Fixed pattern: everyone gets same days off
+            if (isFixedOffDay(day)) {
               shouldBeOff = true;
-              offReason = 'rolling_7day_compliance';
+              offReason = 'fixed_day_policy';
+            }
+            // Still respect max consecutive work days as safety
+            else if (tracker.consecutiveWorkDays >= MAX_CONSECUTIVE_WORK_DAYS) {
+              shouldBeOff = true;
+              offReason = 'max_work_days_exceeded';
+            }
+          }
+          // STAGGERED pattern: distributed offs
+          else {
+            // RULE 1 (HARD LIMIT): MUST give week-off if reached max consecutive work days (7)
+            if (tracker.consecutiveWorkDays >= MAX_CONSECUTIVE_WORK_DAYS) {
+              shouldBeOff = true;
+              offReason = 'max_work_days_exceeded';
+            }
+
+            // RULE 2: Night shift transition safety (mandatory rest before night)
+            else if (tracker.pendingNightTransition && tracker.consecutiveWorkDays >= MIN_CONSECUTIVE_WORK_DAYS) {
+              // PREFERRED: 2 consecutive OFF days before night
+              // FALLBACK: 1 OFF day minimum, then 1 more after 3 work days
+              shouldBeOff = true;
+              offReason = 'pre_night_safety';
+              tracker.pendingNightTransition = false;
+            }
+
+            // RULE 3: Staggered work pattern (use configured work days + offset for staggering)
+            else {
+              const staggeredThreshold = tracker.standardWorkDays + (memberOffset % 3); // 5, 6, or 7 days
+              if (tracker.consecutiveWorkDays >= staggeredThreshold && tracker.offDaysRemaining > 0) {
+                shouldBeOff = true;
+                offReason = 'staggered_cycle';
+              }
+            }
+
+            // RULE 4: Rolling 7-day compliance (must get entitlement within any 7-day window)
+            if (!shouldBeOff) {
+              const offDaysInWindow = tracker.offDaysInRolling7.filter(d => d > dayIndex - 7).length;
+              if (offDaysInWindow < tracker.weekOffEntitlement && tracker.consecutiveWorkDays >= MIN_CONSECUTIVE_WORK_DAYS) {
+                // We're at risk of violating 7-day rule if we don't take OFF now
+                shouldBeOff = true;
+                offReason = 'rolling_7day_compliance';
+              }
             }
           }
 

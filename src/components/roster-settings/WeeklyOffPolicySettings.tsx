@@ -5,11 +5,14 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Save, Loader2, CalendarDays, Info } from 'lucide-react';
+import { Save, Loader2, CalendarDays, Info, Calendar, RefreshCw, Check } from 'lucide-react';
 import type { Json } from '@/integrations/supabase/types';
+import { cn } from '@/lib/utils';
+
+export type WeekOffPattern = 'fixed' | 'staggered';
 
 interface WeeklyOffPolicy {
   enabled: boolean;
@@ -19,6 +22,7 @@ interface WeeklyOffPolicy {
   fixedDays: string[];
   rotatingOff: boolean;
   allowWeekendSplit: boolean;
+  weekOffPattern: WeekOffPattern;
 }
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -28,9 +32,10 @@ const DEFAULT_POLICY: WeeklyOffPolicy = {
   defaultOffDays: 2,
   maxOffDays: 2,
   allowConsecutive: true,
-  fixedDays: [],
-  rotatingOff: true,
+  fixedDays: ['Saturday', 'Sunday'],
+  rotatingOff: false,
   allowWeekendSplit: false,
+  weekOffPattern: 'staggered',
 };
 
 export function WeeklyOffPolicySettings() {
@@ -138,10 +143,86 @@ export function WeeklyOffPolicySettings() {
 
           {policy.enabled && (
             <>
+              {/* Week-Off Pattern Selection */}
+              <div className="space-y-4">
+                <Label className="text-base font-medium">Week-Off Pattern</Label>
+                <p className="text-sm text-muted-foreground -mt-2">
+                  Choose how weekly offs are distributed across team members
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Fixed (Weekend) Option */}
+                  <div
+                    onClick={() => setPolicy({ ...policy, weekOffPattern: 'fixed', rotatingOff: false })}
+                    className={cn(
+                      "relative p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md",
+                      policy.weekOffPattern === 'fixed'
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-border hover:border-primary/50"
+                    )}
+                  >
+                    {policy.weekOffPattern === 'fixed' && (
+                      <div className="absolute top-3 right-3">
+                        <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center">
+                          <Check className="h-4 w-4 text-primary-foreground" />
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-start gap-3">
+                      <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
+                        <Calendar className="h-5 w-5 text-orange-600" />
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="font-semibold">Fixed (Weekend)</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Everyone gets the same fixed days off (e.g., Saturday & Sunday)
+                        </p>
+                        <Badge variant="outline" className="mt-2 text-xs">
+                          Traditional Schedule
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Staggered (Rotating) Option */}
+                  <div
+                    onClick={() => setPolicy({ ...policy, weekOffPattern: 'staggered', rotatingOff: true })}
+                    className={cn(
+                      "relative p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md",
+                      policy.weekOffPattern === 'staggered'
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-border hover:border-primary/50"
+                    )}
+                  >
+                    {policy.weekOffPattern === 'staggered' && (
+                      <div className="absolute top-3 right-3">
+                        <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center">
+                          <Check className="h-4 w-4 text-primary-foreground" />
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-start gap-3">
+                      <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                        <RefreshCw className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="font-semibold">Staggered (Rotating)</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Team members get different off days, ensuring coverage every day
+                        </p>
+                        <Badge variant="outline" className="mt-2 text-xs bg-blue-500/10 text-blue-700 border-blue-500/30">
+                          Recommended for 24/7
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Default Off Days */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Default Weekly Off Days</Label>
+                  <Label>Default Weekly Off Days per Person</Label>
                   <Input
                     type="number"
                     value={policy.defaultOffDays}
@@ -168,20 +249,6 @@ export function WeeklyOffPolicySettings() {
                 </div>
               </div>
 
-              {/* Rotating Off */}
-              <div className="flex items-center justify-between p-4 rounded-lg border">
-                <div className="space-y-1">
-                  <Label>Rotating Weekly Offs</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Weekly off days rotate through the week for fairness
-                  </p>
-                </div>
-                <Switch
-                  checked={policy.rotatingOff}
-                  onCheckedChange={(checked) => setPolicy({ ...policy, rotatingOff: checked })}
-                />
-              </div>
-
               {/* Allow Consecutive */}
               <div className="flex items-center justify-between p-4 rounded-lg border">
                 <div className="space-y-1">
@@ -196,41 +263,51 @@ export function WeeklyOffPolicySettings() {
                 />
               </div>
 
-              {/* Allow Weekend Split */}
-              <div className="flex items-center justify-between p-4 rounded-lg border">
-                <div className="space-y-1">
-                  <Label>Allow Weekend Split</Label>
+              {/* Fixed Days - Only show when Fixed pattern is selected */}
+              {policy.weekOffPattern === 'fixed' && (
+                <div className="space-y-3 p-4 rounded-lg border bg-orange-500/5 border-orange-500/20">
+                  <Label className="text-orange-700">Select Fixed Off Days</Label>
                   <p className="text-sm text-muted-foreground">
-                    One off can be Saturday and one Sunday
-                  </p>
-                </div>
-                <Switch
-                  checked={policy.allowWeekendSplit}
-                  onCheckedChange={(checked) => setPolicy({ ...policy, allowWeekendSplit: checked })}
-                />
-              </div>
-
-              {/* Fixed Days */}
-              {!policy.rotatingOff && (
-                <div className="space-y-3">
-                  <Label>Fixed Off Days</Label>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Select default off days (applies when rotating is disabled)
+                    Choose which days everyone will have off
                   </p>
                   <div className="grid grid-cols-7 gap-2">
                     {DAYS_OF_WEEK.map((day) => (
                       <div
                         key={day}
-                        className={`p-2 rounded-lg border text-center cursor-pointer transition-colors ${
+                        className={cn(
+                          "p-2 rounded-lg border text-center cursor-pointer transition-all",
                           policy.fixedDays.includes(day)
-                            ? 'bg-primary text-primary-foreground border-primary'
-                            : 'bg-muted/50 hover:bg-muted'
-                        }`}
+                            ? "bg-orange-500 text-white border-orange-500 scale-105 shadow-md"
+                            : "bg-muted/50 hover:bg-muted hover:scale-102"
+                        )}
                         onClick={() => toggleFixedDay(day)}
                       >
                         <span className="text-xs font-medium">{day.slice(0, 3)}</span>
                       </div>
                     ))}
+                  </div>
+                  {policy.fixedDays.length > 0 && (
+                    <p className="text-xs text-orange-600 mt-2">
+                      Selected: {policy.fixedDays.join(', ')}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Staggered Info - Only show when Staggered pattern is selected */}
+              {policy.weekOffPattern === 'staggered' && (
+                <div className="p-4 rounded-lg border bg-blue-500/5 border-blue-500/20">
+                  <div className="flex gap-3">
+                    <RefreshCw className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-blue-700">Staggered Distribution</p>
+                      <ul className="text-xs text-muted-foreground space-y-1">
+                        <li>• Members work 5-7 days before getting off days</li>
+                        <li>• Off days are distributed across all days of the week</li>
+                        <li>• Ensures adequate staffing every day including weekends</li>
+                        <li>• Each member's cycle is offset from others</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               )}
