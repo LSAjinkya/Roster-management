@@ -294,7 +294,7 @@ export function ShiftCompositionRulesManager() {
                     {DEPARTMENTS.map(dept => (
                       <TableRow key={dept}>
                         <TableCell className="font-medium">
-                          <Badge variant="outline">{dept}</Badge>
+                          <span className="text-foreground">{dept}</span>
                         </TableCell>
                         {WORK_SHIFT_TYPES.map(shift => (
                           <TableCell key={shift} className="text-center">

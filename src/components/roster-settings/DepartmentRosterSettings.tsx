@@ -111,10 +111,8 @@ export function DepartmentRosterSettings() {
                 }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <Badge variant={dept.is_active ? 'default' : 'secondary'}>
-                      {dept.name}
-                    </Badge>
+                  <div className="flex items-center gap-3 min-w-[180px]">
+                    <span className="font-medium text-foreground">{dept.name}</span>
                     {!dept.is_active && (
                       <span className="text-xs text-muted-foreground">(Inactive)</span>
                     )}
