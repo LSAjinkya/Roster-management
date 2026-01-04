@@ -37,7 +37,7 @@ const SHIFT_CONFIG: Record<string, { icon: typeof Sun; color: string; label: str
   general: { icon: Calendar, color: 'bg-gray-100 text-gray-700 border-gray-300', label: 'General', letter: 'G' },
 };
 
-const SHIFT_TYPES: ShiftType[] = ['morning', 'afternoon', 'night'];
+const SHIFT_TYPES: ShiftType[] = ['morning', 'afternoon', 'night', 'general'];
 
 export function RotationContinuityPreview({ 
   teamMembers, 
@@ -395,7 +395,7 @@ export function RotationContinuityPreview({
 
   const renderShiftDistribution = (stats: Record<WorkShiftType, number>) => (
     <div className="flex gap-2">
-      {(['morning', 'afternoon', 'night'] as WorkShiftType[]).map(shift => (
+      {(['morning', 'afternoon', 'night', 'general'] as WorkShiftType[]).map(shift => (
         <div key={shift} className={`flex items-center gap-1 px-2 py-1 rounded text-xs border ${SHIFT_CONFIG[shift].color}`}>
           <span className="font-medium">{SHIFT_CONFIG[shift].letter}</span>
           <span>: {stats[shift]}</span>

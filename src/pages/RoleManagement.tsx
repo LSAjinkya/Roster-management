@@ -350,7 +350,7 @@ export default function RoleManagement() {
   const notInitializedCount = teamMembers.length - initializedCount;
   const uninitializedMembers = teamMembers.filter(m => !m.isInitialized);
 
-  const SHIFT_TYPES = ['morning', 'afternoon', 'night'] as const;
+  const SHIFT_TYPES = ['morning', 'afternoon', 'night', 'general'] as const;
 
   const handleInitializeAll = async () => {
     if (uninitializedMembers.length === 0) {
