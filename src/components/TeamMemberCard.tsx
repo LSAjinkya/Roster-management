@@ -2,8 +2,9 @@ import { TeamMember } from '@/types/roster';
 import { RoleBadge } from './RoleBadge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { UserCheck, Settings } from 'lucide-react';
+import { UserCheck, Settings, Building2 } from 'lucide-react';
 
 interface TeamMemberCardProps {
   member: TeamMember;
@@ -42,7 +43,15 @@ export function TeamMemberCard({ member, compact = false, className, style, repo
           )} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{member.name}</p>
+          <div className="flex items-center gap-1.5">
+            {member.datacenterCode && (
+              <Badge variant="secondary" className="h-4 px-1 text-[9px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                <Building2 className="h-2.5 w-2.5 mr-0.5" />
+                {member.datacenterCode}
+              </Badge>
+            )}
+            <p className="text-sm font-medium truncate">{member.name}</p>
+          </div>
           <p className="text-xs text-muted-foreground truncate">{member.department}</p>
         </div>
         <RoleBadge role={member.role} />
@@ -82,6 +91,12 @@ export function TeamMemberCard({ member, compact = false, className, style, repo
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
+            {member.datacenterCode && (
+              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                <Building2 className="h-3 w-3 mr-0.5" />
+                {member.datacenterCode}
+              </Badge>
+            )}
             <p className="font-semibold truncate">{member.name}</p>
             <RoleBadge role={member.role} />
           </div>

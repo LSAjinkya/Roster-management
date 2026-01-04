@@ -43,29 +43,43 @@ export default function Roster() {
 
   const fetchTeamMembers = async () => {
     try {
+      // Fetch team members with datacenter info
       const { data, error } = await supabase
         .from('team_members')
-        .select('*')
+        .select(`
+          *,
+          datacenters:datacenter_id (
+            id,
+            code,
+            name
+          )
+        `)
         .order('name');
 
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const members: TeamMember[] = data.map(member => ({
-          id: member.id,
-          name: member.name || '',
-          email: member.email || '',
-          role: (member.role as Role) || 'L1',
-          department: (member.department as Department) || 'Infra',
-          team: member.team as TeamGroup | undefined,
-          status: (member.status as 'available' | 'on-leave' | 'unavailable') || 'available',
-          reportingTLId: member.reporting_tl_id || undefined,
-          weekOffEntitlement: (member.week_off_entitlement as 1 | 2) || 2,
-          isHybrid: member.is_hybrid || false,
-          hybridOfficeDays: member.hybrid_office_days || 5,
-          hybridWfhDays: member.hybrid_wfh_days || 0,
-          workLocationId: member.work_location_id || undefined,
-        }));
+        const members: TeamMember[] = data.map(member => {
+          const dcData = member.datacenters as { id: string; code: string; name: string } | null;
+          return {
+            id: member.id,
+            name: member.name || '',
+            email: member.email || '',
+            role: (member.role as Role) || 'L1',
+            department: (member.department as Department) || 'Infra',
+            team: member.team as TeamGroup | undefined,
+            status: (member.status as 'available' | 'on-leave' | 'unavailable') || 'available',
+            reportingTLId: member.reporting_tl_id || undefined,
+            weekOffEntitlement: (member.week_off_entitlement as 1 | 2) || 2,
+            isHybrid: member.is_hybrid || false,
+            hybridOfficeDays: member.hybrid_office_days || 5,
+            hybridWfhDays: member.hybrid_wfh_days || 0,
+            workLocationId: member.work_location_id || undefined,
+            datacenterId: member.datacenter_id || undefined,
+            datacenterCode: dcData?.code || undefined,
+            datacenterName: dcData?.name || undefined,
+          };
+        });
         setTeamMembers(members);
       }
     } catch (error) {
