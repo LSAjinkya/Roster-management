@@ -17,6 +17,7 @@ import { MemberRotationState, RotationConfig, getWeekOffDaysInCycle, getMemberSh
 import { validateRoster, autoFixRosterViolations } from '@/utils/rosterValidation';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useInfraTeamSettings, isRoleEligibleForShift } from '@/hooks/useInfraTeamSettings';
 
 interface SetupMonthlyRosterDialogProps {
   teamMembers: TeamMember[];
@@ -94,6 +95,9 @@ export function SetupMonthlyRosterDialog({
   
   // Department roster configs from database
   const [departmentRosterConfigs, setDepartmentRosterConfigs] = useState<DepartmentRosterConfig[]>([]);
+
+  // Infra team settings from the hook
+  const infraSettings = useInfraTeamSettings();
 
   // Filter team members by selected departments
   const filteredTeamMembers = useMemo(() => {
@@ -648,7 +652,45 @@ export function SetupMonthlyRosterDialog({
           // WORK DAY - assign current shift
           // NOTE: Shift rotation only happens AFTER OFF days (see lines 475-486)
           // This ensures no mid-week shift changes within a 5-day work block
-          const currentShift = tracker.currentShift;
+          let currentShift = tracker.currentShift;
+
+          // ========================
+          // DC ROLE AVAILABILITY CHECK (Infra Team)
+          // ========================
+          // For Infra department members, check if their role is allowed for this shift
+          // at their assigned datacenter
+          if (member.department === 'Infra' && member.datacenterId && !infraSettings.loading) {
+            const isEligible = isRoleEligibleForShift(
+              infraSettings.dcRoleAvailability,
+              member.datacenterId,
+              member.role,
+              currentShift as 'morning' | 'afternoon' | 'night' | 'general'
+            );
+
+            // If not eligible for current shift, try to find an eligible shift
+            if (!isEligible) {
+              const eligibleShifts = ['morning', 'afternoon', 'night', 'general'].filter(
+                shift => isRoleEligibleForShift(
+                  infraSettings.dcRoleAvailability,
+                  member.datacenterId,
+                  member.role,
+                  shift as 'morning' | 'afternoon' | 'night' | 'general'
+                )
+              );
+
+              if (eligibleShifts.length > 0) {
+                // Pick the first eligible shift that's closest in the rotation order
+                const rotationShifts = SHIFT_ROTATION_ORDER.filter(s => eligibleShifts.includes(s));
+                if (rotationShifts.length > 0) {
+                  currentShift = rotationShifts[0] as ShiftType;
+                } else if (eligibleShifts.includes('general')) {
+                  currentShift = 'general';
+                } else {
+                  currentShift = eligibleShifts[0] as ShiftType;
+                }
+              }
+            }
+          }
 
           // Track if rotation is pending (will apply after next OFF cycle)
           if (tracker.workDaysInCurrentShift >= SHIFT_STABILITY_WORK_DAYS && !tracker.pendingShiftRotation) {

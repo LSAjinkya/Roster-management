@@ -93,6 +93,7 @@ export interface TeamMember {
   weekOffEntitlement?: 1 | 2; // 1 or 2 OFF days per cycle (default: 2)
   workLocationId?: string; // Default work location
   workLocation?: WorkLocation; // Populated work location data
+  datacenterId?: string; // Assigned datacenter for Infra team members
   // Hybrid working settings
   isHybrid?: boolean;
   hybridOfficeDays?: number; // e.g., 3 days in office

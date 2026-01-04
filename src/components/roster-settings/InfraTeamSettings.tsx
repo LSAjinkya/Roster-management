@@ -80,7 +80,7 @@ export function InfraTeamSettings() {
   // DC-specific state
   const [datacenters, setDatacenters] = useState<Datacenter[]>([]);
   const [dcRoleAvailability, setDcRoleAvailability] = useState<DCRoleAvailability[]>([]);
-  const [selectedDC, setSelectedDC] = useState<string>('');
+  const [selectedDCs, setSelectedDCs] = useState<string[]>([]);
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -124,7 +124,7 @@ export function InfraTeamSettings() {
       if (dcError) throw dcError;
       setDatacenters(dcs || []);
       if (dcs && dcs.length > 0) {
-        setSelectedDC(dcs[0].id);
+        setSelectedDCs(dcs.map(dc => dc.id)); // Select all by default
       }
       
       // Fetch DC role availability
@@ -184,46 +184,102 @@ export function InfraTeamSettings() {
     }
   }
 
-  async function saveDCRoleAvailability(dcId: string, role: string, field: keyof DCRoleAvailability, value: boolean) {
+  async function saveDCRoleAvailability(dcIds: string[], role: string, field: keyof DCRoleAvailability, value: boolean) {
     try {
-      const existing = dcRoleAvailability.find(r => r.datacenter_id === dcId && r.role === role);
-      
-      if (existing) {
-        const { error } = await supabase
-          .from('dc_role_shift_availability')
-          .update({ [field]: value })
-          .eq('id', existing.id);
+      // Update for all selected datacenters
+      for (const dcId of dcIds) {
+        const existing = dcRoleAvailability.find(r => r.datacenter_id === dcId && r.role === role);
         
-        if (error) throw error;
-        
-        setDcRoleAvailability(prev => 
-          prev.map(r => r.id === existing.id ? { ...r, [field]: value } : r)
-        );
-      } else {
-        const newEntry = {
-          datacenter_id: dcId,
-          role,
-          morning_shift: field === 'morning_shift' ? value : true,
-          afternoon_shift: field === 'afternoon_shift' ? value : true,
-          night_shift: field === 'night_shift' ? value : true,
-          general_shift: field === 'general_shift' ? value : false,
-        };
-        
-        const { data, error } = await supabase
-          .from('dc_role_shift_availability')
-          .insert(newEntry)
-          .select()
-          .single();
-        
-        if (error) throw error;
-        setDcRoleAvailability(prev => [...prev, data]);
+        if (existing) {
+          const { error } = await supabase
+            .from('dc_role_shift_availability')
+            .update({ [field]: value })
+            .eq('id', existing.id);
+          
+          if (error) throw error;
+          
+          setDcRoleAvailability(prev => 
+            prev.map(r => r.id === existing.id ? { ...r, [field]: value } : r)
+          );
+        } else {
+          const newEntry = {
+            datacenter_id: dcId,
+            role,
+            morning_shift: field === 'morning_shift' ? value : true,
+            afternoon_shift: field === 'afternoon_shift' ? value : true,
+            night_shift: field === 'night_shift' ? value : true,
+            general_shift: field === 'general_shift' ? value : false,
+          };
+          
+          const { data, error } = await supabase
+            .from('dc_role_shift_availability')
+            .insert(newEntry)
+            .select()
+            .single();
+          
+          if (error) throw error;
+          setDcRoleAvailability(prev => [...prev, data]);
+        }
       }
       
-      toast.success('DC role availability updated');
+      const dcCount = dcIds.length;
+      toast.success(`Updated ${role} shift availability for ${dcCount} datacenter${dcCount > 1 ? 's' : ''}`);
     } catch (error) {
       console.error('Error saving DC role availability:', error);
       toast.error('Failed to update');
     }
+  }
+
+  // Toggle datacenter selection
+  function toggleDCSelection(dcId: string) {
+    setSelectedDCs(prev => {
+      if (prev.includes(dcId)) {
+        return prev.filter(id => id !== dcId);
+      } else {
+        return [...prev, dcId];
+      }
+    });
+  }
+
+  // Select/deselect all datacenters
+  function toggleAllDCs() {
+    if (selectedDCs.length === datacenters.length) {
+      setSelectedDCs([]);
+    } else {
+      setSelectedDCs(datacenters.map(dc => dc.id));
+    }
+  }
+
+  // Get combined availability across selected DCs (shows if ALL selected DCs have it enabled)
+  function getCombinedRoleAvailability(role: string): DCRoleAvailability {
+    if (selectedDCs.length === 0) {
+      return {
+        datacenter_id: '',
+        role,
+        morning_shift: true,
+        afternoon_shift: true,
+        night_shift: true,
+        general_shift: false
+      };
+    }
+
+    const availabilities = selectedDCs.map(dcId => getRoleAvailability(dcId, role));
+    
+    return {
+      datacenter_id: selectedDCs[0],
+      role,
+      morning_shift: availabilities.every(a => a.morning_shift),
+      afternoon_shift: availabilities.every(a => a.afternoon_shift),
+      night_shift: availabilities.every(a => a.night_shift),
+      general_shift: availabilities.every(a => a.general_shift)
+    };
+  }
+
+  // Check if there's mixed state across selected DCs
+  function hasMixedState(role: string, field: keyof DCRoleAvailability): boolean {
+    if (selectedDCs.length <= 1) return false;
+    const values = selectedDCs.map(dcId => getRoleAvailability(dcId, role)[field]);
+    return !values.every(v => v === values[0]);
   }
 
   function getRoleAvailability(dcId: string, role: string): DCRoleAvailability {
@@ -586,27 +642,44 @@ export function InfraTeamSettings() {
                 Datacenter Role-Based Shift Availability
               </CardTitle>
               <CardDescription>
-                Configure which roles can work specific shifts at each datacenter
+                Configure which roles can work specific shifts at each datacenter. 
+                Select multiple datacenters to apply settings to all of them at once.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                <Label>Select Datacenter:</Label>
-                <Select value={selectedDC} onValueChange={setSelectedDC}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue placeholder="Select DC" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {datacenters.map(dc => (
-                      <SelectItem key={dc.id} value={dc.id}>
-                        {dc.name} ({dc.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* Multi-select datacenter chips */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Select Datacenters:</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleAllDCs}
+                  >
+                    {selectedDCs.length === datacenters.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {datacenters.map(dc => (
+                    <Badge
+                      key={dc.id}
+                      variant={selectedDCs.includes(dc.id) ? 'default' : 'outline'}
+                      className="cursor-pointer px-3 py-1.5 text-sm"
+                      onClick={() => toggleDCSelection(dc.id)}
+                    >
+                      {dc.name} ({dc.code})
+                    </Badge>
+                  ))}
+                </div>
+                {selectedDCs.length > 1 && (
+                  <p className="text-sm text-muted-foreground">
+                    <Info className="inline h-3 w-3 mr-1" />
+                    Changes will apply to all {selectedDCs.length} selected datacenters
+                  </p>
+                )}
               </div>
               
-              {selectedDC && (
+              {selectedDCs.length > 0 && (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -619,49 +692,75 @@ export function InfraTeamSettings() {
                   </TableHeader>
                   <TableBody>
                     {INFRA_ROLES.map(role => {
-                      const availability = getRoleAvailability(selectedDC, role);
+                      const availability = getCombinedRoleAvailability(role);
                       return (
                         <TableRow key={role}>
                           <TableCell>
                             <span className="font-medium text-foreground">{role}</span>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Switch
-                              checked={availability.morning_shift}
-                              onCheckedChange={(checked) => 
-                                saveDCRoleAvailability(selectedDC, role, 'morning_shift', checked)
-                              }
-                            />
+                            <div className="flex items-center justify-center gap-1">
+                              <Switch
+                                checked={availability.morning_shift}
+                                onCheckedChange={(checked) => 
+                                  saveDCRoleAvailability(selectedDCs, role, 'morning_shift', checked)
+                                }
+                              />
+                              {hasMixedState(role, 'morning_shift') && (
+                                <span className="text-xs text-yellow-600" title="Mixed settings across selected DCs">⚠</span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Switch
-                              checked={availability.afternoon_shift}
-                              onCheckedChange={(checked) => 
-                                saveDCRoleAvailability(selectedDC, role, 'afternoon_shift', checked)
-                              }
-                            />
+                            <div className="flex items-center justify-center gap-1">
+                              <Switch
+                                checked={availability.afternoon_shift}
+                                onCheckedChange={(checked) => 
+                                  saveDCRoleAvailability(selectedDCs, role, 'afternoon_shift', checked)
+                                }
+                              />
+                              {hasMixedState(role, 'afternoon_shift') && (
+                                <span className="text-xs text-yellow-600" title="Mixed settings across selected DCs">⚠</span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Switch
-                              checked={availability.night_shift}
-                              onCheckedChange={(checked) => 
-                                saveDCRoleAvailability(selectedDC, role, 'night_shift', checked)
-                              }
-                            />
+                            <div className="flex items-center justify-center gap-1">
+                              <Switch
+                                checked={availability.night_shift}
+                                onCheckedChange={(checked) => 
+                                  saveDCRoleAvailability(selectedDCs, role, 'night_shift', checked)
+                                }
+                              />
+                              {hasMixedState(role, 'night_shift') && (
+                                <span className="text-xs text-yellow-600" title="Mixed settings across selected DCs">⚠</span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Switch
-                              checked={availability.general_shift}
-                              onCheckedChange={(checked) => 
-                                saveDCRoleAvailability(selectedDC, role, 'general_shift', checked)
-                              }
-                            />
+                            <div className="flex items-center justify-center gap-1">
+                              <Switch
+                                checked={availability.general_shift}
+                                onCheckedChange={(checked) => 
+                                  saveDCRoleAvailability(selectedDCs, role, 'general_shift', checked)
+                                }
+                              />
+                              {hasMixedState(role, 'general_shift') && (
+                                <span className="text-xs text-yellow-600" title="Mixed settings across selected DCs">⚠</span>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
                     })}
                   </TableBody>
                 </Table>
+              )}
+
+              {selectedDCs.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  Select at least one datacenter to configure role shift availability
+                </div>
               )}
             </CardContent>
           </Card>
