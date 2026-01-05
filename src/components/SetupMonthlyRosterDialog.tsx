@@ -13,6 +13,7 @@ import { TeamMember, ShiftType, Department, DEPARTMENTS, TeamGroup } from '@/typ
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { RosterPreviewTable } from './RosterPreviewTable';
 import { RotationContinuityPreview } from './RotationContinuityPreview';
+import { WeekOffDistributionChart } from './WeekOffDistributionChart';
 import { MemberRotationState, RotationConfig, getWeekOffDaysInCycle, getMemberShiftForDate, ROTATING_DEPARTMENTS, GENERAL_SHIFT_DEPARTMENTS, WORK_DAYS_IN_CYCLE, OFF_DAYS_IN_CYCLE, CYCLE_LENGTH, SHIFT_STABILITY_WORK_DAYS, SHIFT_ROTATION_ORDER, REST_DAYS_BEFORE_NIGHT, isOffDay, requiresRestBeforeNight } from '@/types/shiftRules';
 import { validateRoster, autoFixRosterViolations } from '@/utils/rosterValidation';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +36,8 @@ interface DepartmentRosterConfig {
   work_days_per_cycle: number;
   off_days_per_cycle: number;
   rotation_enabled: boolean;
+  week_off_pattern: 'fixed' | 'staggered' | null;
+  fixed_off_days: string[] | null;
 }
 
 interface DepartmentShiftConfig {
@@ -203,12 +206,18 @@ export function SetupMonthlyRosterDialog({
     try {
       const { data, error } = await supabase
         .from('departments')
-        .select('id, name, work_days_per_cycle, off_days_per_cycle, rotation_enabled')
+        .select('id, name, work_days_per_cycle, off_days_per_cycle, rotation_enabled, week_off_pattern, fixed_off_days')
         .eq('is_active', true);
       
       if (error) throw error;
       if (data) {
-        setDepartmentRosterConfigs(data as DepartmentRosterConfig[]);
+        // Cast to proper type
+        const configs: DepartmentRosterConfig[] = data.map(d => ({
+          ...d,
+          week_off_pattern: (d.week_off_pattern as 'fixed' | 'staggered' | null) || null,
+          fixed_off_days: d.fixed_off_days || null,
+        }));
+        setDepartmentRosterConfigs(configs);
       }
     } catch (error) {
       console.error('Error fetching department configs:', error);
@@ -445,6 +454,9 @@ export function SetupMonthlyRosterDialog({
 
     // Get department config lookup
     const getDeptConfig = (dept: string) => deptConfigs.find(c => c.department === dept);
+    
+    // Get department DB config for week-off patterns
+    const getDeptRosterConfig = (dept: string) => departmentRosterConfigs.find(c => c.name === dept);
 
     // Initialize trackers using previous month state for MONTH BOUNDARY CONTINUITY
     allMembers.forEach(member => {
@@ -498,11 +510,34 @@ export function SetupMonthlyRosterDialog({
       memberOffsets[member.id] = index % 7;
     });
     
-    // Helper to check if a day is a fixed off day based on policy
-    const isFixedOffDay = (date: Date): boolean => {
-      if (weeklyOffPolicy.weekOffPattern !== 'fixed') return false;
+    // Helper to check if a day is a fixed off day based on policy (supports dept overrides)
+    const isFixedOffDay = (date: Date, memberDept?: string): boolean => {
       const dayName = format(date, 'EEEE'); // e.g., "Saturday"
+      
+      // Check department-specific override first
+      if (memberDept) {
+        const deptRosterConfig = getDeptRosterConfig(memberDept);
+        if (deptRosterConfig?.week_off_pattern === 'fixed' && deptRosterConfig.fixed_off_days) {
+          return deptRosterConfig.fixed_off_days.includes(dayName);
+        }
+        // If department is explicitly staggered, not fixed
+        if (deptRosterConfig?.week_off_pattern === 'staggered') {
+          return false;
+        }
+      }
+      
+      // Fall back to global policy
+      if (weeklyOffPolicy.weekOffPattern !== 'fixed') return false;
       return weeklyOffPolicy.fixedDays.includes(dayName);
+    };
+    
+    // Helper to get effective week-off pattern for a member
+    const getEffectiveWeekOffPattern = (memberDept: string): 'fixed' | 'staggered' => {
+      const deptRosterConfig = getDeptRosterConfig(memberDept);
+      if (deptRosterConfig?.week_off_pattern) {
+        return deptRosterConfig.week_off_pattern;
+      }
+      return weeklyOffPolicy.weekOffPattern;
     };
     days.forEach((day, dayIndex) => {
       const dateStr = format(day, 'yyyy-MM-dd');
@@ -611,10 +646,12 @@ export function SetupMonthlyRosterDialog({
           let shouldBeOff = false;
           let offReason = '';
 
-          // Check if using FIXED week-off pattern (e.g., weekends)
-          if (weeklyOffPolicy.weekOffPattern === 'fixed') {
+          // Check if using FIXED week-off pattern (e.g., weekends) - with dept override
+          const effectivePattern = getEffectiveWeekOffPattern(member.department);
+          
+          if (effectivePattern === 'fixed') {
             // Fixed pattern: everyone gets same days off
-            if (isFixedOffDay(day)) {
+            if (isFixedOffDay(day, member.department)) {
               shouldBeOff = true;
               offReason = 'fixed_day_policy';
             }
@@ -1355,11 +1392,25 @@ export function SetupMonthlyRosterDialog({
                 <Eye size={16} />
                 View Full Roster
               </Button>
-            </DialogFooter>
+          </DialogFooter>
           </> : <>
-            <ScrollArea className="h-[60vh]">
-              <RosterPreviewTable assignments={previewAssignments} teamMembers={filteredTeamMembers} month={nextMonth} editable={true} onEditCell={handleEditPreviewCell} />
-            </ScrollArea>
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+              {/* Roster Table */}
+              <div className="lg:col-span-3">
+                <ScrollArea className="h-[55vh]">
+                  <RosterPreviewTable assignments={previewAssignments} teamMembers={filteredTeamMembers} month={nextMonth} editable={true} onEditCell={handleEditPreviewCell} />
+                </ScrollArea>
+              </div>
+              
+              {/* Week-Off Distribution Chart */}
+              <div className="lg:col-span-1">
+                <WeekOffDistributionChart 
+                  assignments={previewAssignments} 
+                  month={nextMonth} 
+                  totalMembers={filteredTeamMembers.length}
+                />
+              </div>
+            </div>
 
             <div className="flex items-center justify-between text-sm text-muted-foreground border-t pt-4">
               <span>
