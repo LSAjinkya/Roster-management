@@ -173,6 +173,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          fixed_off_days: string[] | null
           head_member_id: string | null
           id: string
           is_active: boolean
@@ -180,11 +181,13 @@ export type Database = {
           off_days_per_cycle: number
           rotation_enabled: boolean
           updated_at: string
+          week_off_pattern: string | null
           work_days_per_cycle: number
         }
         Insert: {
           created_at?: string
           description?: string | null
+          fixed_off_days?: string[] | null
           head_member_id?: string | null
           id?: string
           is_active?: boolean
@@ -192,11 +195,13 @@ export type Database = {
           off_days_per_cycle?: number
           rotation_enabled?: boolean
           updated_at?: string
+          week_off_pattern?: string | null
           work_days_per_cycle?: number
         }
         Update: {
           created_at?: string
           description?: string | null
+          fixed_off_days?: string[] | null
           head_member_id?: string | null
           id?: string
           is_active?: boolean
@@ -204,6 +209,7 @@ export type Database = {
           off_days_per_cycle?: number
           rotation_enabled?: boolean
           updated_at?: string
+          week_off_pattern?: string | null
           work_days_per_cycle?: number
         }
         Relationships: []
