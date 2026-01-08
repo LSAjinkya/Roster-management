@@ -11,6 +11,7 @@ import { format, parse, getDaysInMonth } from 'date-fns';
 
 interface ImportedMember {
   email: string;
+  name: string;
   department: string;
   manager: string;
   team: string;
@@ -125,19 +126,43 @@ export function RosterImportDialog({ onImportComplete, year = 2026, month = 1 }:
       }
 
       const headers = rows[0];
-      const emailIdx = headers.findIndex(h => h.toLowerCase().includes('email'));
+      
+      // Find the email column that contains actual email values (check first data row)
+      const firstDataRow = rows[1];
+      let emailIdx = -1;
+      headers.forEach((h, idx) => {
+        if (h.toLowerCase().includes('email') && firstDataRow[idx]?.includes('@')) {
+          emailIdx = idx;
+        }
+      });
+      // Fallback: find any column with email in header
+      if (emailIdx === -1) {
+        emailIdx = headers.findIndex(h => h.toLowerCase().includes('email'));
+      }
+      
+      // Find name column (first column usually has name if not an email column)
+      let nameIdx = 0;
+      if (headers[0]?.toLowerCase().includes('email') && !firstDataRow[0]?.includes('@')) {
+        nameIdx = 0; // First column has names even though header says "Email id"
+      }
+      
       const teamIdx = headers.findIndex(h => h.toLowerCase() === 'team');
       const managerIdx = headers.findIndex(h => h.toLowerCase() === 'manager');
       const teamsIdx = headers.findIndex(h => h.toLowerCase() === 'teams');
-      const levelIdx = headers.findIndex(h => h.toLowerCase() === 'levels');
+      const levelIdx = headers.findIndex(h => h.toLowerCase() === 'levels' || h.toLowerCase() === 'level');
       const locationIdx = headers.findIndex(h => h.toLowerCase().includes('location'));
       
-      // Find day columns (1-Jan, 2-Jan, etc.)
-      const dayColumns: { idx: number; day: number }[] = [];
+      // Find day columns with flexible month patterns (1-Jan, 2-Feb, 3-Mar, etc.)
+      const monthPatterns = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+      const dayColumns: { idx: number; day: number; month: number }[] = [];
       headers.forEach((h, idx) => {
-        const match = h.match(/^(\d+)-Jan$/i);
-        if (match) {
-          dayColumns.push({ idx, day: parseInt(match[1]) });
+        const headerLower = h.toLowerCase().trim();
+        for (let m = 0; m < monthPatterns.length; m++) {
+          const match = headerLower.match(new RegExp(`^(\\d+)-${monthPatterns[m]}$`));
+          if (match) {
+            dayColumns.push({ idx, day: parseInt(match[1]), month: m + 1 });
+            break;
+          }
         }
       });
 
@@ -157,18 +182,27 @@ export function RosterImportDialog({ onImportComplete, year = 2026, month = 1 }:
         if (!email || !email.includes('@')) continue;
 
         const shifts: Record<string, string> = {};
-        dayColumns.forEach(({ idx, day }) => {
+        dayColumns.forEach(({ idx, day, month: csvMonth }) => {
           const shift = row[idx]?.toUpperCase()?.trim();
           if (shift && SHIFT_MAP[shift]) {
-            const dateStr = format(new Date(year, month - 1, day), 'yyyy-MM-dd');
+            // Use the month from CSV header if available, otherwise use the prop month
+            const effectiveMonth = csvMonth || month;
+            const dateStr = format(new Date(year, effectiveMonth - 1, day), 'yyyy-MM-dd');
             shifts[dateStr] = SHIFT_MAP[shift];
           }
         });
 
         const existsInDb = memberMap.has(email);
         
+        // Extract name from the first column if it's not the email column
+        const rawName = nameIdx !== emailIdx ? row[nameIdx]?.trim() : '';
+        const name = rawName || email.split('@')[0].split('.').map(
+          p => p.charAt(0).toUpperCase() + p.slice(1)
+        ).join(' ');
+        
         imported.push({
           email,
+          name,
           department: row[teamIdx]?.trim() || '',
           manager: row[managerIdx]?.trim() || '',
           team: row[teamsIdx]?.trim() || '',
@@ -227,7 +261,8 @@ export function RosterImportDialog({ onImportComplete, year = 2026, month = 1 }:
           const locationId = locationCode ? locationMap.get(locationCode) : null;
           
           const memberId = member.email.split('@')[0].replace(/\./g, '-');
-          const name = member.email.split('@')[0].split('.').map(
+          // Use the name parsed from CSV
+          const name = member.name || member.email.split('@')[0].split('.').map(
             p => p.charAt(0).toUpperCase() + p.slice(1)
           ).join(' ');
           
@@ -424,7 +459,8 @@ export function RosterImportDialog({ onImportComplete, year = 2026, month = 1 }:
                         onCheckedChange={() => toggleMember(member.email)}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{member.email}</p>
+                        <p className="font-medium truncate">{member.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{member.email}</p>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <span>{member.department}</span>
                           <span>•</span>
