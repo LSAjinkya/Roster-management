@@ -275,18 +275,31 @@ export function SetupMonthlyRosterDialog({
             a.shift_type !== 'comp-off'
           );
 
-          // Count consecutive work days at end of month (not interrupted by OFF)
+          // FIXED: Count consecutive work days at END of month AFTER the last OFF
+          // We iterate backwards from most recent. First count work days until we hit an OFF.
+          // That gives us the CURRENT consecutive work days at month end.
           let workDaysInCurrent = 0;
           let offDaysUsed = 0;
+          let hitOff = false;
           
           for (const a of workableAssignments) {
-            if (a.shift_type === 'week-off' || a.shift_type === 'public-off' || a.shift_type === 'comp-off') {
-              offDaysUsed++;
-              if (workDaysInCurrent > 0) {
-                break; // We've counted consecutive work days before hitting OFF
+            const isOffType = a.shift_type === 'week-off' || a.shift_type === 'public-off' || a.shift_type === 'comp-off';
+            
+            if (!hitOff) {
+              // First pass: count consecutive work days at END of month
+              if (isOffType) {
+                hitOff = true;
+                offDaysUsed = 1;
+              } else {
+                workDaysInCurrent++;
               }
             } else {
-              workDaysInCurrent++;
+              // After hitting first OFF, count consecutive OFFs
+              if (isOffType) {
+                offDaysUsed++;
+              } else {
+                break; // Done counting OFF block
+              }
             }
           }
           
@@ -494,7 +507,8 @@ export function SetupMonthlyRosterDialog({
         offDaysRemaining: continuingOffDays,
         weekOffEntitlement,
         standardWorkDays,
-        workDaysInCurrentShift: 0,
+        // FIXED: Also carry over workDaysInCurrentShift for shift stability
+        workDaysInCurrentShift: prevState?.workDaysInCurrent || 0,
         currentShift: (prevState?.shift || rotationState?.current_shift_type || SHIFT_ROTATION_ORDER[0]) as ShiftType,
         lastShiftType: null,
         pendingNightTransition,
@@ -678,13 +692,12 @@ export function SetupMonthlyRosterDialog({
               tracker.pendingNightTransition = false;
             }
 
-            // RULE 3: Staggered work pattern (use configured work days + offset for staggering)
-            else {
-              const staggeredThreshold = tracker.standardWorkDays + (memberOffset % 3); // 5, 6, or 7 days
-              if (tracker.consecutiveWorkDays >= staggeredThreshold && tracker.offDaysRemaining > 0) {
-                shouldBeOff = true;
-                offReason = 'staggered_cycle';
-              }
+            // RULE 3: Staggered work pattern using configured work days
+            // FIXED: Use standardWorkDays directly without offset to ensure proper 5-day cycles
+            // The offset is only used for initial staggering across the team, not per-day decisions
+            else if (tracker.consecutiveWorkDays >= tracker.standardWorkDays && tracker.offDaysRemaining > 0) {
+              shouldBeOff = true;
+              offReason = 'staggered_cycle';
             }
 
             // RULE 4: Rolling 7-day compliance (must get entitlement within any 7-day window)
@@ -698,11 +711,14 @@ export function SetupMonthlyRosterDialog({
             }
           }
 
-          // HARD LIMIT: Never work fewer than 3 days between OFF cycles (except month carryover)
-          // This prevents taking OFF too early
+          // FIXED: Prevent OFF if we haven't worked minimum days in CURRENT month cycle
+          // But allow OFF at month start if COMBINED with previous month's work days >= MIN
           if (shouldBeOff && tracker.consecutiveWorkDays < MIN_CONSECUTIVE_WORK_DAYS && offReason !== 'max_work_days_exceeded') {
-            // Exception: if it's month start and continuing from previous month
-            if (dayIndex > 0 || previousMonthState[member.id]?.workDaysInCurrent >= MIN_CONSECUTIVE_WORK_DAYS) {
+            const prevWorkDays = previousMonthState[member.id]?.workDaysInCurrent || 0;
+            const combinedWorkDays = tracker.consecutiveWorkDays + prevWorkDays;
+            
+            // Only block OFF if combined work days (from prev month + this month) is still below minimum
+            if (combinedWorkDays < MIN_CONSECUTIVE_WORK_DAYS) {
               shouldBeOff = false;
             }
           }
