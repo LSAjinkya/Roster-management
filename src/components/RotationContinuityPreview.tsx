@@ -299,16 +299,26 @@ export function RotationContinuityPreview({
                   </SelectContent>
                 </Select>
                 <Select 
-                  value={String(data.workDaysCompleted)} 
-                  onValueChange={(v) => handleWorkDaysChange(data.member.id, parseInt(v))}
+                  value={data.workDaysCompleted >= WORK_DAYS_IN_CYCLE ? 'off' : String(data.workDaysCompleted)} 
+                  onValueChange={(v) => {
+                    if (v === 'off') {
+                      // Set to 5+ to trigger OFF days
+                      handleWorkDaysChange(data.member.id, WORK_DAYS_IN_CYCLE);
+                    } else {
+                      handleWorkDaysChange(data.member.id, parseInt(v));
+                    }
+                  }}
                 >
-                  <SelectTrigger className="h-7 w-20 text-xs">
+                  <SelectTrigger className="h-7 w-24 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {[0, 1, 2, 3, 4, 5].map(d => (
                       <SelectItem key={d} value={String(d)}>Day {d}</SelectItem>
                     ))}
+                    <SelectItem value="off" className="text-amber-600 font-medium">
+                      2 OFF (Cycle Done)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 <button 
