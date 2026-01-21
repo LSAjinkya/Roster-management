@@ -1104,7 +1104,7 @@ export function SetupMonthlyRosterDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {step === 'config' ? <>
+        {step === 'config' ? <div className="overflow-y-auto max-h-[calc(90vh-120px)] pr-2">
             {/* Month Selector */}
             <div className="rounded-lg border p-4 mb-4">
               <div className="space-y-3">
@@ -1541,7 +1541,7 @@ export function SetupMonthlyRosterDialog({
                 Preview Continuity & Roster
               </Button>
             </DialogFooter>
-          </> : step === 'continuity' ? <>
+          </div> : step === 'continuity' ? <>
             {/* Continuity Preview Step */}
             <ScrollArea className="h-[60vh]">
               <RotationContinuityPreview 
