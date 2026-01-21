@@ -89,6 +89,10 @@ export function SetupMonthlyRosterDialog({
   } | null>(null);
   const [publicHolidays, setPublicHolidays] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [selectedMonthOffset, setSelectedMonthOffset] = useState(1); // 0 = current, 1 = next, 2 = +2 months
+  const [selectedTeam, setSelectedTeam] = useState<string>('all');
+  const [selectedLocation, setSelectedLocation] = useState<string>('all');
+  const [workLocations, setWorkLocations] = useState<{ id: string; name: string; city: string | null }[]>([]);
   const [weeklyOffPolicy, setWeeklyOffPolicy] = useState<{
     enabled: boolean;
     weekOffPattern: 'fixed' | 'staggered';
@@ -113,11 +117,50 @@ export function SetupMonthlyRosterDialog({
   // Infra team settings from the hook
   const infraSettings = useInfraTeamSettings();
 
-  // Filter team members by selected departments
+  // Fetch work locations on dialog open
+  useEffect(() => {
+    if (open && workLocations.length === 0) {
+      const fetchLocations = async () => {
+        const { data, error } = await supabase
+          .from('work_locations')
+          .select('id, name, city')
+          .eq('is_active', true)
+          .order('name');
+        if (!error && data) {
+          setWorkLocations(data);
+        }
+      };
+      fetchLocations();
+    }
+  }, [open, workLocations.length]);
+
+  // Get unique teams from team members
+  const availableTeams = useMemo(() => {
+    const teams = new Set<string>();
+    teamMembers.forEach(m => {
+      if (m.team) teams.add(m.team);
+    });
+    return Array.from(teams).sort();
+  }, [teamMembers]);
+
+  // Filter team members by selected departments, team, and location
   const filteredTeamMembers = useMemo(() => {
-    if (selectedDepartments.length === 0) return teamMembers;
-    return teamMembers.filter(m => selectedDepartments.includes(m.department));
-  }, [teamMembers, selectedDepartments]);
+    let members = [...teamMembers];
+    
+    if (selectedDepartments.length > 0) {
+      members = members.filter(m => selectedDepartments.includes(m.department));
+    }
+    
+    if (selectedTeam !== 'all') {
+      members = members.filter(m => m.team === selectedTeam);
+    }
+    
+    if (selectedLocation !== 'all') {
+      members = members.filter(m => m.workLocationId === selectedLocation);
+    }
+    
+    return members;
+  }, [teamMembers, selectedDepartments, selectedTeam, selectedLocation]);
 
   // Department shift configuration - Rotation order: Afternoon → Morning → Night
   // Now includes work_days_per_cycle and off_days_per_cycle from DB
@@ -150,14 +193,24 @@ export function SetupMonthlyRosterDialog({
       })));
     }
   }, [departmentRosterConfigs]);
-  const nextMonth = addMonths(new Date(), 1);
-  const monthStart = startOfMonth(nextMonth);
-  const monthEnd = endOfMonth(nextMonth);
-  const monthName = format(nextMonth, 'MMMM yyyy');
+  // Dynamic month selection based on offset
+  const targetMonth = addMonths(new Date(), selectedMonthOffset);
+  const monthStart = startOfMonth(targetMonth);
+  const monthEnd = endOfMonth(targetMonth);
+  const monthName = format(targetMonth, 'MMMM yyyy');
   const totalDays = eachDayOfInterval({
     start: monthStart,
     end: monthEnd
   }).length;
+
+  // Available months for selection (current + next 3 months)
+  const availableMonths = useMemo(() => {
+    return [0, 1, 2, 3].map(offset => ({
+      offset,
+      label: format(addMonths(new Date(), offset), 'MMMM yyyy'),
+      shortLabel: format(addMonths(new Date(), offset), 'MMM yyyy'),
+    }));
+  }, []);
 
   // State to hold previous month's last assignments for continuity
   const [previousMonthState, setPreviousMonthState] = useState<Record<string, {
@@ -176,6 +229,14 @@ export function SetupMonthlyRosterDialog({
       fetchWeeklyOffPolicy();
     }
   }, [open]);
+
+  // Refetch previous month state when selected month changes
+  useEffect(() => {
+    if (open) {
+      fetchPreviousMonthState();
+      fetchHolidays();
+    }
+  }, [selectedMonthOffset]);
 
   // Fetch weekly off policy
   const fetchWeeklyOffPolicy = async () => {
@@ -227,11 +288,14 @@ export function SetupMonthlyRosterDialog({
   // Fetch last assignments from previous month for cross-month continuity
   const fetchPreviousMonthState = async () => {
     try {
-      const prevMonthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
-      const prevMonthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
-
+      // Calculate the month before the target month
+      const targetDate = addMonths(new Date(), selectedMonthOffset);
+      const prevMonth = addMonths(targetDate, -1);
+      const prevMonthEnd = format(endOfMonth(prevMonth), 'yyyy-MM-dd');
+      
       // Get last 14 days of previous month to understand cycle position (longer window for accuracy)
-      const lastDaysStart = format(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - 14), 'yyyy-MM-dd');
+      const lastDaysDate = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0); // Last day of prev month
+      const lastDaysStart = format(new Date(lastDaysDate.getFullYear(), lastDaysDate.getMonth(), lastDaysDate.getDate() - 14), 'yyyy-MM-dd');
       
       const {
         data: lastAssignments,
@@ -1018,7 +1082,7 @@ export function SetupMonthlyRosterDialog({
       <DialogTrigger asChild>
         <Button className="gap-2">
           <CalendarPlus size={16} />
-          Setup {format(nextMonth, 'MMM')} Roster
+          Setup Roster
         </Button>
       </DialogTrigger>
       <DialogContent className={step === 'preview' || step === 'continuity' ? "max-w-[95vw] max-h-[95vh]" : "max-w-2xl max-h-[90vh]"}>
@@ -1041,6 +1105,93 @@ export function SetupMonthlyRosterDialog({
         </DialogHeader>
 
         {step === 'config' ? <>
+            {/* Month Selector */}
+            <div className="rounded-lg border p-4 mb-4">
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-base">Select Month</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Choose which month to set up the roster for
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {availableMonths.map(month => (
+                    <Button
+                      key={month.offset}
+                      variant={selectedMonthOffset === month.offset ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSelectedMonthOffset(month.offset)}
+                    >
+                      {month.shortLabel}
+                      {month.offset === 0 && <Badge variant="secondary" className="ml-1 text-xs">Current</Badge>}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Team & Location Filter */}
+            <div className="rounded-lg border p-4 mb-4">
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-base">Filter by Team or Location</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Optionally filter members by team or work location (e.g., Bangalore)
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm text-muted-foreground mb-1.5 block">Team</Label>
+                    <Select value={selectedTeam} onValueChange={setSelectedTeam}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Teams" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Teams</SelectItem>
+                        {availableTeams.map(team => (
+                          <SelectItem key={team} value={team}>{team}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-muted-foreground mb-1.5 block">Work Location</Label>
+                    <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Locations" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Locations</SelectItem>
+                        {workLocations.map(loc => (
+                          <SelectItem key={loc.id} value={loc.id}>
+                            {loc.name} {loc.city && `(${loc.city})`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {(selectedTeam !== 'all' || selectedLocation !== 'all') && (
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-primary">
+                      {filteredTeamMembers.length} member(s) match the filter
+                    </p>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => {
+                        setSelectedTeam('all');
+                        setSelectedLocation('all');
+                      }}
+                      className="text-xs h-6"
+                    >
+                      Clear filter
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Department Multi-Selector */}
             <div className="rounded-lg border p-4 mb-4">
               <div className="space-y-3">
@@ -1053,7 +1204,7 @@ export function SetupMonthlyRosterDialog({
                 <div className="flex flex-wrap gap-2">
                   {departments.map(dept => {
                     const isSelected = selectedDepartments.includes(dept.name);
-                    const memberCount = teamMembers.filter(m => m.department === dept.name).length;
+                    const memberCount = filteredTeamMembers.filter(m => m.department === dept.name).length;
                     if (memberCount === 0) return null;
                     return (
                       <Button
@@ -1080,7 +1231,7 @@ export function SetupMonthlyRosterDialog({
                 {selectedDepartments.length > 0 && (
                   <div className="flex items-center gap-2">
                     <p className="text-sm text-primary">
-                      Roster will be generated for {filteredTeamMembers.length} member(s) in {selectedDepartments.length} department(s)
+                      Roster will be generated for {filteredTeamMembers.filter(m => selectedDepartments.includes(m.department)).length} member(s) in {selectedDepartments.length} department(s)
                     </p>
                     <Button 
                       variant="ghost" 
@@ -1414,7 +1565,7 @@ export function SetupMonthlyRosterDialog({
               {/* Roster Table */}
               <div className="lg:col-span-3">
                 <ScrollArea className="h-[55vh]">
-                  <RosterPreviewTable assignments={previewAssignments} teamMembers={filteredTeamMembers} month={nextMonth} editable={true} onEditCell={handleEditPreviewCell} />
+                  <RosterPreviewTable assignments={previewAssignments} teamMembers={filteredTeamMembers} month={targetMonth} editable={true} onEditCell={handleEditPreviewCell} />
                 </ScrollArea>
               </div>
               
@@ -1422,7 +1573,7 @@ export function SetupMonthlyRosterDialog({
               <div className="lg:col-span-1">
                 <WeekOffDistributionChart 
                   assignments={previewAssignments} 
-                  month={nextMonth} 
+                  month={targetMonth} 
                   totalMembers={filteredTeamMembers.length}
                 />
               </div>
