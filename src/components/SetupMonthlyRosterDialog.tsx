@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarPlus, Loader2, Settings2, Eye, Save, ChevronLeft, ChevronRight, AlertTriangle, FileCheck, Upload } from 'lucide-react';
+import { CalendarPlus, Loader2, Settings2, Eye, Save, ChevronLeft, ChevronRight, AlertTriangle, FileCheck, Upload, Check, ChevronsUpDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { TeamMember, ShiftType, Department, DEPARTMENTS, TeamGroup } from '@/types/roster';
@@ -19,6 +19,9 @@ import { validateRoster, autoFixRosterViolations } from '@/utils/rosterValidatio
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useInfraTeamSettings, isRoleEligibleForShift } from '@/hooks/useInfraTeamSettings';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { cn } from '@/lib/utils';
 
 interface SetupMonthlyRosterDialogProps {
   teamMembers: TeamMember[];
@@ -1156,27 +1159,48 @@ export function SetupMonthlyRosterDialog({
                   </div>
                   <div>
                     <Label className="text-sm text-muted-foreground mb-1.5 block">Work Locations</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {workLocations.map(loc => {
-                        const isSelected = selectedLocations.includes(loc.id);
-                        return (
-                          <Button
-                            key={loc.id}
-                            variant={isSelected ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => {
-                              if (isSelected) {
-                                setSelectedLocations(prev => prev.filter(id => id !== loc.id));
-                              } else {
-                                setSelectedLocations(prev => [...prev, loc.id]);
-                              }
-                            }}
-                          >
-                            {loc.name} {loc.city && `(${loc.city})`}
-                          </Button>
-                        );
-                      })}
-                    </div>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                        >
+                          {selectedLocations.length === 0
+                            ? "All Locations"
+                            : selectedLocations.length === 1
+                              ? workLocations.find(l => l.id === selectedLocations[0])?.name || "1 selected"
+                              : `${selectedLocations.length} locations selected`}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[250px] p-0 bg-popover z-50" align="start">
+                        <div className="p-2 space-y-1">
+                          {workLocations.map(loc => {
+                            const isSelected = selectedLocations.includes(loc.id);
+                            return (
+                              <div
+                                key={loc.id}
+                                className={cn(
+                                  "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-accent",
+                                  isSelected && "bg-accent"
+                                )}
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setSelectedLocations(prev => prev.filter(id => id !== loc.id));
+                                  } else {
+                                    setSelectedLocations(prev => [...prev, loc.id]);
+                                  }
+                                }}
+                              >
+                                <Checkbox checked={isSelected} />
+                                <span className="text-sm">{loc.name} {loc.city && `(${loc.city})`}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                 </div>
                 {(selectedTeam !== 'all' || selectedLocations.length > 0) && (
