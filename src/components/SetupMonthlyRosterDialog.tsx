@@ -91,7 +91,7 @@ export function SetupMonthlyRosterDialog({
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [selectedMonthOffset, setSelectedMonthOffset] = useState(1); // 0 = current, 1 = next, 2 = +2 months
   const [selectedTeam, setSelectedTeam] = useState<string>('all');
-  const [selectedLocation, setSelectedLocation] = useState<string>('all');
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [workLocations, setWorkLocations] = useState<{ id: string; name: string; city: string | null }[]>([]);
   const [weeklyOffPolicy, setWeeklyOffPolicy] = useState<{
     enabled: boolean;
@@ -155,12 +155,12 @@ export function SetupMonthlyRosterDialog({
       members = members.filter(m => m.team === selectedTeam);
     }
     
-    if (selectedLocation !== 'all') {
-      members = members.filter(m => m.workLocationId === selectedLocation);
+    if (selectedLocations.length > 0) {
+      members = members.filter(m => m.workLocationId && selectedLocations.includes(m.workLocationId));
     }
     
     return members;
-  }, [teamMembers, selectedDepartments, selectedTeam, selectedLocation]);
+  }, [teamMembers, selectedDepartments, selectedTeam, selectedLocations]);
 
   // Department shift configuration - Rotation order: Afternoon → Morning → Night
   // Now includes work_days_per_cycle and off_days_per_cycle from DB
@@ -1155,23 +1155,31 @@ export function SetupMonthlyRosterDialog({
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-sm text-muted-foreground mb-1.5 block">Work Location</Label>
-                    <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Locations" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Locations</SelectItem>
-                        {workLocations.map(loc => (
-                          <SelectItem key={loc.id} value={loc.id}>
+                    <Label className="text-sm text-muted-foreground mb-1.5 block">Work Locations</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {workLocations.map(loc => {
+                        const isSelected = selectedLocations.includes(loc.id);
+                        return (
+                          <Button
+                            key={loc.id}
+                            variant={isSelected ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedLocations(prev => prev.filter(id => id !== loc.id));
+                              } else {
+                                setSelectedLocations(prev => [...prev, loc.id]);
+                              }
+                            }}
+                          >
                             {loc.name} {loc.city && `(${loc.city})`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          </Button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-                {(selectedTeam !== 'all' || selectedLocation !== 'all') && (
+                {(selectedTeam !== 'all' || selectedLocations.length > 0) && (
                   <div className="flex items-center gap-2">
                     <p className="text-sm text-primary">
                       {filteredTeamMembers.length} member(s) match the filter
@@ -1181,7 +1189,7 @@ export function SetupMonthlyRosterDialog({
                       size="sm" 
                       onClick={() => {
                         setSelectedTeam('all');
-                        setSelectedLocation('all');
+                        setSelectedLocations([]);
                       }}
                       className="text-xs h-6"
                     >
