@@ -37,6 +37,8 @@ const SHIFT_CONFIG: Record<string, { icon: typeof Sun; color: string; label: str
   general: { icon: Calendar, color: 'bg-gray-100 text-gray-700 border-gray-300', label: 'General', letter: 'G' },
 };
 
+// Only rotating shifts - General is for TL/Managers only (not in rotation)
+const ROTATING_SHIFT_TYPES: ShiftType[] = ['afternoon', 'morning', 'night'];
 const SHIFT_TYPES: ShiftType[] = ['morning', 'afternoon', 'night', 'general'];
 
 export function RotationContinuityPreview({ 
@@ -291,7 +293,7 @@ export function RotationContinuityPreview({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {SHIFT_TYPES.map(s => (
+                    {ROTATING_SHIFT_TYPES.map(s => (
                       <SelectItem key={s} value={s}>
                         {SHIFT_CONFIG[s].label}
                       </SelectItem>
@@ -367,7 +369,7 @@ export function RotationContinuityPreview({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {SHIFT_TYPES.map(s => (
+                        {ROTATING_SHIFT_TYPES.map(s => (
                           <SelectItem key={s} value={s}>
                             {SHIFT_CONFIG[s].label}
                           </SelectItem>
