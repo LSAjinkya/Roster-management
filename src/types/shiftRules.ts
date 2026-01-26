@@ -62,24 +62,36 @@ export interface MemberAvailability {
 }
 
 // =====================================================
-// CORE CONSTANTS - SHIFT RULES
+// CORE CONSTANTS - 2-WEEK SHIFT CYCLE
 // =====================================================
 
-// Rule 1: Core Work Cycle - 5 work days + 2 OFF days (COMPULSORY 2 week-offs per week)
-export const WORK_DAYS_IN_CYCLE = 5;
-export const OFF_DAYS_IN_CYCLE = 2; // Compulsory 2 week-offs per week
-export const CYCLE_LENGTH = WORK_DAYS_IN_CYCLE + OFF_DAYS_IN_CYCLE; // 7 days
+// Pattern: 5 Work → 2 OFF → 5 Work → 2 OFF → Rotate Shift
+// Total: 10 work days + 4 OFF days = 14 calendar days per shift
+
+// Rule 1: Work Block Pattern
+export const WORK_DAYS_PER_BLOCK = 5;           // 5 consecutive work days per block
+export const OFF_DAYS_PER_BLOCK = 2;            // 2 consecutive OFF days per block
+export const WORK_BLOCKS_PER_SHIFT = 2;         // 2 work blocks before rotation
+
+// Rule 2: Derived Constants
+export const TOTAL_WORK_DAYS_PER_SHIFT = WORK_DAYS_PER_BLOCK * WORK_BLOCKS_PER_SHIFT; // 10 work days
+export const TOTAL_OFF_DAYS_PER_SHIFT = OFF_DAYS_PER_BLOCK * WORK_BLOCKS_PER_SHIFT;   // 4 OFF days
+export const FULL_SHIFT_CYCLE_DAYS = TOTAL_WORK_DAYS_PER_SHIFT + TOTAL_OFF_DAYS_PER_SHIFT; // 14 days
+
+// Legacy constants (kept for backward compatibility)
+export const WORK_DAYS_IN_CYCLE = WORK_DAYS_PER_BLOCK;   // 5 (per block)
+export const OFF_DAYS_IN_CYCLE = OFF_DAYS_PER_BLOCK;     // 2 (per block)
+export const CYCLE_LENGTH = WORK_DAYS_PER_BLOCK + OFF_DAYS_PER_BLOCK; // 7 days (one block)
 export const MIN_WEEKLY_OFFS = 2; // Minimum week-offs required per week
 
-// Rule 2: Shift Stability - Same shift for 10 working days
-export const SHIFT_STABILITY_WORK_DAYS = 10;
-// Full shift cycle = 10 work days + 4 OFF days (2 blocks of 2)
-export const SHIFT_CYCLE_CALENDAR_DAYS = 14; // 10 work + 4 OFF
+// Rule 3: Shift Stability - Same shift for 10 working days (2 weeks)
+export const SHIFT_STABILITY_WORK_DAYS = TOTAL_WORK_DAYS_PER_SHIFT; // 10 work days
+export const SHIFT_CYCLE_CALENDAR_DAYS = FULL_SHIFT_CYCLE_DAYS; // 14 calendar days
 
-// Rule 4: Shift Rotation Order
+// Rule 4: Shift Rotation Order (Afternoon → Morning → Night)
 export const SHIFT_ROTATION_ORDER: ShiftType[] = ['afternoon', 'morning', 'night'];
 
-// Rule 5: Night Shift Safety - REST days required before night shift (1-2 days minimum)
+// Rule 5: Night Shift Safety - REST days required before night shift
 export const REST_DAYS_BEFORE_NIGHT = 1; // Minimum 1 day rest before night shift
 export const MAX_REST_DAYS_BEFORE_NIGHT = 2; // Recommended 2 days rest before night shift
 
@@ -104,11 +116,11 @@ export const DEFAULT_ASSIGNMENT_CONFIG: AutoAssignmentConfig = {
   respectWeeklyOffs: true,
   respectLeaves: true,
   respectPublicHolidays: true,
-  work_days: WORK_DAYS_IN_CYCLE,
-  off_days: OFF_DAYS_IN_CYCLE,
+  work_days: WORK_DAYS_PER_BLOCK,
+  off_days: OFF_DAYS_PER_BLOCK,
   maxConsecutiveNights: 5,
   minRestHours: 12,
-  rotationCycleDays: SHIFT_CYCLE_CALENDAR_DAYS,
+  rotationCycleDays: FULL_SHIFT_CYCLE_DAYS,
   flagShortages: true,
   shiftSequence: SHIFT_ROTATION_ORDER,
 };

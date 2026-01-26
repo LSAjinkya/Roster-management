@@ -7,9 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { TeamMember, ShiftType, Department } from '@/types/roster';
-import { SHIFT_ROTATION_ORDER, ROTATING_DEPARTMENTS, WORK_DAYS_IN_CYCLE } from '@/types/shiftRules';
+import { SHIFT_ROTATION_ORDER, ROTATING_DEPARTMENTS } from '@/types/shiftRules';
 import { ArrowRight, Moon, Sun, Sunrise, Calendar, AlertTriangle, MapPin, Building2, Edit2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+
+// 2-WEEK SHIFT CYCLE CONSTANTS
+const WORK_DAYS_PER_BLOCK = 5;       // 5 consecutive work days per block
+const WORK_BLOCKS_PER_SHIFT = 2;     // 2 work blocks before rotation
+const TOTAL_WORK_DAYS_PER_SHIFT = WORK_DAYS_PER_BLOCK * WORK_BLOCKS_PER_SHIFT; // 10 work days
 
 interface PreviousMonthState {
   shift: ShiftType;
@@ -105,7 +110,13 @@ export function RotationContinuityPreview({
   }, []);
 
   // Calculate continuation for each member with local overrides
-  // workDays encoding: 1-5 = Day 1-5, 6 = OFF 1st, 7 = OFF 2nd
+  // Extended encoding for 2-week cycle (10 work days + 4 OFF days):
+  // 1-5: Block 1 Day 1-5 (work days 1-5)
+  // 6: Block 1 OFF 1st (completed 5 work days, on 1st OFF)
+  // 7: Block 1 OFF 2nd (completed 5 work days + 1 OFF, on 2nd OFF)
+  // 8-12: Block 2 Day 1-5 (work days 6-10)
+  // 13: Block 2 OFF 1st (completed 10 work days, on 1st OFF - will rotate after)
+  // 14: Block 2 OFF 2nd (completed 10 work days + 1 OFF, on 2nd OFF - rotation complete)
   const continuityData = useMemo(() => {
     const rotatingMembers = teamMembers.filter(
       m => ROTATING_DEPARTMENTS.includes(m.department) && m.role !== 'TL' && m.role !== 'Manager'
@@ -121,45 +132,71 @@ export function RotationContinuityPreview({
           hasPreviousData: false,
           currentShift: 'afternoon' as ShiftType,
           workDaysCompleted: 0,
-          workDaysRemaining: WORK_DAYS_IN_CYCLE,
+          workDaysRemaining: TOTAL_WORK_DAYS_PER_SHIFT,
           nextShift: 'afternoon' as ShiftType,
           startsWithOff: false,
           offDaysNeeded: 0,
-          isOnOff1: false,
-          isOnOff2: false,
+          isBlock1Off1: false,
+          isBlock1Off2: false,
+          isBlock2Off1: false,
+          isBlock2Off2: false,
+          blockNumber: 1,
+          dayInBlock: 0,
         };
       }
 
       const currentShift = override?.shift || prevState?.shift || 'afternoon';
       const rawWorkDays = override?.workDays ?? prevState?.workDaysInCurrent ?? 0;
       
-      // Check if currently on OFF days (6 = OFF 1st, 7 = OFF 2nd)
-      const isOnOff1 = rawWorkDays === 6;
-      const isOnOff2 = rawWorkDays === 7;
-      const isOnOff = isOnOff1 || isOnOff2;
+      // Decode the extended state
+      const isBlock1Off1 = rawWorkDays === 6;
+      const isBlock1Off2 = rawWorkDays === 7;
+      const isInBlock2 = rawWorkDays >= 8 && rawWorkDays <= 12;
+      const isBlock2Off1 = rawWorkDays === 13;
+      const isBlock2Off2 = rawWorkDays === 14;
+      const isAnyOff = isBlock1Off1 || isBlock1Off2 || isBlock2Off1 || isBlock2Off2;
       
-      // Actual work days completed (max 5 for display)
-      const workDaysCompleted = isOnOff ? 5 : Math.min(rawWorkDays, 5);
-      const workDaysRemaining = isOnOff ? 0 : WORK_DAYS_IN_CYCLE - workDaysCompleted;
+      // Calculate work days completed
+      let workDaysCompleted: number;
+      let blockNumber: number;
+      let dayInBlock: number;
+      
+      if (isBlock1Off1 || isBlock1Off2) {
+        workDaysCompleted = WORK_DAYS_PER_BLOCK;
+        blockNumber = 1;
+        dayInBlock = 0;
+      } else if (isInBlock2) {
+        const block2Day = rawWorkDays - 7;
+        workDaysCompleted = WORK_DAYS_PER_BLOCK + block2Day;
+        blockNumber = 2;
+        dayInBlock = block2Day;
+      } else if (isBlock2Off1 || isBlock2Off2) {
+        workDaysCompleted = TOTAL_WORK_DAYS_PER_SHIFT;
+        blockNumber = 2;
+        dayInBlock = 0;
+      } else {
+        workDaysCompleted = Math.min(rawWorkDays, WORK_DAYS_PER_BLOCK);
+        blockNumber = 1;
+        dayInBlock = workDaysCompleted;
+      }
+      
+      const workDaysRemaining = TOTAL_WORK_DAYS_PER_SHIFT - workDaysCompleted;
       
       // Determine OFF days needed at month start
-      // If on OFF 1st (6): Already took 1 OFF, need 1 more OFF (OFF 2nd), then rotate to next shift
-      // If on OFF 2nd (7): Already took 2 OFFs, rotation complete, start fresh with next shift (Day 1)
-      // If completed 5 work days (5): Need 2 OFF days, then rotate
-      const needsOff = workDaysCompleted >= WORK_DAYS_IN_CYCLE || isOnOff;
+      let offDaysNeeded = 0;
+      if (isBlock1Off1) offDaysNeeded = 1;
+      else if (isBlock2Off1) offDaysNeeded = 1;
+      else if (workDaysCompleted >= WORK_DAYS_PER_BLOCK && !isBlock1Off2 && !isBlock2Off2 && !isInBlock2) {
+        offDaysNeeded = 2;
+      }
       
-      // OFF days needed in the NEW month:
-      // - OFF 1st: 1 more OFF (they took 1 already at month end)
-      // - OFF 2nd: 0 more OFF (OFF cycle complete, start Day 1 of new shift)
-      // - Completed 5 days: 2 OFFs before rotating
-      const offDaysNeeded = isOnOff2 ? 0 : (isOnOff1 ? 1 : (needsOff ? 2 : 0));
-      
-      // Calculate next shift after OFF
-      // Both OFF 1st and OFF 2nd will start the next shift after their remaining OFF days
+      // Calculate next shift (only rotates after Block 2 OFF completion)
       const currentShiftIndex = SHIFT_ROTATION_ORDER.indexOf(currentShift as any);
-      const nextShiftAfterOff = (needsOff || isOnOff) 
+      const nextShiftAfterOff = (isBlock2Off1 || isBlock2Off2 || (workDaysCompleted >= TOTAL_WORK_DAYS_PER_SHIFT)) 
         ? SHIFT_ROTATION_ORDER[(currentShiftIndex + 1) % 3]
         : currentShift;
+      
+      const startsWithOff = isAnyOff || (workDaysCompleted >= WORK_DAYS_PER_BLOCK && !isInBlock2);
 
       return {
         member,
@@ -168,10 +205,14 @@ export function RotationContinuityPreview({
         workDaysCompleted,
         workDaysRemaining,
         nextShift: nextShiftAfterOff,
-        startsWithOff: needsOff || isOnOff,
+        startsWithOff,
         offDaysNeeded: Math.max(0, offDaysNeeded),
-        isOnOff1,
-        isOnOff2,
+        isBlock1Off1,
+        isBlock1Off2,
+        isBlock2Off1,
+        isBlock2Off2,
+        blockNumber,
+        dayInBlock,
       };
     });
   }, [teamMembers, previousMonthState, localOverrides]);
@@ -388,31 +429,52 @@ export function RotationContinuityPreview({
                   </SelectContent>
                 </Select>
                 <Select 
-                  value={data.isOnOff2 ? 'off2' : (data.isOnOff1 ? 'off1' : String(data.workDaysCompleted || 1))} 
+                  value={
+                    data.isBlock2Off2 ? 'b2off2' : 
+                    data.isBlock2Off1 ? 'b2off1' : 
+                    data.isBlock1Off2 ? 'b1off2' : 
+                    data.isBlock1Off1 ? 'b1off1' : 
+                    String(data.workDaysCompleted || 1)
+                  } 
                   onValueChange={(v) => {
-                    if (v === 'off1') {
-                      // OFF 1st = 6 (completed 5 work days, on 1st off day)
-                      handleWorkDaysChange(data.member.id, 6);
-                    } else if (v === 'off2') {
-                      // OFF 2nd = 7 (completed 5 work days + 1 off, on 2nd off day)
-                      handleWorkDaysChange(data.member.id, 7);
-                    } else {
-                      handleWorkDaysChange(data.member.id, parseInt(v));
+                    if (v === 'b1off1') handleWorkDaysChange(data.member.id, 6);
+                    else if (v === 'b1off2') handleWorkDaysChange(data.member.id, 7);
+                    else if (v === 'b2off1') handleWorkDaysChange(data.member.id, 13);
+                    else if (v === 'b2off2') handleWorkDaysChange(data.member.id, 14);
+                    else {
+                      const days = parseInt(v);
+                      // If >5, store as block 2 (add 7 offset)
+                      handleWorkDaysChange(data.member.id, days > 5 ? days + 2 : days);
                     }
                   }}
                 >
-                  <SelectTrigger className="h-7 w-24 text-xs">
+                  <SelectTrigger className="h-7 w-32 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="header-b1" disabled className="text-xs font-semibold text-muted-foreground">
+                      Block 1 (Days 1-5)
+                    </SelectItem>
                     {[1, 2, 3, 4, 5].map(d => (
                       <SelectItem key={d} value={String(d)}>Day {d}</SelectItem>
                     ))}
-                    <SelectItem value="off1" className="text-amber-600 font-medium">
-                      OFF 1st
+                    <SelectItem value="b1off1" className="text-amber-600 font-medium">
+                      Block 1 OFF 1st
                     </SelectItem>
-                    <SelectItem value="off2" className="text-amber-600 font-medium">
-                      OFF 2nd
+                    <SelectItem value="b1off2" className="text-amber-600 font-medium">
+                      Block 1 OFF 2nd
+                    </SelectItem>
+                    <SelectItem value="header-b2" disabled className="text-xs font-semibold text-muted-foreground">
+                      Block 2 (Days 6-10)
+                    </SelectItem>
+                    {[6, 7, 8, 9, 10].map(d => (
+                      <SelectItem key={d} value={String(d)}>Day {d}</SelectItem>
+                    ))}
+                    <SelectItem value="b2off1" className="text-orange-600 font-medium">
+                      Block 2 OFF 1st
+                    </SelectItem>
+                    <SelectItem value="b2off2" className="text-orange-600 font-medium">
+                      Block 2 OFF 2nd → Rotate
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -428,25 +490,29 @@ export function RotationContinuityPreview({
                 {/* Current State Display */}
                 <div 
                   className={`flex items-center gap-1 px-2 py-1 rounded text-xs border cursor-pointer hover:ring-2 ring-primary/50 ${
-                    data.isOnOff1 || data.isOnOff2 
+                    (data.isBlock1Off1 || data.isBlock1Off2 || data.isBlock2Off1 || data.isBlock2Off2)
                       ? 'bg-amber-100 text-amber-700 border-amber-300' 
                       : (SHIFT_CONFIG[data.currentShift]?.color || '')
                   }`}
                   onClick={() => editable && setEditingMember(data.member.id)}
                 >
-                  {data.isOnOff1 || data.isOnOff2 ? (
+                  {(data.isBlock1Off1 || data.isBlock1Off2 || data.isBlock2Off1 || data.isBlock2Off2) ? (
                     <>
                       <Calendar className="h-3 w-3" />
                       <span>{SHIFT_CONFIG[data.currentShift]?.letter}</span>
                       <span className="mx-0.5">→</span>
-                      <span>{data.isOnOff1 ? 'OFF 1st' : 'OFF 2nd'}</span>
+                      <span>
+                        {data.isBlock1Off1 ? 'B1 OFF 1st' : 
+                         data.isBlock1Off2 ? 'B1 OFF 2nd' :
+                         data.isBlock2Off1 ? 'B2 OFF 1st' : 'B2 OFF 2nd'}
+                      </span>
                     </>
                   ) : (
                     <>
                       <ShiftIcon className="h-3 w-3" />
                       <span>{SHIFT_CONFIG[data.currentShift]?.label}</span>
                       <span className="text-muted-foreground ml-1">
-                        (Day {data.workDaysCompleted}/{WORK_DAYS_IN_CYCLE})
+                        (Day {data.workDaysCompleted}/{TOTAL_WORK_DAYS_PER_SHIFT})
                       </span>
                     </>
                   )}
@@ -461,13 +527,15 @@ export function RotationContinuityPreview({
                     {/* Show OFF badge only if there are remaining OFF days needed */}
                     {data.offDaysNeeded > 0 && (
                       <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 border-amber-200">
-                        {data.isOnOff1 ? 'OFF 2nd →' : `OFF × ${data.offDaysNeeded} →`}
+                        {data.isBlock1Off1 || data.isBlock2Off1 ? 'OFF 2nd →' : `OFF × ${data.offDaysNeeded} →`}
                       </Badge>
                     )}
                     <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs border ${SHIFT_CONFIG[data.nextShift]?.color || ''}`}>
                       <NextShiftIcon className="h-3 w-3" />
                       <span>{SHIFT_CONFIG[data.nextShift]?.label}</span>
-                      <span className="text-muted-foreground ml-1">(Day 1)</span>
+                      <span className="text-muted-foreground ml-1">
+                        {(data.isBlock2Off1 || data.isBlock2Off2) ? '(Day 1 - New Shift)' : '(Day 6 - Block 2)'}
+                      </span>
                     </div>
                   </div>
                 ) : editable && isEditingNext ? (
