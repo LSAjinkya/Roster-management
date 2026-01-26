@@ -505,27 +505,29 @@ export function SetupMonthlyRosterDialog({
     });
 
     // ========================
-    // CONSTANTS FROM REQUIREMENTS
+    // 2-WEEK SHIFT CYCLE CONSTANTS
     // ========================
-    const MIN_CONSECUTIVE_WORK_DAYS = 3;
-    const MAX_CONSECUTIVE_WORK_DAYS = 7;
-    const STANDARD_WORK_DAYS = 5;
-    const NIGHT_SHIFT_MIN_REST = 1;
-    const NIGHT_SHIFT_PREFERRED_REST = 2;
+    // Pattern: 5 Work → 2 OFF → 5 Work → 2 OFF → Rotate Shift
+    // Total: 10 work days + 4 OFF days = 14 days per shift
+    const STANDARD_WORK_DAYS = 5;           // 5 consecutive work days per block
+    const STANDARD_OFF_DAYS = 2;            // 2 consecutive OFF days per block
+    const WORK_BLOCKS_PER_SHIFT = 2;        // 2 work blocks before rotation
+    const TOTAL_WORK_DAYS_PER_SHIFT = STANDARD_WORK_DAYS * WORK_BLOCKS_PER_SHIFT; // 10 work days
+    const TOTAL_OFF_DAYS_PER_SHIFT = STANDARD_OFF_DAYS * WORK_BLOCKS_PER_SHIFT;   // 4 OFF days
 
     // Track each member's comprehensive state with cross-month continuity
     interface MemberCycleTracker {
-      consecutiveWorkDays: number; // Must be 3-7
-      offDaysRemaining: number; // Based on department or user's week_off_entitlement
-      weekOffEntitlement: number; // From department config or user setting
-      standardWorkDays: number; // From department config
-      workDaysInCurrentShift: number; // For shift stability (rotate after 10)
-      currentShift: ShiftType; // Current assigned shift type
-      lastShiftType: ShiftType | null; // Previous shift for night transition check
-      pendingNightTransition: boolean; // Need rest before night
-      pendingShiftRotation: boolean; // Rotation pending, apply after next OFF cycle
-      offDaysInRolling7: number[]; // Track OFF days in rolling 7-day window
-      forceOffOnStart?: boolean; // MUST assign OFF on first day(s) due to continuity
+      consecutiveWorkDays: number;           // Current consecutive work days (max 5)
+      offDaysRemaining: number;              // OFF days remaining in current block (max 2)
+      weekOffEntitlement: number;            // Always 2 (per block)
+      standardWorkDays: number;              // Always 5 (per block)
+      workDaysInCurrentShift: number;        // Total work days in shift (0-10)
+      offBlocksCompleted: number;            // OFF blocks completed (0, 1, or 2)
+      currentShift: ShiftType;               // Current assigned shift type
+      lastShiftType: ShiftType | null;       // Previous shift for tracking
+      offDaysInRolling7: number[];           // Track OFF days in rolling 7-day window
+      forceOffOnStart: boolean;              // MUST assign OFF on first day(s) due to continuity
+      forceOffCount: number;                 // Number of forced OFF days at month start
     }
     const memberTrackers: Record<string, MemberCycleTracker> = {};
 
@@ -540,26 +542,27 @@ export function SetupMonthlyRosterDialog({
       const isRotating = ROTATING_DEPARTMENTS.includes(member.department) && member.role !== 'TL' && member.role !== 'Manager';
       const isGeneralShift = GENERAL_SHIFT_DEPARTMENTS.includes(member.department) || member.role === 'TL' || member.role === 'Manager';
 
-      // Get department-specific config
-      const deptConfig = getDeptConfig(member.department);
-      const deptWorkDays = deptConfig?.workDaysPerCycle ?? STANDARD_WORK_DAYS;
-      const deptOffDays = deptConfig?.offDaysPerCycle ?? 2;
-      
-      // Use department config, fallback to user's week-off entitlement, then default to 2
-      const weekOffEntitlement = deptOffDays || ((member as any).weekOffEntitlement || 2);
-      const standardWorkDays = deptWorkDays || STANDARD_WORK_DAYS;
-      
       const prevState = previousMonthState[member.id];
       const rotationState = stateMap[member.id];
 
       // Handle OFF 1st (6) and OFF 2nd (7) encoding from RotationContinuityPreview
+      // Also now: 8 = Block 1 OFF 1st, 9 = Block 1 OFF 2nd (first week complete, second week coming)
       const rawWorkDays = prevState?.workDaysInCurrent || 0;
-      const isOnOff1 = rawWorkDays === 6;
-      const isOnOff2 = rawWorkDays === 7;
-      const isOnOff = isOnOff1 || isOnOff2;
       
-      // Actual work days completed (max 5)
-      const actualWorkDays = isOnOff ? 5 : Math.min(rawWorkDays, 5);
+      // Decode the extended state:
+      // 1-5: Day 1-5 of Block 1 (work days 1-5)
+      // 6: Block 1 OFF 1st (completed 5 work days, on 1st OFF)
+      // 7: Block 1 OFF 2nd (completed 5 work days + 1 OFF, on 2nd OFF)
+      // 8-12: Day 1-5 of Block 2 (work days 6-10)
+      // 13: Block 2 OFF 1st (completed 10 work days, on 1st OFF - will rotate after)
+      // 14: Block 2 OFF 2nd (completed 10 work days + 1 OFF, on 2nd OFF - will rotate after)
+      
+      const isBlock1Off1 = rawWorkDays === 6;
+      const isBlock1Off2 = rawWorkDays === 7;
+      const isInBlock2 = rawWorkDays >= 8 && rawWorkDays <= 12;
+      const isBlock2Off1 = rawWorkDays === 13;
+      const isBlock2Off2 = rawWorkDays === 14;
+      const isAnyOff = isBlock1Off1 || isBlock1Off2 || isBlock2Off1 || isBlock2Off2;
 
       // Get the shift from previous month state
       const lastShift = prevState?.shift || rotationState?.current_shift_type || SHIFT_ROTATION_ORDER[0];
@@ -568,64 +571,82 @@ export function SetupMonthlyRosterDialog({
       const currentShiftIndex = SHIFT_ROTATION_ORDER.indexOf(lastShift as any);
       const nextShiftInRotation = SHIFT_ROTATION_ORDER[(currentShiftIndex + 1) % 3];
       
-      // Determine current shift and OFF days remaining based on state
-      // KEY LOGIC:
-      // - OFF 1st (6): Member on 1st OFF day at month end. Start Feb with 1 more OFF, then rotate to next shift
-      // - OFF 2nd (7): Member on 2nd OFF day at month end. Start Feb with new rotated shift (Day 1)
-      // - Day 1-5: Continue same shift, add work days
-      
       let currentShift: ShiftType;
       let offDaysRemaining: number;
       let consecutiveWorkDays: number;
       let workDaysInCurrentShift: number;
-      let forceOffOnStart = false; // Flag to force OFF assignment on first day(s)
+      let offBlocksCompleted: number;
+      let forceOffOnStart = false;
+      let forceOffCount = 0;
       
-      if (isOnOff1) {
-        // Member ended on OFF 1st → needs 1 more OFF day → then rotate to next shift
-        // DON'T pre-rotate - rotation will happen after OFF completes
-        currentShift = lastShift as ShiftType;
-        offDaysRemaining = 1; // Still need 1 OFF (OFF 2nd)
-        consecutiveWorkDays = 0; // Not working
-        workDaysInCurrentShift = 5; // Completed 5 work days before OFF
-        forceOffOnStart = true; // MUST give OFF on Day 1
-      } else if (isOnOff2) {
-        // Member ended on OFF 2nd → OFF complete → start with rotated shift (Day 1)
-        // Rotation happened at end of last month, so use next shift
+      if (isBlock2Off2) {
+        // Block 2 OFF 2nd complete → rotate to next shift, start fresh
         currentShift = nextShiftInRotation as ShiftType;
-        offDaysRemaining = weekOffEntitlement; // Reset full entitlement
-        consecutiveWorkDays = 0; // Starting fresh
-        workDaysInCurrentShift = 0; // Day 1 of new shift
-      } else if (actualWorkDays >= STANDARD_WORK_DAYS) {
-        // Completed 5 work days → needs 2 OFF days → then rotate
-        // DON'T pre-rotate - rotation will happen after OFF completes
+        offDaysRemaining = STANDARD_OFF_DAYS;
+        consecutiveWorkDays = 0;
+        workDaysInCurrentShift = 0;
+        offBlocksCompleted = 0;
+      } else if (isBlock2Off1) {
+        // Block 2 OFF 1st → need 1 more OFF, then rotate to next shift
         currentShift = lastShift as ShiftType;
-        offDaysRemaining = weekOffEntitlement; // Need full 2 OFF days
-        consecutiveWorkDays = STANDARD_WORK_DAYS; // Mark as 5 so first day triggers OFF
-        workDaysInCurrentShift = actualWorkDays;
-        forceOffOnStart = false; // Will be triggered by consecutiveWorkDays >= 5 check
+        offDaysRemaining = 1;
+        consecutiveWorkDays = 0;
+        workDaysInCurrentShift = TOTAL_WORK_DAYS_PER_SHIFT;
+        offBlocksCompleted = 1;
+        forceOffOnStart = true;
+        forceOffCount = 1;
+      } else if (isInBlock2) {
+        // Day 1-5 of Block 2 (work days 6-10 of shift)
+        const block2Day = rawWorkDays - 7; // 8→1, 9→2, etc.
+        currentShift = lastShift as ShiftType;
+        offDaysRemaining = STANDARD_OFF_DAYS;
+        consecutiveWorkDays = block2Day;
+        workDaysInCurrentShift = STANDARD_WORK_DAYS + block2Day; // 6-10
+        offBlocksCompleted = 1;
+      } else if (isBlock1Off2) {
+        // Block 1 OFF 2nd → OFF complete, continue to Block 2 Day 1 (same shift)
+        currentShift = lastShift as ShiftType;
+        offDaysRemaining = STANDARD_OFF_DAYS;
+        consecutiveWorkDays = 0;
+        workDaysInCurrentShift = STANDARD_WORK_DAYS;
+        offBlocksCompleted = 1;
+      } else if (isBlock1Off1) {
+        // Block 1 OFF 1st → need 1 more OFF, then Block 2 Day 1
+        currentShift = lastShift as ShiftType;
+        offDaysRemaining = 1;
+        consecutiveWorkDays = 0;
+        workDaysInCurrentShift = STANDARD_WORK_DAYS;
+        offBlocksCompleted = 0;
+        forceOffOnStart = true;
+        forceOffCount = 1;
+      } else if (rawWorkDays >= STANDARD_WORK_DAYS) {
+        // Completed 5 work days in Block 1 → needs 2 OFF days
+        currentShift = lastShift as ShiftType;
+        offDaysRemaining = STANDARD_OFF_DAYS;
+        consecutiveWorkDays = STANDARD_WORK_DAYS;
+        workDaysInCurrentShift = rawWorkDays;
+        offBlocksCompleted = 0;
       } else {
-        // Still in middle of work cycle (Day 1-4) → continue same shift
+        // Still in Block 1 (Day 1-4) → continue same shift
         currentShift = lastShift as ShiftType;
-        offDaysRemaining = weekOffEntitlement;
-        consecutiveWorkDays = actualWorkDays;
-        workDaysInCurrentShift = actualWorkDays;
+        offDaysRemaining = STANDARD_OFF_DAYS;
+        consecutiveWorkDays = rawWorkDays;
+        workDaysInCurrentShift = rawWorkDays;
+        offBlocksCompleted = 0;
       }
-      
-      // Check if transitioning to night shift (may need rest)
-      const pendingNightTransition = currentShift === 'night' && lastShift === 'morning';
       
       memberTrackers[member.id] = {
         consecutiveWorkDays,
         offDaysRemaining,
-        weekOffEntitlement,
-        standardWorkDays,
+        weekOffEntitlement: STANDARD_OFF_DAYS,
+        standardWorkDays: STANDARD_WORK_DAYS,
         workDaysInCurrentShift,
+        offBlocksCompleted,
         currentShift,
         lastShiftType: null,
-        pendingNightTransition,
-        pendingShiftRotation: false,
         offDaysInRolling7: [],
-        forceOffOnStart // NEW: track if this member MUST start with OFF
+        forceOffOnStart,
+        forceOffCount
       };
     });
 
@@ -706,34 +727,23 @@ export function SetupMonthlyRosterDialog({
               weekOffEntitlement,
               standardWorkDays: deptWorkDays,
               workDaysInCurrentShift: 0,
+              offBlocksCompleted: 0,
               currentShift: 'general',
               lastShiftType: null,
-              pendingNightTransition: false,
-              pendingShiftRotation: false,
-              offDaysInRolling7: []
+              offDaysInRolling7: [],
+              forceOffOnStart: false,
+              forceOffCount: 0
             };
           }
           const t = memberTrackers[member.id];
-          const memberOffset = memberOffsets[member.id] || allMembers.indexOf(member) % 7;
 
-          // HARD LIMIT: Max 7 consecutive work days
-          let shouldBeOff = t.consecutiveWorkDays >= MAX_CONSECUTIVE_WORK_DAYS;
-
-          // Use department-specific standard work days (default: 5 work + configured off days)
-          if (!shouldBeOff && t.consecutiveWorkDays >= t.standardWorkDays && t.offDaysRemaining > 0) {
-            shouldBeOff = true;
-          }
-
-          // Rolling 7-day compliance check
-          if (!shouldBeOff) {
-            const offDaysInWindow = t.offDaysInRolling7.filter(d => d > dayIndex - 7).length;
-            if (offDaysInWindow < t.weekOffEntitlement && t.consecutiveWorkDays >= MIN_CONSECUTIVE_WORK_DAYS) {
-              // Risk of violating rolling 7-day rule
-              shouldBeOff = true;
-            }
-          }
+          // Simple rule for general: 5 work + 2 OFF
+          let shouldBeOff = t.consecutiveWorkDays >= STANDARD_WORK_DAYS;
+          
           // Check if member is in the middle of consecutive off days (for general shift)
-          const isInConsecutiveOffGeneral = t.offDaysRemaining < t.weekOffEntitlement && t.consecutiveWorkDays === 0;
+          const isInConsecutiveOffGeneral = t.offDaysRemaining > 0 && 
+                                            t.offDaysRemaining < t.weekOffEntitlement && 
+                                            t.consecutiveWorkDays === 0;
 
           if (shouldBeOff || isInConsecutiveOffGeneral) {
             assignments.push({
@@ -760,15 +770,15 @@ export function SetupMonthlyRosterDialog({
           return;
         }
 
-        // Rotating members with SIMPLIFIED rules:
-        // 1. Work exactly 5 days → 2 OFF days (consecutive, no split)
-        // 2. Shift rotates AFTER week-off completion
-        // 3. Never give OFF before completing 5 work days
+        // ========================
+        // 2-WEEK SHIFT CYCLE FOR ROTATING MEMBERS
+        // Pattern: 5 Work → 2 OFF → 5 Work → 2 OFF → Rotate Shift
+        // ========================
         if (isRotating && use15DayRotation) {
           const tracker = memberTrackers[member.id];
 
           // ========================
-          // SIMPLE WEEK-OFF LOGIC
+          // WEEK-OFF LOGIC
           // ========================
           let shouldBeOff = false;
 
@@ -782,18 +792,14 @@ export function SetupMonthlyRosterDialog({
           }
           
           // RULE 2: Force OFF at month start due to continuity (coming from OFF 1st)
-          // forceOffOnStart is set when member ended previous month on OFF 1st
-          else if (tracker.forceOffOnStart && tracker.offDaysRemaining > 0) {
+          else if (tracker.forceOffOnStart && tracker.forceOffCount > 0) {
             shouldBeOff = true;
           }
           
-          // RULE 3: Completed exactly 5 work days → start 2-day OFF
+          // RULE 3: Completed exactly 5 work days in current block → start 2-day OFF
           else if (tracker.consecutiveWorkDays >= STANDARD_WORK_DAYS) {
             shouldBeOff = true;
           }
-
-          // IMPORTANT: Never give OFF before completing 5 work days
-          // No early OFFs, no split week-offs, no exceptions
 
           if (shouldBeOff) {
             assignments.push({
@@ -805,33 +811,39 @@ export function SetupMonthlyRosterDialog({
             tracker.consecutiveWorkDays = 0;
             tracker.offDaysRemaining--;
             tracker.offDaysInRolling7.push(dayIndex);
+            
+            // Handle forced OFF countdown
+            if (tracker.forceOffOnStart && tracker.forceOffCount > 0) {
+              tracker.forceOffCount--;
+              if (tracker.forceOffCount <= 0) {
+                tracker.forceOffOnStart = false;
+              }
+            }
 
-            // Reset off entitlement after all OFFs given (2 consecutive days completed)
+            // Check if OFF block is complete (2 consecutive OFFs given)
             if (tracker.offDaysRemaining <= 0) {
               tracker.offDaysRemaining = tracker.weekOffEntitlement;
-              tracker.forceOffOnStart = false; // Clear forced OFF flag
-
-              // SIMPLE RULE: Rotate shift AFTER every week-off cycle (5 work + 2 OFF)
-              // Shift rotation: Afternoon → Morning → Night → Afternoon
-              const currentIndex = SHIFT_ROTATION_ORDER.indexOf(tracker.currentShift as any);
-              const nextIndex = (currentIndex + 1) % SHIFT_ROTATION_ORDER.length;
-              tracker.currentShift = SHIFT_ROTATION_ORDER[nextIndex] as ShiftType;
-              tracker.workDaysInCurrentShift = 0;
-              tracker.pendingShiftRotation = false;
+              tracker.offBlocksCompleted++;
+              
+              // CHECK: If 2 OFF blocks completed (4 total OFF days), rotate shift
+              if (tracker.offBlocksCompleted >= WORK_BLOCKS_PER_SHIFT) {
+                // Rotate shift: Afternoon → Morning → Night → Afternoon
+                const currentIndex = SHIFT_ROTATION_ORDER.indexOf(tracker.currentShift as any);
+                const nextIndex = (currentIndex + 1) % SHIFT_ROTATION_ORDER.length;
+                tracker.currentShift = SHIFT_ROTATION_ORDER[nextIndex] as ShiftType;
+                tracker.workDaysInCurrentShift = 0;
+                tracker.offBlocksCompleted = 0;
+              }
             }
             return;
           }
 
           // WORK DAY - assign current shift
-          // NOTE: Shift rotation only happens AFTER OFF days (see lines 475-486)
-          // This ensures no mid-week shift changes within a 5-day work block
           let currentShift = tracker.currentShift;
 
           // ========================
           // DC ROLE AVAILABILITY CHECK (Infra Team)
           // ========================
-          // For Infra department members, check if their role is allowed for this shift
-          // at their assigned datacenter
           if (member.department === 'Infra' && member.datacenterId && !infraSettings.loading) {
             const isEligible = isRoleEligibleForShift(
               infraSettings.dcRoleAvailability,
@@ -840,7 +852,6 @@ export function SetupMonthlyRosterDialog({
               currentShift as 'morning' | 'afternoon' | 'night' | 'general'
             );
 
-            // If not eligible for current shift, try to find an eligible shift
             if (!isEligible) {
               const eligibleShifts = ['morning', 'afternoon', 'night', 'general'].filter(
                 shift => isRoleEligibleForShift(
@@ -852,7 +863,6 @@ export function SetupMonthlyRosterDialog({
               );
 
               if (eligibleShifts.length > 0) {
-                // Pick the first eligible shift that's closest in the rotation order
                 const rotationShifts = SHIFT_ROTATION_ORDER.filter(s => eligibleShifts.includes(s));
                 if (rotationShifts.length > 0) {
                   currentShift = rotationShifts[0] as ShiftType;
@@ -865,11 +875,6 @@ export function SetupMonthlyRosterDialog({
             }
           }
 
-          // Track if rotation is pending (will apply after next OFF cycle)
-          if (tracker.workDaysInCurrentShift >= SHIFT_STABILITY_WORK_DAYS && !tracker.pendingShiftRotation) {
-            tracker.pendingShiftRotation = true;
-          }
-
           assignments.push({
             member_id: member.id,
             shift_type: currentShift,
@@ -877,6 +882,7 @@ export function SetupMonthlyRosterDialog({
             department: member.department as Department
           });
           tracker.consecutiveWorkDays++;
+          tracker.workDaysInCurrentShift++;
           tracker.workDaysInCurrentShift++;
           tracker.lastShiftType = currentShift;
           return;
