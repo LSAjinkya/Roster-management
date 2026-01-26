@@ -143,13 +143,19 @@ export function RotationContinuityPreview({
       const workDaysRemaining = isOnOff ? 0 : WORK_DAYS_IN_CYCLE - workDaysCompleted;
       
       // Determine OFF days needed at month start
-      // If on OFF 1st (6), need 2 OFF days before next shift
-      // If on OFF 2nd (7), need 1 OFF day before next shift (and rotate)
+      // If on OFF 1st (6): Already took 1 OFF, need 1 more OFF (OFF 2nd), then rotate to next shift
+      // If on OFF 2nd (7): Already took 2 OFFs, rotation complete, start fresh with next shift (Day 1)
+      // If completed 5 work days (5): Need 2 OFF days, then rotate
       const needsOff = workDaysCompleted >= WORK_DAYS_IN_CYCLE || isOnOff;
-      const offDaysNeeded = isOnOff2 ? 1 : (isOnOff1 ? 2 : (needsOff ? 2 : 0));
+      
+      // OFF days needed in the NEW month:
+      // - OFF 1st: 1 more OFF (they took 1 already at month end)
+      // - OFF 2nd: 0 more OFF (OFF cycle complete, start Day 1 of new shift)
+      // - Completed 5 days: 2 OFFs before rotating
+      const offDaysNeeded = isOnOff2 ? 0 : (isOnOff1 ? 1 : (needsOff ? 2 : 0));
       
       // Calculate next shift after OFF
-      // If on OFF 2nd, they will rotate to next shift after 1 more OFF day
+      // Both OFF 1st and OFF 2nd will start the next shift after their remaining OFF days
       const currentShiftIndex = SHIFT_ROTATION_ORDER.indexOf(currentShift as any);
       const nextShiftAfterOff = (needsOff || isOnOff) 
         ? SHIFT_ROTATION_ORDER[(currentShiftIndex + 1) % 3]
@@ -450,9 +456,12 @@ export function RotationContinuityPreview({
                 {/* Editable Upcoming/Next Shift */}
                 {data.startsWithOff ? (
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 border-amber-200">
-                      {data.isOnOff1 ? 'OFF 2nd →' : (data.offDaysNeeded === 2 ? 'OFF × 2 →' : 'OFF × 1 →')}
-                    </Badge>
+                    {/* Show OFF badge only if there are remaining OFF days needed */}
+                    {data.offDaysNeeded > 0 && (
+                      <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 border-amber-200">
+                        {data.isOnOff1 ? 'OFF 2nd →' : `OFF × ${data.offDaysNeeded} →`}
+                      </Badge>
+                    )}
                     <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs border ${SHIFT_CONFIG[data.nextShift]?.color || ''}`}>
                       <NextShiftIcon className="h-3 w-3" />
                       <span>{SHIFT_CONFIG[data.nextShift]?.label}</span>
