@@ -48,6 +48,7 @@ export function RotationContinuityPreview({
 }: RotationContinuityPreviewProps) {
   const [workLocations, setWorkLocations] = useState<WorkLocation[]>([]);
   const [editingMember, setEditingMember] = useState<string | null>(null);
+  // workDays: 1-5 = Day 1-5, 6 = OFF 1st, 7 = OFF 2nd
   const [localOverrides, setLocalOverrides] = useState<Record<string, { shift: ShiftType; workDays: number }>>({});
 
   const nextMonth = addMonths(new Date(), 1);
@@ -67,6 +68,7 @@ export function RotationContinuityPreview({
   }, []);
 
   // Calculate continuation for each member with local overrides
+  // workDays encoding: 1-5 = Day 1-5, 6 = OFF 1st, 7 = OFF 2nd
   const continuityData = useMemo(() => {
     const rotatingMembers = teamMembers.filter(
       m => ROTATING_DEPARTMENTS.includes(m.department) && m.role !== 'TL' && m.role !== 'Manager'
@@ -86,20 +88,33 @@ export function RotationContinuityPreview({
           nextShift: 'afternoon' as ShiftType,
           startsWithOff: false,
           offDaysNeeded: 0,
+          isOnOff1: false,
+          isOnOff2: false,
         };
       }
 
       const currentShift = override?.shift || prevState?.shift || 'afternoon';
-      const workDaysCompleted = override?.workDays ?? prevState?.workDaysInCurrent ?? 0;
-      const workDaysRemaining = WORK_DAYS_IN_CYCLE - workDaysCompleted;
+      const rawWorkDays = override?.workDays ?? prevState?.workDaysInCurrent ?? 0;
       
-      // If they've completed 5+ work days, they need OFF days next
-      const needsOff = workDaysCompleted >= WORK_DAYS_IN_CYCLE;
-      const offDaysNeeded = needsOff ? (member.weekOffEntitlement || 2) - (prevState?.offDaysUsed || 0) : 0;
+      // Check if currently on OFF days (6 = OFF 1st, 7 = OFF 2nd)
+      const isOnOff1 = rawWorkDays === 6;
+      const isOnOff2 = rawWorkDays === 7;
+      const isOnOff = isOnOff1 || isOnOff2;
+      
+      // Actual work days completed (max 5 for display)
+      const workDaysCompleted = isOnOff ? 5 : Math.min(rawWorkDays, 5);
+      const workDaysRemaining = isOnOff ? 0 : WORK_DAYS_IN_CYCLE - workDaysCompleted;
+      
+      // Determine OFF days needed at month start
+      // If on OFF 1st (6), need 2 OFF days before next shift
+      // If on OFF 2nd (7), need 1 OFF day before next shift (and rotate)
+      const needsOff = workDaysCompleted >= WORK_DAYS_IN_CYCLE || isOnOff;
+      const offDaysNeeded = isOnOff2 ? 1 : (isOnOff1 ? 2 : (needsOff ? 2 : 0));
       
       // Calculate next shift after OFF
+      // If on OFF 2nd, they will rotate to next shift after 1 more OFF day
       const currentShiftIndex = SHIFT_ROTATION_ORDER.indexOf(currentShift as any);
-      const nextShiftAfterOff = needsOff 
+      const nextShiftAfterOff = (needsOff || isOnOff) 
         ? SHIFT_ROTATION_ORDER[(currentShiftIndex + 1) % 3]
         : currentShift;
 
@@ -108,10 +123,12 @@ export function RotationContinuityPreview({
         hasPreviousData: true,
         currentShift,
         workDaysCompleted,
-        workDaysRemaining: needsOff ? 0 : workDaysRemaining,
+        workDaysRemaining,
         nextShift: nextShiftAfterOff,
-        startsWithOff: needsOff && offDaysNeeded > 0,
+        startsWithOff: needsOff || isOnOff,
         offDaysNeeded: Math.max(0, offDaysNeeded),
+        isOnOff1,
+        isOnOff2,
       };
     });
   }, [teamMembers, previousMonthState, localOverrides]);
@@ -301,11 +318,14 @@ export function RotationContinuityPreview({
                   </SelectContent>
                 </Select>
                 <Select 
-                  value={data.workDaysCompleted >= WORK_DAYS_IN_CYCLE ? 'off1' : String(data.workDaysCompleted)} 
+                  value={data.isOnOff2 ? 'off2' : (data.isOnOff1 ? 'off1' : String(data.workDaysCompleted || 1))} 
                   onValueChange={(v) => {
-                    if (v === 'off1' || v === 'off2') {
-                      // Set to 5+ to trigger OFF days
-                      handleWorkDaysChange(data.member.id, WORK_DAYS_IN_CYCLE);
+                    if (v === 'off1') {
+                      // OFF 1st = 6 (completed 5 work days, on 1st off day)
+                      handleWorkDaysChange(data.member.id, 6);
+                    } else if (v === 'off2') {
+                      // OFF 2nd = 7 (completed 5 work days + 1 off, on 2nd off day)
+                      handleWorkDaysChange(data.member.id, 7);
                     } else {
                       handleWorkDaysChange(data.member.id, parseInt(v));
                     }
@@ -337,14 +357,27 @@ export function RotationContinuityPreview({
               <>
                 {/* Current State Display */}
                 <div 
-                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs border cursor-pointer hover:ring-2 ring-primary/50 ${SHIFT_CONFIG[data.currentShift]?.color || ''}`}
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs border cursor-pointer hover:ring-2 ring-primary/50 ${
+                    data.isOnOff1 || data.isOnOff2 
+                      ? 'bg-amber-100 text-amber-700 border-amber-300' 
+                      : (SHIFT_CONFIG[data.currentShift]?.color || '')
+                  }`}
                   onClick={() => editable && setEditingMember(data.member.id)}
                 >
-                  <ShiftIcon className="h-3 w-3" />
-                  <span>{SHIFT_CONFIG[data.currentShift]?.label}</span>
-                  <span className="text-muted-foreground ml-1">
-                    (Day {data.workDaysCompleted}/{WORK_DAYS_IN_CYCLE})
-                  </span>
+                  {data.isOnOff1 || data.isOnOff2 ? (
+                    <>
+                      <Calendar className="h-3 w-3" />
+                      <span>{data.isOnOff1 ? 'OFF 1st' : 'OFF 2nd'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShiftIcon className="h-3 w-3" />
+                      <span>{SHIFT_CONFIG[data.currentShift]?.label}</span>
+                      <span className="text-muted-foreground ml-1">
+                        (Day {data.workDaysCompleted}/{WORK_DAYS_IN_CYCLE})
+                      </span>
+                    </>
+                  )}
                   {editable && <Edit2 className="h-3 w-3 ml-1 opacity-50" />}
                 </div>
 
@@ -352,9 +385,16 @@ export function RotationContinuityPreview({
 
                 {/* Editable Upcoming/Next Shift */}
                 {data.startsWithOff ? (
-                  <Badge variant="secondary" className="text-xs bg-gray-200">
-                    OFF × {data.offDaysNeeded}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 border-amber-200">
+                      {data.isOnOff1 ? 'OFF 2nd →' : (data.offDaysNeeded === 2 ? 'OFF × 2 →' : 'OFF × 1 →')}
+                    </Badge>
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs border ${SHIFT_CONFIG[data.nextShift]?.color || ''}`}>
+                      <NextShiftIcon className="h-3 w-3" />
+                      <span>{SHIFT_CONFIG[data.nextShift]?.label}</span>
+                      <span className="text-muted-foreground ml-1">(Day 1)</span>
+                    </div>
+                  </div>
                 ) : editable && isEditingNext ? (
                   <div className="flex items-center gap-2">
                     <Select 

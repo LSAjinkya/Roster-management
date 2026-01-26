@@ -551,30 +551,51 @@ export function SetupMonthlyRosterDialog({
       const prevState = previousMonthState[member.id];
       const rotationState = stateMap[member.id];
 
+      // Handle OFF 1st (6) and OFF 2nd (7) encoding from RotationContinuityPreview
+      const rawWorkDays = prevState?.workDaysInCurrent || 0;
+      const isOnOff1 = rawWorkDays === 6;
+      const isOnOff2 = rawWorkDays === 7;
+      const isOnOff = isOnOff1 || isOnOff2;
+      
+      // Actual work days completed (max 5)
+      const actualWorkDays = isOnOff ? 5 : Math.min(rawWorkDays, 5);
+
       // Check if transitioning from morning to night (needs rest)
       const lastShift = prevState?.shift || rotationState?.current_shift_type || SHIFT_ROTATION_ORDER[0];
       const nextShiftInRotation = SHIFT_ROTATION_ORDER[(SHIFT_ROTATION_ORDER.indexOf(lastShift as any) + 1) % 3];
-      const pendingNightTransition = lastShift === 'morning' && nextShiftInRotation === 'night' && prevState?.workDaysInCurrent >= MIN_CONSECUTIVE_WORK_DAYS;
+      const pendingNightTransition = lastShift === 'morning' && nextShiftInRotation === 'night' && actualWorkDays >= MIN_CONSECUTIVE_WORK_DAYS;
       
-      // IMPORTANT: Check last month's week-off usage for continuity
-      // If member had OFF days at end of last month, they should continue work cycle
-      // If member was working at end of last month, check if they're due for OFF
-      const wasOnOffAtMonthEnd = prevState?.offDaysUsed && prevState.offDaysUsed > 0;
-      const continuingOffDays = wasOnOffAtMonthEnd 
-        ? Math.max(0, weekOffEntitlement - prevState.offDaysUsed) 
-        : weekOffEntitlement;
+      // Calculate OFF days remaining based on state
+      // If on OFF 1st, need 1 more OFF day
+      // If on OFF 2nd, need 0 more OFF days (complete, will rotate on first day)
+      let offDaysRemaining = weekOffEntitlement;
+      if (isOnOff1) {
+        offDaysRemaining = 1; // Need 1 more OFF day (OFF 2nd)
+      } else if (isOnOff2) {
+        offDaysRemaining = 0; // OFF cycle complete, will start working on new shift
+      } else if (actualWorkDays >= STANDARD_WORK_DAYS) {
+        offDaysRemaining = weekOffEntitlement; // Need full OFF cycle
+      }
+      
+      // Determine current shift - if completing OFF 2nd, rotate to next shift
+      let currentShift = (prevState?.shift || rotationState?.current_shift_type || SHIFT_ROTATION_ORDER[0]) as ShiftType;
+      if (isOnOff2) {
+        // Completed OFF cycle, rotate to next shift
+        const currentIndex = SHIFT_ROTATION_ORDER.indexOf(currentShift as any);
+        currentShift = SHIFT_ROTATION_ORDER[(currentIndex + 1) % 3] as ShiftType;
+      }
       
       memberTrackers[member.id] = {
-        // MONTH BOUNDARY CONTINUITY: Continue from previous month's work day count
-        consecutiveWorkDays: prevState?.workDaysInCurrent || 0,
-        offDaysRemaining: continuingOffDays,
+        // If on OFF, set consecutive work days to 0 (not working)
+        // If on OFF 2nd specifically, they'll start fresh with the new shift
+        consecutiveWorkDays: isOnOff ? 0 : actualWorkDays,
+        offDaysRemaining,
         weekOffEntitlement,
         standardWorkDays,
-        // FIXED: Also carry over workDaysInCurrentShift for shift stability
-        workDaysInCurrentShift: prevState?.workDaysInCurrent || 0,
-        currentShift: (prevState?.shift || rotationState?.current_shift_type || SHIFT_ROTATION_ORDER[0]) as ShiftType,
+        workDaysInCurrentShift: isOnOff2 ? 0 : (isOnOff ? actualWorkDays : actualWorkDays),
+        currentShift,
         lastShiftType: null,
-        pendingNightTransition,
+        pendingNightTransition: isOnOff2 ? (currentShift === 'night') : pendingNightTransition,
         pendingShiftRotation: false,
         offDaysInRolling7: []
       };
@@ -777,11 +798,14 @@ export function SetupMonthlyRosterDialog({
           // FIXED: Prevent OFF if we haven't worked minimum days in CURRENT month cycle
           // But allow OFF at month start if COMBINED with previous month's work days >= MIN
           if (shouldBeOff && tracker.consecutiveWorkDays < MIN_CONSECUTIVE_WORK_DAYS && offReason !== 'max_work_days_exceeded') {
-            const prevWorkDays = previousMonthState[member.id]?.workDaysInCurrent || 0;
-            const combinedWorkDays = tracker.consecutiveWorkDays + prevWorkDays;
+            const rawPrevWorkDays = previousMonthState[member.id]?.workDaysInCurrent || 0;
+            // Handle OFF encoding: 6 = OFF 1st (means 5 work days), 7 = OFF 2nd (means 5 work days)
+            const actualPrevWorkDays = rawPrevWorkDays >= 6 ? 5 : rawPrevWorkDays;
+            const combinedWorkDays = tracker.consecutiveWorkDays + actualPrevWorkDays;
             
             // Only block OFF if combined work days (from prev month + this month) is still below minimum
-            if (combinedWorkDays < MIN_CONSECUTIVE_WORK_DAYS) {
+            // But allow OFF if they were on OFF at month end (rawPrevWorkDays >= 6)
+            if (combinedWorkDays < MIN_CONSECUTIVE_WORK_DAYS && rawPrevWorkDays < 6) {
               shouldBeOff = false;
             }
           }
@@ -791,7 +815,8 @@ export function SetupMonthlyRosterDialog({
           // ========================
 
           // Check if member is in the middle of consecutive off days
-          const isInConsecutiveOff = tracker.offDaysRemaining < tracker.weekOffEntitlement && tracker.consecutiveWorkDays === 0;
+          // IMPORTANT: offDaysRemaining must be > 0 (still have OFF days to take) AND < entitlement (already started OFF)
+          const isInConsecutiveOff = tracker.offDaysRemaining > 0 && tracker.offDaysRemaining < tracker.weekOffEntitlement && tracker.consecutiveWorkDays === 0;
 
           if (shouldBeOff || isInConsecutiveOff) {
             assignments.push({
@@ -1563,7 +1588,19 @@ export function SetupMonthlyRosterDialog({
             <ScrollArea className="h-[60vh]">
               <RotationContinuityPreview 
                 teamMembers={filteredTeamMembers} 
-                previousMonthState={previousMonthState} 
+                previousMonthState={previousMonthState}
+                onContinuityChange={(memberId, newShift, workDays) => {
+                  // Update previousMonthState with user's changes
+                  // workDays: 1-5 = Day 1-5, 6 = OFF 1st, 7 = OFF 2nd
+                  setPreviousMonthState(prev => ({
+                    ...prev,
+                    [memberId]: {
+                      shift: newShift,
+                      workDaysInCurrent: workDays,
+                      offDaysUsed: workDays === 6 ? 1 : (workDays === 7 ? 2 : 0),
+                    }
+                  }));
+                }}
               />
             </ScrollArea>
 
