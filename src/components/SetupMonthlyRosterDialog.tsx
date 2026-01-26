@@ -1609,7 +1609,12 @@ export function SetupMonthlyRosterDialog({
                 <ChevronLeft size={16} />
                 Back to Config
               </Button>
-              <Button onClick={() => setStep('preview')} className="gap-2">
+              <Button onClick={() => {
+                // Regenerate assignments with updated continuity state before showing preview
+                const assignments = generateAssignments();
+                setPreviewAssignments(assignments);
+                setStep('preview');
+              }} className="gap-2">
                 <Eye size={16} />
                 View Full Roster
               </Button>
