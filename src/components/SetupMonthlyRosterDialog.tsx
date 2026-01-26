@@ -146,7 +146,7 @@ export function SetupMonthlyRosterDialog({
     return Array.from(teams).sort();
   }, [teamMembers]);
 
-  // Filter team members by selected departments, team, and location
+  // Filter team members by selected departments and location (team filter removed)
   const filteredTeamMembers = useMemo(() => {
     let members = [...teamMembers];
     
@@ -154,16 +154,12 @@ export function SetupMonthlyRosterDialog({
       members = members.filter(m => selectedDepartments.includes(m.department));
     }
     
-    if (selectedTeam !== 'all') {
-      members = members.filter(m => m.team === selectedTeam);
-    }
-    
     if (selectedLocations.length > 0) {
       members = members.filter(m => m.workLocationId && selectedLocations.includes(m.workLocationId));
     }
     
     return members;
-  }, [teamMembers, selectedDepartments, selectedTeam, selectedLocations]);
+  }, [teamMembers, selectedDepartments, selectedLocations]);
 
   // Department shift configuration - Rotation order: Afternoon → Morning → Night
   // Now includes work_days_per_cycle and off_days_per_cycle from DB
@@ -1133,32 +1129,17 @@ export function SetupMonthlyRosterDialog({
               </div>
             </div>
 
-            {/* Team & Location Filter */}
-            <div className="rounded-lg border p-4 mb-4">
-              <div className="space-y-3">
-                <div>
-                  <Label className="text-base">Filter by Team or Location</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Optionally filter members by team or work location (e.g., Bangalore)
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+            {/* Location Filter - Only shown when departments are selected */}
+            {selectedDepartments.length > 0 && (
+              <div className="rounded-lg border p-4 mb-4">
+                <div className="space-y-3">
                   <div>
-                    <Label className="text-sm text-muted-foreground mb-1.5 block">Team</Label>
-                    <Select value={selectedTeam} onValueChange={setSelectedTeam}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Teams" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Teams</SelectItem>
-                        {availableTeams.map(team => (
-                          <SelectItem key={team} value={team}>{team}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-base">Filter by Work Location</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Optionally filter members by work location for selected department(s)
+                    </p>
                   </div>
                   <div>
-                    <Label className="text-sm text-muted-foreground mb-1.5 block">Work Locations</Label>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
@@ -1174,15 +1155,19 @@ export function SetupMonthlyRosterDialog({
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[250px] p-0 bg-popover z-50" align="start">
+                      <PopoverContent className="w-[300px] p-0 bg-popover z-50" align="start">
                         <div className="p-2 space-y-1">
                           {workLocations.map(loc => {
                             const isSelected = selectedLocations.includes(loc.id);
+                            // Count members from selected departments at this location
+                            const memberCount = teamMembers.filter(
+                              m => selectedDepartments.includes(m.department) && m.workLocationId === loc.id
+                            ).length;
                             return (
                               <div
                                 key={loc.id}
                                 className={cn(
-                                  "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-accent",
+                                  "flex items-center justify-between gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-accent",
                                   isSelected && "bg-accent"
                                 )}
                                 onClick={() => {
@@ -1193,8 +1178,11 @@ export function SetupMonthlyRosterDialog({
                                   }
                                 }}
                               >
-                                <Checkbox checked={isSelected} />
-                                <span className="text-sm">{loc.name} {loc.city && `(${loc.city})`}</span>
+                                <div className="flex items-center gap-2">
+                                  <Checkbox checked={isSelected} />
+                                  <span className="text-sm">{loc.name} {loc.city && `(${loc.city})`}</span>
+                                </div>
+                                <Badge variant="secondary" className="text-xs">{memberCount}</Badge>
                               </div>
                             );
                           })}
@@ -1202,27 +1190,24 @@ export function SetupMonthlyRosterDialog({
                       </PopoverContent>
                     </Popover>
                   </div>
+                  {selectedLocations.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-primary">
+                        {filteredTeamMembers.length} member(s) match the filter
+                      </p>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setSelectedLocations([])}
+                        className="text-xs h-6"
+                      >
+                        Clear location filter
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                {(selectedTeam !== 'all' || selectedLocations.length > 0) && (
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm text-primary">
-                      {filteredTeamMembers.length} member(s) match the filter
-                    </p>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => {
-                        setSelectedTeam('all');
-                        setSelectedLocations([]);
-                      }}
-                      className="text-xs h-6"
-                    >
-                      Clear filter
-                    </Button>
-                  </div>
-                )}
               </div>
-            </div>
+            )}
 
             {/* Department Multi-Selector */}
             <div className="rounded-lg border p-4 mb-4">
