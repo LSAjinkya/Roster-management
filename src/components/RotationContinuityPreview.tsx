@@ -57,7 +57,7 @@ export function RotationContinuityPreview({
 }: RotationContinuityPreviewProps) {
   const [workLocations, setWorkLocations] = useState<WorkLocation[]>([]);
   const [editingMember, setEditingMember] = useState<string | null>(null);
-  // workDays: 1-5 = Day 1-5, 6 = OFF 1st, 7 = OFF 2nd
+  // workDays: 1-10 = Day 1-10, 11 = OFF 1st, 12 = OFF 2nd, 13 = OFF 3rd, 14 = OFF 4th
   const [localOverrides, setLocalOverrides] = useState<Record<string, { shift: ShiftType; workDays: number }>>({});
   const [lastWeekAssignments, setLastWeekAssignments] = useState<LastWeekAssignment[]>([]);
 
@@ -105,7 +105,7 @@ export function RotationContinuityPreview({
   }, []);
 
   // Calculate continuation for each member with local overrides
-  // workDays encoding: 1-5 = Day 1-5, 6 = OFF 1st, 7 = OFF 2nd
+  // workDays encoding: 1-10 = Day 1-10, 11 = OFF 1st, 12 = OFF 2nd, 13 = OFF 3rd, 14 = OFF 4th
   const continuityData = useMemo(() => {
     const rotatingMembers = teamMembers.filter(
       m => ROTATING_DEPARTMENTS.includes(m.department) && m.role !== 'TL' && m.role !== 'Manager'
@@ -127,35 +127,48 @@ export function RotationContinuityPreview({
           offDaysNeeded: 0,
           isOnOff1: false,
           isOnOff2: false,
+          isOnOff3: false,
+          isOnOff4: false,
         };
       }
 
       const currentShift = override?.shift || prevState?.shift || 'afternoon';
       const rawWorkDays = override?.workDays ?? prevState?.workDaysInCurrent ?? 0;
       
-      // Check if currently on OFF days (6 = OFF 1st, 7 = OFF 2nd)
-      const isOnOff1 = rawWorkDays === 6;
-      const isOnOff2 = rawWorkDays === 7;
-      const isOnOff = isOnOff1 || isOnOff2;
+      // Check if currently on OFF days (11 = OFF 1st, 12 = OFF 2nd, 13 = OFF 3rd, 14 = OFF 4th)
+      const isOnOff1 = rawWorkDays === 11;
+      const isOnOff2 = rawWorkDays === 12;
+      const isOnOff3 = rawWorkDays === 13;
+      const isOnOff4 = rawWorkDays === 14;
+      const isOnOff = isOnOff1 || isOnOff2 || isOnOff3 || isOnOff4;
       
-      // Actual work days completed (max 5 for display)
-      const workDaysCompleted = isOnOff ? 5 : Math.min(rawWorkDays, 5);
+      // Actual work days completed (max 10 for display)
+      const workDaysCompleted = isOnOff ? WORK_DAYS_IN_CYCLE : Math.min(rawWorkDays, WORK_DAYS_IN_CYCLE);
       const workDaysRemaining = isOnOff ? 0 : WORK_DAYS_IN_CYCLE - workDaysCompleted;
       
       // Determine OFF days needed at month start
-      // If on OFF 1st (6): Already took 1 OFF, need 1 more OFF (OFF 2nd), then rotate to next shift
-      // If on OFF 2nd (7): Already took 2 OFFs, rotation complete, start fresh with next shift (Day 1)
-      // If completed 5 work days (5): Need 2 OFF days, then rotate
+      // OFF 1st = 11: need 3 more OFF (2nd, 3rd, 4th), then rotate
+      // OFF 2nd = 12: need 2 more OFF (3rd, 4th), then rotate
+      // OFF 3rd = 13: need 1 more OFF (4th), then rotate
+      // OFF 4th = 14: OFF complete, start Day 1 of new shift
+      // Completed 10 days: Need 4 OFFs before rotating
       const needsOff = workDaysCompleted >= WORK_DAYS_IN_CYCLE || isOnOff;
       
-      // OFF days needed in the NEW month:
-      // - OFF 1st: 1 more OFF (they took 1 already at month end)
-      // - OFF 2nd: 0 more OFF (OFF cycle complete, start Day 1 of new shift)
-      // - Completed 5 days: 2 OFFs before rotating
-      const offDaysNeeded = isOnOff2 ? 0 : (isOnOff1 ? 1 : (needsOff ? 2 : 0));
+      // OFF days needed in the NEW month
+      let offDaysNeeded = 0;
+      if (isOnOff4) {
+        offDaysNeeded = 0; // OFF complete
+      } else if (isOnOff3) {
+        offDaysNeeded = 1;
+      } else if (isOnOff2) {
+        offDaysNeeded = 2;
+      } else if (isOnOff1) {
+        offDaysNeeded = 3;
+      } else if (needsOff) {
+        offDaysNeeded = 4; // Full 4 OFF days
+      }
       
       // Calculate next shift after OFF
-      // Both OFF 1st and OFF 2nd will start the next shift after their remaining OFF days
       const currentShiftIndex = SHIFT_ROTATION_ORDER.indexOf(currentShift as any);
       const nextShiftAfterOff = (needsOff || isOnOff) 
         ? SHIFT_ROTATION_ORDER[(currentShiftIndex + 1) % 3]
@@ -172,6 +185,8 @@ export function RotationContinuityPreview({
         offDaysNeeded: Math.max(0, offDaysNeeded),
         isOnOff1,
         isOnOff2,
+        isOnOff3,
+        isOnOff4,
       };
     });
   }, [teamMembers, previousMonthState, localOverrides]);
@@ -388,14 +403,16 @@ export function RotationContinuityPreview({
                   </SelectContent>
                 </Select>
                 <Select 
-                  value={data.isOnOff2 ? 'off2' : (data.isOnOff1 ? 'off1' : String(data.workDaysCompleted || 1))} 
+                  value={data.isOnOff4 ? 'off4' : (data.isOnOff3 ? 'off3' : (data.isOnOff2 ? 'off2' : (data.isOnOff1 ? 'off1' : String(data.workDaysCompleted || 1))))} 
                   onValueChange={(v) => {
                     if (v === 'off1') {
-                      // OFF 1st = 6 (completed 5 work days, on 1st off day)
-                      handleWorkDaysChange(data.member.id, 6);
+                      handleWorkDaysChange(data.member.id, 11);
                     } else if (v === 'off2') {
-                      // OFF 2nd = 7 (completed 5 work days + 1 off, on 2nd off day)
-                      handleWorkDaysChange(data.member.id, 7);
+                      handleWorkDaysChange(data.member.id, 12);
+                    } else if (v === 'off3') {
+                      handleWorkDaysChange(data.member.id, 13);
+                    } else if (v === 'off4') {
+                      handleWorkDaysChange(data.member.id, 14);
                     } else {
                       handleWorkDaysChange(data.member.id, parseInt(v));
                     }
@@ -405,15 +422,13 @@ export function RotationContinuityPreview({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {[1, 2, 3, 4, 5].map(d => (
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(d => (
                       <SelectItem key={d} value={String(d)}>Day {d}</SelectItem>
                     ))}
-                    <SelectItem value="off1" className="text-amber-600 font-medium">
-                      OFF 1st
-                    </SelectItem>
-                    <SelectItem value="off2" className="text-amber-600 font-medium">
-                      OFF 2nd
-                    </SelectItem>
+                    <SelectItem value="off1" className="text-amber-600 font-medium">OFF 1st</SelectItem>
+                    <SelectItem value="off2" className="text-amber-600 font-medium">OFF 2nd</SelectItem>
+                    <SelectItem value="off3" className="text-amber-600 font-medium">OFF 3rd</SelectItem>
+                    <SelectItem value="off4" className="text-amber-600 font-medium">OFF 4th</SelectItem>
                   </SelectContent>
                 </Select>
                 <button 
@@ -428,18 +443,18 @@ export function RotationContinuityPreview({
                 {/* Current State Display */}
                 <div 
                   className={`flex items-center gap-1 px-2 py-1 rounded text-xs border cursor-pointer hover:ring-2 ring-primary/50 ${
-                    data.isOnOff1 || data.isOnOff2 
+                    data.isOnOff1 || data.isOnOff2 || data.isOnOff3 || data.isOnOff4
                       ? 'bg-amber-100 text-amber-700 border-amber-300' 
                       : (SHIFT_CONFIG[data.currentShift]?.color || '')
                   }`}
                   onClick={() => editable && setEditingMember(data.member.id)}
                 >
-                  {data.isOnOff1 || data.isOnOff2 ? (
+                  {data.isOnOff1 || data.isOnOff2 || data.isOnOff3 || data.isOnOff4 ? (
                     <>
                       <Calendar className="h-3 w-3" />
                       <span>{SHIFT_CONFIG[data.currentShift]?.letter}</span>
                       <span className="mx-0.5">→</span>
-                      <span>{data.isOnOff1 ? 'OFF 1st' : 'OFF 2nd'}</span>
+                      <span>{data.isOnOff1 ? 'OFF 1st' : (data.isOnOff2 ? 'OFF 2nd' : (data.isOnOff3 ? 'OFF 3rd' : 'OFF 4th'))}</span>
                     </>
                   ) : (
                     <>
@@ -461,7 +476,7 @@ export function RotationContinuityPreview({
                     {/* Show OFF badge only if there are remaining OFF days needed */}
                     {data.offDaysNeeded > 0 && (
                       <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 border-amber-200">
-                        {data.isOnOff1 ? 'OFF 2nd →' : `OFF × ${data.offDaysNeeded} →`}
+                        {`OFF × ${data.offDaysNeeded} →`}
                       </Badge>
                     )}
                     <div className={`flex items-center gap-1 px-2 py-1 rounded text-xs border ${SHIFT_CONFIG[data.nextShift]?.color || ''}`}>
