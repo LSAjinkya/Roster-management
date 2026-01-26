@@ -1307,7 +1307,7 @@ export function SetupMonthlyRosterDialog({
                         </div>
                         <div>
                           <span className="text-sm text-muted-foreground">Weekly Offs:</span>
-                          <span className="ml-2 font-medium">{rotationConfig.off_days} days off pattern</span>
+                          <span className="ml-2 font-medium">{OFF_DAYS_IN_CYCLE} days off pattern</span>
                         </div>
                         <div>
                           <span className="text-sm text-muted-foreground">Total Members:</span>
@@ -1345,22 +1345,22 @@ export function SetupMonthlyRosterDialog({
                         <p className="text-sm font-medium mb-2">Example Pattern</p>
                         <div className="flex flex-wrap gap-2 text-xs">
                           <div className="flex items-center gap-1">
-                            <Badge className="bg-amber-500 text-white">Days 1-{rotationConfig.rotation_cycle_days}</Badge>
+                            <Badge className="bg-amber-500 text-white">Days 1-{WORK_DAYS_IN_CYCLE}</Badge>
                             <span>Afternoon</span>
                           </div>
                           <span className="text-muted-foreground">→</span>
                           <div className="flex items-center gap-1">
-                            <Badge className="bg-blue-500 text-white">Days {rotationConfig.rotation_cycle_days + 1}-{rotationConfig.rotation_cycle_days * 2}</Badge>
+                            <Badge className="bg-blue-500 text-white">Days {WORK_DAYS_IN_CYCLE + 1}-{WORK_DAYS_IN_CYCLE * 2}</Badge>
                             <span>Morning</span>
                           </div>
                           <span className="text-muted-foreground">→</span>
                           <div className="flex items-center gap-1">
-                            <Badge className="bg-purple-600 text-white">Days {rotationConfig.rotation_cycle_days * 2 + 1}-{rotationConfig.rotation_cycle_days * 3}</Badge>
+                            <Badge className="bg-purple-600 text-white">Days {WORK_DAYS_IN_CYCLE * 2 + 1}-{WORK_DAYS_IN_CYCLE * 3}</Badge>
                             <span>Night</span>
                           </div>
                         </div>
                         <p className="text-xs text-muted-foreground mt-2">
-                          2 days off in each week of the cycle
+                          {OFF_DAYS_IN_CYCLE} days off after every {WORK_DAYS_IN_CYCLE} work days (2 off per week)
                         </p>
                       </div>
                     </>}
