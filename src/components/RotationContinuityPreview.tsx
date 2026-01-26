@@ -437,6 +437,8 @@ export function RotationContinuityPreview({
                   {data.isOnOff1 || data.isOnOff2 ? (
                     <>
                       <Calendar className="h-3 w-3" />
+                      <span>{SHIFT_CONFIG[data.currentShift]?.letter}</span>
+                      <span className="mx-0.5">→</span>
                       <span>{data.isOnOff1 ? 'OFF 1st' : 'OFF 2nd'}</span>
                     </>
                   ) : (
