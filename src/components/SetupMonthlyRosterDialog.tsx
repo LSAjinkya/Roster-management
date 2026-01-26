@@ -507,10 +507,9 @@ export function SetupMonthlyRosterDialog({
     // ========================
     // CONSTANTS FROM REQUIREMENTS
     // ========================
-    const MIN_CONSECUTIVE_WORK_DAYS = 5;
-    const MAX_CONSECUTIVE_WORK_DAYS = 12;
-    const STANDARD_WORK_DAYS = 10; // 10 work days before OFF
-    const STANDARD_OFF_DAYS = 4; // 4 OFF days (2 per week)
+    const MIN_CONSECUTIVE_WORK_DAYS = 3;
+    const MAX_CONSECUTIVE_WORK_DAYS = 7;
+    const STANDARD_WORK_DAYS = 5;
     const NIGHT_SHIFT_MIN_REST = 1;
     const NIGHT_SHIFT_PREFERRED_REST = 2;
 
@@ -544,26 +543,23 @@ export function SetupMonthlyRosterDialog({
       // Get department-specific config
       const deptConfig = getDeptConfig(member.department);
       const deptWorkDays = deptConfig?.workDaysPerCycle ?? STANDARD_WORK_DAYS;
-      const deptOffDays = deptConfig?.offDaysPerCycle ?? STANDARD_OFF_DAYS;
+      const deptOffDays = deptConfig?.offDaysPerCycle ?? 2;
       
-      // Use department config, fallback to user's week-off entitlement, then default to 4
-      const weekOffEntitlement = deptOffDays || ((member as any).weekOffEntitlement || STANDARD_OFF_DAYS);
+      // Use department config, fallback to user's week-off entitlement, then default to 2
+      const weekOffEntitlement = deptOffDays || ((member as any).weekOffEntitlement || 2);
       const standardWorkDays = deptWorkDays || STANDARD_WORK_DAYS;
       
       const prevState = previousMonthState[member.id];
       const rotationState = stateMap[member.id];
 
-      // Handle OFF states (11-14 encode OFF 1st-4th) from RotationContinuityPreview
-      // OFF 1st = 11, OFF 2nd = 12, OFF 3rd = 13, OFF 4th = 14
+      // Handle OFF 1st (6) and OFF 2nd (7) encoding from RotationContinuityPreview
       const rawWorkDays = prevState?.workDaysInCurrent || 0;
-      const isOnOff1 = rawWorkDays === 11; // OFF 1st
-      const isOnOff2 = rawWorkDays === 12; // OFF 2nd
-      const isOnOff3 = rawWorkDays === 13; // OFF 3rd
-      const isOnOff4 = rawWorkDays === 14; // OFF 4th
-      const isOnOff = isOnOff1 || isOnOff2 || isOnOff3 || isOnOff4;
+      const isOnOff1 = rawWorkDays === 6;
+      const isOnOff2 = rawWorkDays === 7;
+      const isOnOff = isOnOff1 || isOnOff2;
       
-      // Actual work days completed (max 10)
-      const actualWorkDays = isOnOff ? STANDARD_WORK_DAYS : Math.min(rawWorkDays, STANDARD_WORK_DAYS);
+      // Actual work days completed (max 5)
+      const actualWorkDays = isOnOff ? 5 : Math.min(rawWorkDays, 5);
 
       // Get the shift from previous month state
       const lastShift = prevState?.shift || rotationState?.current_shift_type || SHIFT_ROTATION_ORDER[0];
@@ -585,41 +581,30 @@ export function SetupMonthlyRosterDialog({
       let forceOffOnStart = false; // Flag to force OFF assignment on first day(s)
       
       if (isOnOff1) {
-        // Member ended on OFF 1st → needs 3 more OFF days → then rotate to next shift
+        // Member ended on OFF 1st → needs 1 more OFF day → then rotate to next shift
+        // DON'T pre-rotate - rotation will happen after OFF completes
         currentShift = lastShift as ShiftType;
-        offDaysRemaining = 3; // Still need OFF 2nd, 3rd, 4th
-        consecutiveWorkDays = 0;
-        workDaysInCurrentShift = STANDARD_WORK_DAYS;
-        forceOffOnStart = true;
+        offDaysRemaining = 1; // Still need 1 OFF (OFF 2nd)
+        consecutiveWorkDays = 0; // Not working
+        workDaysInCurrentShift = 5; // Completed 5 work days before OFF
+        forceOffOnStart = true; // MUST give OFF on Day 1
       } else if (isOnOff2) {
-        // Member ended on OFF 2nd → needs 2 more OFF days → then rotate
-        currentShift = lastShift as ShiftType;
-        offDaysRemaining = 2; // Still need OFF 3rd, 4th
-        consecutiveWorkDays = 0;
-        workDaysInCurrentShift = STANDARD_WORK_DAYS;
-        forceOffOnStart = true;
-      } else if (isOnOff3) {
-        // Member ended on OFF 3rd → needs 1 more OFF day → then rotate
-        currentShift = lastShift as ShiftType;
-        offDaysRemaining = 1; // Still need OFF 4th
-        consecutiveWorkDays = 0;
-        workDaysInCurrentShift = STANDARD_WORK_DAYS;
-        forceOffOnStart = true;
-      } else if (isOnOff4) {
-        // Member ended on OFF 4th → OFF complete → start with rotated shift (Day 1)
+        // Member ended on OFF 2nd → OFF complete → start with rotated shift (Day 1)
+        // Rotation happened at end of last month, so use next shift
         currentShift = nextShiftInRotation as ShiftType;
-        offDaysRemaining = weekOffEntitlement; // Reset full 4-day entitlement
-        consecutiveWorkDays = 0;
-        workDaysInCurrentShift = 0;
+        offDaysRemaining = weekOffEntitlement; // Reset full entitlement
+        consecutiveWorkDays = 0; // Starting fresh
+        workDaysInCurrentShift = 0; // Day 1 of new shift
       } else if (actualWorkDays >= STANDARD_WORK_DAYS) {
-        // Completed 10 work days → needs 4 OFF days → then rotate
+        // Completed 5 work days → needs 2 OFF days → then rotate
+        // DON'T pre-rotate - rotation will happen after OFF completes
         currentShift = lastShift as ShiftType;
-        offDaysRemaining = weekOffEntitlement; // Need full 4 OFF days
-        consecutiveWorkDays = STANDARD_WORK_DAYS; // Mark as 10 so first day triggers OFF
+        offDaysRemaining = weekOffEntitlement; // Need full 2 OFF days
+        consecutiveWorkDays = STANDARD_WORK_DAYS; // Mark as 5 so first day triggers OFF
         workDaysInCurrentShift = actualWorkDays;
-        forceOffOnStart = false; // Will be triggered by consecutiveWorkDays >= 10 check
+        forceOffOnStart = false; // Will be triggered by consecutiveWorkDays >= 5 check
       } else {
-        // Still in middle of work cycle (Day 1-9) → continue same shift
+        // Still in middle of work cycle (Day 1-4) → continue same shift
         currentShift = lastShift as ShiftType;
         offDaysRemaining = weekOffEntitlement;
         consecutiveWorkDays = actualWorkDays;
@@ -711,8 +696,8 @@ export function SetupMonthlyRosterDialog({
           if (!tracker) {
             // Initialize tracker for general shift workers
             const deptConfig = getDeptConfig(member.department);
-            const deptWorkDays = deptConfig?.workDaysPerCycle ?? 5; // General shift: 5 work days/week
-            const deptOffDays = deptConfig?.offDaysPerCycle ?? 2; // General shift: 2 OFF days/week
+            const deptWorkDays = deptConfig?.workDaysPerCycle ?? STANDARD_WORK_DAYS;
+            const deptOffDays = deptConfig?.offDaysPerCycle ?? 2;
             const weekOffEntitlement = deptOffDays || ((member as any).weekOffEntitlement || 2);
             
             memberTrackers[member.id] = {
@@ -776,14 +761,14 @@ export function SetupMonthlyRosterDialog({
         }
 
         // Rotating members with SIMPLIFIED rules:
-        // 1. Work exactly 10 days → 4 OFF days (2 per week, consecutive blocks)
-        // 2. Shift rotates AFTER week-off completion (all 4 OFF days taken)
-        // 3. Never give OFF before completing 10 work days
+        // 1. Work exactly 5 days → 2 OFF days (consecutive, no split)
+        // 2. Shift rotates AFTER week-off completion
+        // 3. Never give OFF before completing 5 work days
         if (isRotating && use15DayRotation) {
           const tracker = memberTrackers[member.id];
 
           // ========================
-          // SIMPLE WEEK-OFF LOGIC (10 Work + 4 OFF)
+          // SIMPLE WEEK-OFF LOGIC
           // ========================
           let shouldBeOff = false;
 
@@ -796,18 +781,18 @@ export function SetupMonthlyRosterDialog({
             shouldBeOff = true;
           }
           
-          // RULE 2: Force OFF at month start due to continuity (coming from previous OFF state)
-          // forceOffOnStart is set when member ended previous month mid-OFF cycle
+          // RULE 2: Force OFF at month start due to continuity (coming from OFF 1st)
+          // forceOffOnStart is set when member ended previous month on OFF 1st
           else if (tracker.forceOffOnStart && tracker.offDaysRemaining > 0) {
             shouldBeOff = true;
           }
           
-          // RULE 3: Completed exactly 10 work days → start 4-day OFF
+          // RULE 3: Completed exactly 5 work days → start 2-day OFF
           else if (tracker.consecutiveWorkDays >= STANDARD_WORK_DAYS) {
             shouldBeOff = true;
           }
 
-          // IMPORTANT: Never give OFF before completing 10 work days
+          // IMPORTANT: Never give OFF before completing 5 work days
           // No early OFFs, no split week-offs, no exceptions
 
           if (shouldBeOff) {
@@ -821,12 +806,12 @@ export function SetupMonthlyRosterDialog({
             tracker.offDaysRemaining--;
             tracker.offDaysInRolling7.push(dayIndex);
 
-            // Reset off entitlement after all OFFs given (4 consecutive days completed)
+            // Reset off entitlement after all OFFs given (2 consecutive days completed)
             if (tracker.offDaysRemaining <= 0) {
               tracker.offDaysRemaining = tracker.weekOffEntitlement;
               tracker.forceOffOnStart = false; // Clear forced OFF flag
 
-              // SIMPLE RULE: Rotate shift AFTER every complete cycle (10 work + 4 OFF)
+              // SIMPLE RULE: Rotate shift AFTER every week-off cycle (5 work + 2 OFF)
               // Shift rotation: Afternoon → Morning → Night → Afternoon
               const currentIndex = SHIFT_ROTATION_ORDER.indexOf(tracker.currentShift as any);
               const nextIndex = (currentIndex + 1) % SHIFT_ROTATION_ORDER.length;
@@ -1307,7 +1292,7 @@ export function SetupMonthlyRosterDialog({
                         </div>
                         <div>
                           <span className="text-sm text-muted-foreground">Weekly Offs:</span>
-                          <span className="ml-2 font-medium">{OFF_DAYS_IN_CYCLE} days off pattern</span>
+                          <span className="ml-2 font-medium">{rotationConfig.off_days} days off pattern</span>
                         </div>
                         <div>
                           <span className="text-sm text-muted-foreground">Total Members:</span>
@@ -1345,22 +1330,22 @@ export function SetupMonthlyRosterDialog({
                         <p className="text-sm font-medium mb-2">Example Pattern</p>
                         <div className="flex flex-wrap gap-2 text-xs">
                           <div className="flex items-center gap-1">
-                            <Badge className="bg-amber-500 text-white">Days 1-{WORK_DAYS_IN_CYCLE}</Badge>
+                            <Badge className="bg-amber-500 text-white">Days 1-{rotationConfig.rotation_cycle_days}</Badge>
                             <span>Afternoon</span>
                           </div>
                           <span className="text-muted-foreground">→</span>
                           <div className="flex items-center gap-1">
-                            <Badge className="bg-blue-500 text-white">Days {WORK_DAYS_IN_CYCLE + 1}-{WORK_DAYS_IN_CYCLE * 2}</Badge>
+                            <Badge className="bg-blue-500 text-white">Days {rotationConfig.rotation_cycle_days + 1}-{rotationConfig.rotation_cycle_days * 2}</Badge>
                             <span>Morning</span>
                           </div>
                           <span className="text-muted-foreground">→</span>
                           <div className="flex items-center gap-1">
-                            <Badge className="bg-purple-600 text-white">Days {WORK_DAYS_IN_CYCLE * 2 + 1}-{WORK_DAYS_IN_CYCLE * 3}</Badge>
+                            <Badge className="bg-purple-600 text-white">Days {rotationConfig.rotation_cycle_days * 2 + 1}-{rotationConfig.rotation_cycle_days * 3}</Badge>
                             <span>Night</span>
                           </div>
                         </div>
                         <p className="text-xs text-muted-foreground mt-2">
-                          {OFF_DAYS_IN_CYCLE} days off after every {WORK_DAYS_IN_CYCLE} work days (2 off per week)
+                          2 days off in each week of the cycle
                         </p>
                       </div>
                     </>}

@@ -65,15 +65,15 @@ export interface MemberAvailability {
 // CORE CONSTANTS - SHIFT RULES
 // =====================================================
 
-// Rule 1: Core Work Cycle - 10 work days + 4 OFF days (2 week-offs per week across 2 weeks)
-export const WORK_DAYS_IN_CYCLE = 10; // 10 consecutive work days
-export const OFF_DAYS_IN_CYCLE = 4; // 4 OFF days total (2 per week = 4 in 2 weeks)
-export const CYCLE_LENGTH = WORK_DAYS_IN_CYCLE + OFF_DAYS_IN_CYCLE; // 14 days
+// Rule 1: Core Work Cycle - 5 work days + 2 OFF days (COMPULSORY 2 week-offs per week)
+export const WORK_DAYS_IN_CYCLE = 5;
+export const OFF_DAYS_IN_CYCLE = 2; // Compulsory 2 week-offs per week
+export const CYCLE_LENGTH = WORK_DAYS_IN_CYCLE + OFF_DAYS_IN_CYCLE; // 7 days
 export const MIN_WEEKLY_OFFS = 2; // Minimum week-offs required per week
 
-// Rule 2: Shift Stability - Same shift for 10 working days (matches WORK_DAYS_IN_CYCLE)
+// Rule 2: Shift Stability - Same shift for 10 working days
 export const SHIFT_STABILITY_WORK_DAYS = 10;
-// Full shift cycle = 10 work days + 4 OFF days
+// Full shift cycle = 10 work days + 4 OFF days (2 blocks of 2)
 export const SHIFT_CYCLE_CALENDAR_DAYS = 14; // 10 work + 4 OFF
 
 // Rule 4: Shift Rotation Order

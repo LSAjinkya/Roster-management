@@ -16,19 +16,19 @@ import { format, eachDayOfInterval, addDays, subDays, startOfWeek, endOfWeek } f
 // =====================================================
 // VALIDATION RULE PRIORITY ORDER
 // =====================================================
-// 1. Work cycle (10 Work + 4 OFF across 2 weeks) - HIGHEST
+// 1. Work cycle (5 Work + 2 OFF) - HIGHEST
 // 2. Night shift rest rule
-// 3. Shift continuity (10 days = 1 work cycle)
+// 3. Shift continuity (10 days)
 // 4. Shift rotation
 // 5. Fairness
 // 6. Manual overrides - LOWEST
 
 // =====================================================
-// RULE 1: CORE WORK CYCLE VALIDATION (10+4)
+// RULE 1: CORE WORK CYCLE VALIDATION (5+2)
 // =====================================================
 
 /**
- * Validates that a member never works more than 10 consecutive days
+ * Validates that a member never works more than 5 consecutive days
  */
 export function validateConsecutiveWorkDays(
   memberId: string,
@@ -96,7 +96,7 @@ export function validateConsecutiveWorkDays(
 }
 
 /**
- * Validates that OFF days are in continuous blocks (at least 2 consecutive)
+ * Validates that OFF days are in continuous blocks of 2
  */
 export function validateOffDayBlocks(
   memberId: string,
