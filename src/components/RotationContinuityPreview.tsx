@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { format, addMonths, startOfMonth } from 'date-fns';
+import { format, addMonths, startOfMonth, subDays, eachDayOfInterval, endOfMonth } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -30,11 +30,20 @@ interface WorkLocation {
   city: string;
 }
 
+interface LastWeekAssignment {
+  memberId: string;
+  date: string;
+  shiftType: ShiftType;
+}
+
 const SHIFT_CONFIG: Record<string, { icon: typeof Sun; color: string; label: string; letter: string }> = {
   morning: { icon: Sunrise, color: 'bg-amber-100 text-amber-700 border-amber-300', label: 'Morning', letter: 'M' },
   afternoon: { icon: Sun, color: 'bg-blue-100 text-blue-700 border-blue-300', label: 'Afternoon', letter: 'A' },
   night: { icon: Moon, color: 'bg-purple-100 text-purple-700 border-purple-300', label: 'Night', letter: 'N' },
   general: { icon: Calendar, color: 'bg-gray-100 text-gray-700 border-gray-300', label: 'General', letter: 'G' },
+  'week-off': { icon: Calendar, color: 'bg-orange-100 text-orange-700 border-orange-300', label: 'OFF', letter: 'O' },
+  leave: { icon: Calendar, color: 'bg-red-100 text-red-700 border-red-300', label: 'L', letter: 'L' },
+  'comp-off': { icon: Calendar, color: 'bg-teal-100 text-teal-700 border-teal-300', label: 'CO', letter: 'CO' },
 };
 
 // Only rotating shifts - General is for TL/Managers only (not in rotation)
@@ -50,11 +59,17 @@ export function RotationContinuityPreview({
   const [editingMember, setEditingMember] = useState<string | null>(null);
   // workDays: 1-5 = Day 1-5, 6 = OFF 1st, 7 = OFF 2nd
   const [localOverrides, setLocalOverrides] = useState<Record<string, { shift: ShiftType; workDays: number }>>({});
+  const [lastWeekAssignments, setLastWeekAssignments] = useState<LastWeekAssignment[]>([]);
 
   const nextMonth = addMonths(new Date(), 1);
   const monthName = format(nextMonth, 'MMMM yyyy');
+  
+  // Last 7 days of previous month (current month's last week)
+  const currentMonthEnd = endOfMonth(new Date());
+  const lastWeekStart = subDays(currentMonthEnd, 6);
+  const lastWeekDays = eachDayOfInterval({ start: lastWeekStart, end: currentMonthEnd });
 
-  // Fetch work locations
+  // Fetch work locations and last week assignments
   useEffect(() => {
     const fetchLocations = async () => {
       const { data } = await supabase
@@ -64,7 +79,29 @@ export function RotationContinuityPreview({
         .order('name');
       if (data) setWorkLocations(data);
     };
+    
+    const fetchLastWeekAssignments = async () => {
+      const startDate = format(lastWeekStart, 'yyyy-MM-dd');
+      const endDate = format(currentMonthEnd, 'yyyy-MM-dd');
+      
+      const { data, error } = await supabase
+        .from('shift_assignments')
+        .select('member_id, date, shift_type')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date');
+      
+      if (data && !error) {
+        setLastWeekAssignments(data.map(d => ({
+          memberId: d.member_id,
+          date: d.date,
+          shiftType: d.shift_type as ShiftType
+        })));
+      }
+    };
+    
     fetchLocations();
+    fetchLastWeekAssignments();
   }, []);
 
   // Calculate continuation for each member with local overrides
@@ -235,6 +272,30 @@ export function RotationContinuityPreview({
     onContinuityChange?.(memberId, current.shift, workDays);
   };
 
+  // Get member's last week shifts
+  const getMemberLastWeek = (memberId: string) => {
+    return lastWeekDays.map(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const assignment = lastWeekAssignments.find(a => a.memberId === memberId && a.date === dateStr);
+      return {
+        date: day,
+        dateStr,
+        shift: assignment?.shiftType || null
+      };
+    });
+  };
+
+  const getShiftLetter = (shift: ShiftType | null): string => {
+    if (!shift) return '-';
+    const config = SHIFT_CONFIG[shift];
+    return config?.letter || shift.charAt(0).toUpperCase();
+  };
+
+  const getShiftCellStyle = (shift: ShiftType | null): string => {
+    if (!shift) return 'bg-muted/50 text-muted-foreground';
+    return SHIFT_CONFIG[shift]?.color || 'bg-muted text-foreground';
+  };
+
   const renderMemberRow = (data: typeof continuityData[0], editable = true) => {
     const ShiftIcon = SHIFT_CONFIG[data.currentShift]?.icon || Sun;
     const NextShiftIcon = SHIFT_CONFIG[data.nextShift]?.icon || Sun;
@@ -246,12 +307,15 @@ export function RotationContinuityPreview({
     const isStartingFresh = !data.hasPreviousData || data.workDaysCompleted === 0;
     const isTransitioning = data.startsWithOff;
     
+    // Get last week data for this member
+    const memberLastWeek = getMemberLastWeek(data.member.id);
+    
     return (
       <div
         key={data.member.id}
-        className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+        className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors gap-3"
       >
-        <div className="flex items-center gap-3 min-w-[200px]">
+        <div className="flex items-center gap-3 min-w-[180px]">
           {/* Continuity Status Indicator */}
           <div className="flex-shrink-0">
             {isContinuing && !isTransitioning && (
@@ -273,29 +337,29 @@ export function RotationContinuityPreview({
               />
             )}
           </div>
-          <div className="w-32 truncate font-medium text-sm">
+          <div className="w-28 truncate font-medium text-sm">
             {data.member.name}
           </div>
           <Badge variant="outline" className="text-xs">
             {data.member.role}
           </Badge>
-          {/* Status Badge */}
-          {isContinuing && !isTransitioning && (
-            <Badge variant="secondary" className="text-[10px] h-5 bg-blue-100 text-blue-700 border-blue-200">
-              Continuing
-            </Badge>
-          )}
-          {isTransitioning && (
-            <Badge variant="secondary" className="text-[10px] h-5 bg-amber-100 text-amber-700 border-amber-200">
-              Transitioning
-            </Badge>
-          )}
-          {isStartingFresh && !isTransitioning && (
-            <Badge variant="secondary" className="text-[10px] h-5 bg-emerald-100 text-emerald-700 border-emerald-200">
-              Fresh Start
-            </Badge>
-          )}
         </div>
+
+        {/* Last Week of Previous Month - Visual Grid */}
+        <div className="flex items-center gap-0.5 shrink-0">
+          {memberLastWeek.map(({ date, dateStr, shift }) => (
+            <div
+              key={dateStr}
+              className={`w-7 h-7 flex items-center justify-center rounded text-[10px] font-medium border ${getShiftCellStyle(shift)}`}
+              title={`${format(date, 'EEE, MMM d')}: ${shift || 'No data'}`}
+            >
+              {getShiftLetter(shift)}
+            </div>
+          ))}
+        </div>
+
+        {/* Arrow separator */}
+        <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
 
         {data.hasPreviousData ? (
           <div className="flex items-center gap-2">
@@ -489,7 +553,7 @@ export function RotationContinuityPreview({
             Rotation Continuity for {monthName}
           </CardTitle>
           <CardDescription>
-            Click on any shift to edit. Week-offs are distributed based on rotation, not fixed weekends.
+            Review last week shifts and edit continuity. Week-offs are distributed based on rotation, not fixed weekends.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -507,6 +571,27 @@ export function RotationContinuityPreview({
             <div className="flex items-center gap-1.5">
               <div className="w-2 h-2 rounded-full bg-emerald-500" />
               <span>Fresh Start (new cycle)</span>
+            </div>
+          </div>
+
+          {/* Last Week Header Row */}
+          <div className="flex items-center gap-3 mb-3 pb-2 border-b">
+            <div className="min-w-[180px]"></div>
+            <div className="flex items-center gap-0.5 shrink-0">
+              {lastWeekDays.map((day) => (
+                <div
+                  key={format(day, 'yyyy-MM-dd')}
+                  className="w-7 h-7 flex flex-col items-center justify-center text-[9px] text-muted-foreground"
+                  title={format(day, 'EEEE, MMM d')}
+                >
+                  <span className="font-medium">{format(day, 'EEE').charAt(0)}</span>
+                  <span>{format(day, 'd')}</span>
+                </div>
+              ))}
+            </div>
+            <div className="shrink-0 w-4" /> {/* Spacer for arrow */}
+            <div className="text-xs text-muted-foreground font-medium">
+              Next State
             </div>
           </div>
 
