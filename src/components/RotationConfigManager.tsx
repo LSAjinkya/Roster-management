@@ -113,10 +113,10 @@ export function RotationConfigManager() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <Settings size={20} />
-              Rotation Configuration
+              2-Week Shift Rotation
             </CardTitle>
             <CardDescription>
-              Configure 15-day shift rotation with 2+2 weekly offs
+              Configure 14-day shift cycle: 5 Work → 2 OFF → 5 Work → 2 OFF → Rotate
             </CardDescription>
           </div>
           <div className="flex gap-2">
@@ -136,7 +136,7 @@ export function RotationConfigManager() {
         <div className="space-y-4 p-4 rounded-lg border">
           <h3 className="font-medium">Shift Rotation Sequence</h3>
           <p className="text-sm text-muted-foreground">
-            Drag to reorder. Each member works 15 days in one shift, then moves to the next.
+            Drag to reorder. Each member works 14 days (10 work + 4 OFF) in one shift, then rotates to the next.
           </p>
           
           <DragDropContext onDragEnd={handleDragEnd}>
@@ -160,29 +160,37 @@ export function RotationConfigManager() {
         {/* Cycle Configuration */}
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-4 p-4 rounded-lg border">
-            <h3 className="font-medium">15-Day Rotation Cycle</h3>
+            <h3 className="font-medium">14-Day Shift Cycle</h3>
             
             <div className="space-y-2">
               <div className="flex justify-between">
-                <Label>Cycle Length</Label>
-                <span className="text-sm font-medium">{config.rotation_cycle_days} days</span>
+                <Label>Total Cycle Length</Label>
+                <span className="text-sm font-medium">14 days per shift</span>
               </div>
-              <Slider value={[config.rotation_cycle_days]} onValueChange={([v]) => setConfig({
-              ...config,
-              rotation_cycle_days: v
-            })} min={7} max={30} step={1} />
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p><strong>Block 1:</strong> 5 Work Days → 2 OFF Days</p>
+                <p><strong>Block 2:</strong> 5 Work Days → 2 OFF Days</p>
+                <p><strong>Then:</strong> Rotate to next shift</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <Label>Work Days per Shift</Label>
+                <span className="text-sm font-medium">10 days (5+5)</span>
+              </div>
               <p className="text-xs text-muted-foreground">
-                Each member stays on one shift for this many days before rotating
+                Two blocks of 5 consecutive working days
               </p>
             </div>
 
             <div className="space-y-2">
               <div className="flex justify-between">
-                <Label>Weekly Offs Pattern</Label>
-                <span className="text-sm font-medium">2 days</span>
+                <Label>OFF Days per Shift</Label>
+                <span className="text-sm font-medium">4 days (2+2)</span>
               </div>
               <p className="text-xs text-muted-foreground">
-                2 days offs in a week 
+                Two blocks of 2 consecutive OFF days
               </p>
             </div>
           </div>
