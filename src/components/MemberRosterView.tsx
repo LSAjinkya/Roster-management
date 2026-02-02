@@ -262,7 +262,7 @@ export function MemberRosterView({ assignments, teamMembers }: MemberRosterViewP
                     </div>
                   ) : (
                     <div className="px-2 py-1.5 rounded text-center text-xs text-muted-foreground bg-muted/50">
-                      OFF
+                      -
                     </div>
                   )}
                 </div>
