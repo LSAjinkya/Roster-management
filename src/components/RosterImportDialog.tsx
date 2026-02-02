@@ -146,24 +146,59 @@ export function RosterImportDialog({ onImportComplete }: RosterImportDialogProps
 
       const headers = rows[0];
       
-      // Find the email column that contains actual email values (check first data row)
-      const firstDataRow = rows[1];
-      let emailIdx = -1;
-      headers.forEach((h, idx) => {
-        if (h.toLowerCase().includes('email') && firstDataRow[idx]?.includes('@')) {
-          emailIdx = idx;
+      // Find a data row that actually has an email (skip header rows like day names)
+      let firstDataRowIdx = 1;
+      let firstDataRow = rows[1];
+      for (let i = 1; i < Math.min(rows.length, 5); i++) {
+        const hasEmail = rows[i].some(cell => cell?.includes('@'));
+        if (hasEmail) {
+          firstDataRowIdx = i;
+          firstDataRow = rows[i];
+          break;
         }
-      });
-      // Fallback: find any column with email in header
-      if (emailIdx === -1) {
-        emailIdx = headers.findIndex(h => h.toLowerCase().includes('email'));
       }
       
-      // Find name column (first column usually has name if not an email column)
-      let nameIdx = 0;
-      if (headers[0]?.toLowerCase().includes('email') && !firstDataRow[0]?.includes('@')) {
-        nameIdx = 0; // First column has names even though header says "Email id"
+      // Find the email column - look for column with email header AND actual email data
+      let emailIdx = -1;
+      headers.forEach((h, idx) => {
+        if (h.toLowerCase().includes('email')) {
+          // Verify this column has email data in any of the data rows
+          for (let i = firstDataRowIdx; i < Math.min(rows.length, firstDataRowIdx + 5); i++) {
+            if (rows[i][idx]?.includes('@')) {
+              emailIdx = idx;
+              break;
+            }
+          }
+        }
+      });
+      
+      // Fallback: scan all columns in data rows for emails
+      if (emailIdx === -1) {
+        for (let idx = 0; idx < headers.length; idx++) {
+          for (let i = firstDataRowIdx; i < Math.min(rows.length, firstDataRowIdx + 5); i++) {
+            if (rows[i][idx]?.includes('@')) {
+              emailIdx = idx;
+              break;
+            }
+          }
+          if (emailIdx !== -1) break;
+        }
       }
+      
+      console.log('Email column index:', emailIdx, 'Header:', headers[emailIdx]);
+      
+      // Find name column - usually "Name" header or first column if it has names
+      let nameIdx = headers.findIndex(h => h.toLowerCase() === 'name');
+      if (nameIdx === -1) {
+        // Check if first column has name data (not emails, not day names)
+        const firstColValue = firstDataRow[0]?.trim();
+        if (firstColValue && !firstColValue.includes('@') && 
+            !['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].includes(firstColValue.toLowerCase())) {
+          nameIdx = 0;
+        }
+      }
+      
+      console.log('Name column index:', nameIdx, 'Header:', headers[nameIdx]);
       
       const teamIdx = headers.findIndex(h => h.toLowerCase() === 'team');
       const managerIdx = headers.findIndex(h => h.toLowerCase() === 'manager');
@@ -194,8 +229,13 @@ export function RosterImportDialog({ onImportComplete }: RosterImportDialogProps
 
       const imported: ImportedMember[] = [];
       
-      for (let i = 1; i < rows.length; i++) {
+      // Start from the first actual data row (skip header and day name rows)
+      for (let i = firstDataRowIdx; i < rows.length; i++) {
         const row = rows[i];
+        
+        // Skip empty rows
+        if (!row || row.every(cell => !cell?.trim())) continue;
+        
         const email = row[emailIdx]?.toLowerCase()?.trim();
         
         if (!email || !email.includes('@')) continue;
@@ -217,11 +257,13 @@ export function RosterImportDialog({ onImportComplete }: RosterImportDialogProps
 
         const existsInDb = memberMap.has(email);
         
-        // Extract name from the first column if it's not the email column
-        const rawName = nameIdx !== emailIdx ? row[nameIdx]?.trim() : '';
+        // Extract name from the name column
+        const rawName = nameIdx >= 0 && nameIdx !== emailIdx ? row[nameIdx]?.trim() : '';
         const name = rawName || email.split('@')[0].split('.').map(
           p => p.charAt(0).toUpperCase() + p.slice(1)
         ).join(' ');
+        
+        console.log(`Parsed member: ${name} (${email}) - exists: ${existsInDb}`);
         
         imported.push({
           email,
@@ -240,7 +282,9 @@ export function RosterImportDialog({ onImportComplete }: RosterImportDialogProps
       setParsedData(imported);
       setSelectedMembers(new Set(imported.map(m => m.email)));
       
-      toast.success(`Parsed ${imported.length} members from CSV`);
+      const newCount = imported.filter(m => !m.existsInDb).length;
+      const existingCount = imported.filter(m => m.existsInDb).length;
+      toast.success(`Parsed ${imported.length} members (${existingCount} existing, ${newCount} new)`);
     } catch (error) {
       console.error('Error parsing CSV:', error);
       toast.error('Failed to parse CSV file');
