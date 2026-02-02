@@ -22,10 +22,12 @@ export function TeamMemberCard({ member, compact = false, className, style, repo
     .join('')
     .toUpperCase();
 
+  // Green for online (available), Red for offline (on-leave)
+  // Note: unavailable members should be filtered out before reaching this component
   const statusColors = {
-    available: 'bg-status-available',
-    'on-leave': 'bg-status-leave',
-    unavailable: 'bg-status-unavailable',
+    available: 'bg-green-500',  // Online
+    'on-leave': 'bg-red-500',   // Offline
+    unavailable: 'bg-gray-400', // Should not be shown
   };
 
   if (compact) {
@@ -118,12 +120,12 @@ export function TeamMemberCard({ member, compact = false, className, style, repo
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">Status</span>
           <span className={cn(
-            'font-medium capitalize',
-            member.status === 'available' && 'text-status-available',
-            member.status === 'on-leave' && 'text-status-leave',
-            member.status === 'unavailable' && 'text-status-unavailable'
+            'font-medium',
+            member.status === 'available' && 'text-green-600 dark:text-green-400',
+            member.status === 'on-leave' && 'text-red-600 dark:text-red-400',
+            member.status === 'unavailable' && 'text-muted-foreground'
           )}>
-            {member.status.replace('-', ' ')}
+            {member.status === 'available' ? 'Online' : member.status === 'on-leave' ? 'Offline' : 'Left Company'}
           </span>
         </div>
         {reportingTL && member.role !== 'TL' && (
