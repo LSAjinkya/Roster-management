@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, addDays, isSameDay, startOfDay } from 'date-fns';
-import { Home, User, Loader2, Calendar, ChevronDown, ChevronRight } from 'lucide-react';
+import { format, addDays, isSameDay, startOfDay, getDay } from 'date-fns';
+import { Home, User, Loader2, Calendar, ChevronDown, ChevronRight, Filter } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface WfhMember {
   id: string;
@@ -13,57 +14,97 @@ interface WfhMember {
   department: string;
   email: string;
   date: Date;
+  hybridWfhDays: number;
 }
 
 export function WfhStaffWidget() {
   const today = startOfDay(new Date());
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set([format(today, 'yyyy-MM-dd')]));
+  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
 
-  // Fetch WFH assignments for next 7 days
+  // Fetch departments for filter
+  const { data: departments = [] } = useQuery({
+    queryKey: ['wfh-departments'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('departments')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name');
+      
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  // Fetch hybrid WFH members for next 7 days
   const { data: wfhMembers = [], isLoading } = useQuery({
     queryKey: ['wfh-staff-next-7-days', format(today, 'yyyy-MM-dd')],
     queryFn: async () => {
-      const dates: string[] = [];
-      for (let i = 0; i < 7; i++) {
-        dates.push(format(addDays(today, i), 'yyyy-MM-dd'));
-      }
-
-      // Get assignments where work_location_id is null (WFH)
-      const { data: assignments, error: assignmentsError } = await supabase
-        .from('shift_assignments')
-        .select('member_id, date')
-        .in('date', dates)
-        .is('work_location_id', null);
-
-      if (assignmentsError) throw assignmentsError;
-
-      if (!assignments || assignments.length === 0) {
-        return [];
-      }
-
-      const memberIds = [...new Set(assignments.map(a => a.member_id))];
-      
-      const { data: members, error: membersError } = await supabase
+      // Get members who are hybrid with WFH days > 0
+      const { data: hybridMembers, error: membersError } = await supabase
         .from('team_members')
-        .select('id, name, department, email, status')
-        .in('id', memberIds)
+        .select('id, name, department, email, is_hybrid, hybrid_wfh_days')
+        .eq('is_hybrid', true)
+        .gt('hybrid_wfh_days', 0)
         .neq('status', 'unavailable');
 
       if (membersError) throw membersError;
+      if (!hybridMembers || hybridMembers.length === 0) return [];
 
-      // Create WFH entries with dates
+      // Get the next 7 days
+      const dates: Date[] = [];
+      for (let i = 0; i < 7; i++) {
+        dates.push(addDays(today, i));
+      }
+
+      // For hybrid members, determine which days they work from home
+      // Logic: Members with hybrid_wfh_days work from home on certain days of the week
+      // We'll use a simple algorithm: if hybrid_wfh_days >= days remaining in week, they're WFH
       const wfhEntries: WfhMember[] = [];
-      assignments.forEach(assignment => {
-        const member = members?.find(m => m.id === assignment.member_id);
-        if (member) {
-          wfhEntries.push({
-            id: member.id,
-            name: member.name,
-            department: member.department,
-            email: member.email,
-            date: new Date(assignment.date)
-          });
-        }
+      
+      hybridMembers.forEach(member => {
+        const wfhDaysPerWeek = member.hybrid_wfh_days || 0;
+        
+        dates.forEach(date => {
+          const dayOfWeek = getDay(date); // 0 = Sunday, 6 = Saturday
+          
+          // Simple WFH logic based on hybrid_wfh_days:
+          // 5 days WFH = all weekdays
+          // 4 days = Mon-Thu WFH
+          // 3 days = Mon-Wed WFH  
+          // 2 days = Mon-Tue WFH
+          // 1 day = Monday only WFH
+          let isWfhDay = false;
+          
+          if (wfhDaysPerWeek >= 5) {
+            // Full WFH - all weekdays
+            isWfhDay = dayOfWeek >= 1 && dayOfWeek <= 5;
+          } else if (wfhDaysPerWeek === 4) {
+            // Mon, Tue, Wed, Thu WFH
+            isWfhDay = dayOfWeek >= 1 && dayOfWeek <= 4;
+          } else if (wfhDaysPerWeek === 3) {
+            // Mon, Tue, Wed WFH
+            isWfhDay = dayOfWeek >= 1 && dayOfWeek <= 3;
+          } else if (wfhDaysPerWeek === 2) {
+            // Mon, Tue WFH
+            isWfhDay = dayOfWeek === 1 || dayOfWeek === 2;
+          } else if (wfhDaysPerWeek === 1) {
+            // Monday only WFH
+            isWfhDay = dayOfWeek === 1;
+          }
+          
+          if (isWfhDay) {
+            wfhEntries.push({
+              id: member.id,
+              name: member.name,
+              department: member.department,
+              email: member.email,
+              date: date,
+              hybridWfhDays: wfhDaysPerWeek,
+            });
+          }
+        });
       });
 
       // Sort by date
@@ -94,8 +135,13 @@ export function WfhStaffWidget() {
     });
   };
 
+  // Filter by department
+  const filteredMembers = departmentFilter === 'all' 
+    ? wfhMembers 
+    : wfhMembers.filter(m => m.department === departmentFilter);
+
   // Group by date for display
-  const groupedByDate = wfhMembers.reduce((acc, member) => {
+  const groupedByDate = filteredMembers.reduce((acc, member) => {
     const dateKey = format(member.date, 'yyyy-MM-dd');
     if (!acc[dateKey]) {
       acc[dateKey] = [];
@@ -107,14 +153,35 @@ export function WfhStaffWidget() {
   // Sort dates chronologically
   const sortedDates = Object.keys(groupedByDate).sort();
 
+  // Get unique departments from WFH members for filter
+  const wfhDepartments = [...new Set(wfhMembers.map(m => m.department))].sort();
+
   return (
     <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
       <div className="p-4 border-b border-border/50">
-        <div className="flex items-center gap-2">
-          <Home className="h-5 w-5 text-blue-500" />
-          <div>
-            <h2 className="font-semibold text-lg">Working From Home</h2>
-            <p className="text-sm text-muted-foreground">Staff working remotely - next 7 days</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Home className="h-5 w-5 text-blue-500" />
+            <div>
+              <h2 className="font-semibold text-lg">Working From Home</h2>
+              <p className="text-sm text-muted-foreground">Hybrid staff WFH schedule - next 7 days</p>
+            </div>
+          </div>
+          
+          {/* Department Filter */}
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <SelectTrigger className="w-[160px] h-8 text-sm">
+                <SelectValue placeholder="All Departments" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Departments</SelectItem>
+                {wfhDepartments.map(dept => (
+                  <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
@@ -126,7 +193,12 @@ export function WfhStaffWidget() {
         ) : sortedDates.length === 0 ? (
           <div className="text-center py-6">
             <User className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
-            <p className="text-sm text-muted-foreground">No one working from home in the next 7 days</p>
+            <p className="text-sm text-muted-foreground">
+              {departmentFilter === 'all' 
+                ? 'No hybrid staff working from home in the next 7 days'
+                : `No hybrid staff from ${departmentFilter} working from home`
+              }
+            </p>
           </div>
         ) : (
           <div className="space-y-2 max-h-[500px] overflow-y-auto">
@@ -195,10 +267,11 @@ export function WfhStaffWidget() {
             })}
           </div>
         )}
-        {wfhMembers.length > 0 && (
+        {filteredMembers.length > 0 && (
           <div className="mt-3 pt-3 border-t border-border/50 text-center">
             <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{wfhMembers.length}</span> WFH assignments in next 7 days
+              <span className="font-medium text-foreground">{filteredMembers.length}</span> WFH days scheduled
+              {departmentFilter !== 'all' && ` for ${departmentFilter}`}
             </p>
           </div>
         )}
