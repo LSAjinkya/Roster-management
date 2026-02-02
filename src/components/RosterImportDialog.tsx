@@ -512,7 +512,7 @@ export function RosterImportDialog({ onImportComplete }: RosterImportDialogProps
                 </div>
               </div>
 
-              <ScrollArea className="flex-1 border rounded-lg max-h-[300px] min-h-[150px]">
+              <ScrollArea className="border rounded-lg h-[300px]">
                 <div className="p-4 space-y-2">
                   {parsedData.map(member => (
                     <div
