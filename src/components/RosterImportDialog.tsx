@@ -309,15 +309,31 @@ export function RosterImportDialog({ onImportComplete, year = 2026, month = 1 }:
         }).eq('id', memberId);
       }
       
-      // Delete existing assignments for this month
-      const startDate = format(new Date(year, month - 1, 1), 'yyyy-MM-dd');
-      const endDate = format(new Date(year, month - 1, getDaysInMonth(new Date(year, month - 1))), 'yyyy-MM-dd');
+      // Delete existing assignments for all dates found in the CSV (covers correct months)
+      const allDates = new Set<string>();
+      membersToImport.forEach(m => {
+        Object.keys(m.shifts).forEach(date => allDates.add(date));
+      });
       
-      await supabase
-        .from('shift_assignments')
-        .delete()
-        .gte('date', startDate)
-        .lte('date', endDate);
+      if (allDates.size > 0) {
+        const sortedDates = Array.from(allDates).sort();
+        const startDate = sortedDates[0];
+        const endDate = sortedDates[sortedDates.length - 1];
+        
+        console.log(`Deleting existing assignments from ${startDate} to ${endDate}`);
+        
+        const { error: deleteError, count: deleteCount } = await supabase
+          .from('shift_assignments')
+          .delete()
+          .gte('date', startDate)
+          .lte('date', endDate);
+        
+        if (deleteError) {
+          console.error('Error deleting existing assignments:', deleteError);
+        } else {
+          console.log(`Deleted ${deleteCount} existing assignments`);
+        }
+      }
       
       // Insert shift assignments
       const assignments: any[] = [];
