@@ -400,8 +400,8 @@ export function BiWeeklyRosterView({ assignments, teamMembers, onShiftChange, on
                                         shift === 'comp-off' ? 'CO' :
                                         shift === 'week-off' ? 'OFF' :
                                         shift === 'public-off' ? 'PO' :
-                                        shift === 'paid-leave' ? 'PL' : 'OFF'
-                                      ) : 'OFF'}
+                                        shift === 'paid-leave' ? 'PL' : '-'
+                                      ) : '-'}
                                     </span>
                                     {isWorkShift && canEditShifts && (
                                       <ArrowLeftRight size={10} className="mt-0.5 opacity-50" />
