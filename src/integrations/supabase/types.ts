@@ -813,6 +813,7 @@ export type Database = {
           email: string
           hybrid_office_days: number | null
           hybrid_wfh_days: number | null
+          hybrid_wfh_days_pattern: number[] | null
           id: string
           is_hybrid: boolean | null
           name: string
@@ -831,6 +832,7 @@ export type Database = {
           email: string
           hybrid_office_days?: number | null
           hybrid_wfh_days?: number | null
+          hybrid_wfh_days_pattern?: number[] | null
           id: string
           is_hybrid?: boolean | null
           name: string
@@ -849,6 +851,7 @@ export type Database = {
           email?: string
           hybrid_office_days?: number | null
           hybrid_wfh_days?: number | null
+          hybrid_wfh_days_pattern?: number[] | null
           id?: string
           is_hybrid?: boolean | null
           name?: string

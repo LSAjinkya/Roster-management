@@ -78,6 +78,7 @@ export interface HybridWorkSettings {
   isHybrid: boolean;
   officeDays: number;
   wfhDays: number;
+  wfhDaysPattern?: number[]; // Array of weekday numbers (0=Sunday to 6=Saturday)
 }
 
 export interface TeamMember {
@@ -100,6 +101,7 @@ export interface TeamMember {
   isHybrid?: boolean;
   hybridOfficeDays?: number; // e.g., 3 days in office
   hybridWfhDays?: number; // e.g., 2 days WFH
+  hybridWfhDaysPattern?: number[]; // Specific weekdays for WFH (0=Sun to 6=Sat)
 }
 
 export interface ShiftAssignment {
