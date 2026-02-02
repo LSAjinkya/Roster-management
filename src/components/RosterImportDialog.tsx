@@ -279,17 +279,25 @@ export function RosterImportDialog({ onImportComplete }: RosterImportDialogProps
       if (createMissingUsers) {
         const newMembers = membersToImport.filter(m => !m.existsInDb);
         
+        console.log(`Creating ${newMembers.length} new team members...`);
+        
         for (const member of newMembers) {
           const locationCode = getLocationCode(member.location);
           const locationId = locationCode ? locationMap.get(locationCode) : null;
           
-          const memberId = member.email.split('@')[0].replace(/\./g, '-');
+          // Generate a unique ID from email - use crypto for uniqueness
+          const emailPrefix = member.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+          const uniqueSuffix = crypto.randomUUID().slice(0, 8);
+          const memberId = `${emailPrefix}-${uniqueSuffix}`;
+          
           // Use the name parsed from CSV
           const name = member.name || member.email.split('@')[0].split('.').map(
             p => p.charAt(0).toUpperCase() + p.slice(1)
           ).join(' ');
           
-          const { error } = await supabase.from('team_members').insert({
+          console.log(`Creating member: ${member.email} with ID: ${memberId}`);
+          
+          const { data: insertedMember, error } = await supabase.from('team_members').insert({
             id: memberId,
             email: member.email,
             name,
@@ -298,12 +306,19 @@ export function RosterImportDialog({ onImportComplete }: RosterImportDialogProps
             team: member.team?.trim() || null,
             work_location_id: locationId,
             status: 'available',
-          });
+          }).select('id').single();
           
-          if (error && !error.message.includes('duplicate')) {
-            console.error('Error creating member:', error);
-          } else {
-            member.memberId = memberId;
+          if (error) {
+            // Check if it's a duplicate - member might already exist
+            if (error.message.includes('duplicate') || error.code === '23505') {
+              console.log(`Member ${member.email} already exists, will use existing record`);
+            } else {
+              console.error('Error creating member:', error);
+              toast.error(`Failed to create ${member.name}: ${error.message}`);
+            }
+          } else if (insertedMember) {
+            console.log(`Successfully created member: ${member.email} with ID: ${insertedMember.id}`);
+            member.memberId = insertedMember.id;
             member.existsInDb = true;
           }
         }
