@@ -1,13 +1,14 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Upload, FileSpreadsheet, Check, AlertCircle, Loader2, UserPlus } from 'lucide-react';
+import { Upload, FileSpreadsheet, Check, AlertCircle, Loader2, UserPlus, Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
-import { format, parse, getDaysInMonth } from 'date-fns';
+import { format, parse as dateParse } from 'date-fns';
 
 interface ImportedMember {
   email: string;
@@ -24,8 +25,6 @@ interface ImportedMember {
 
 interface RosterImportDialogProps {
   onImportComplete: () => void;
-  year?: number;
-  month?: number;
 }
 
 const SHIFT_MAP: Record<string, string> = {
@@ -79,14 +78,34 @@ const DEPARTMENT_MAP: Record<string, string> = {
   'r&d': 'Development',
 };
 
-export function RosterImportDialog({ onImportComplete, year = 2026, month = 1 }: RosterImportDialogProps) {
+export function RosterImportDialog({ onImportComplete }: RosterImportDialogProps) {
   const [open, setOpen] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
   const [parsedData, setParsedData] = useState<ImportedMember[]>([]);
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
   const [createMissingUsers, setCreateMissingUsers] = useState(true);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Calculate date range from parsed data
+  const dateRange = useMemo(() => {
+    const allDates = new Set<string>();
+    parsedData
+      .filter(m => selectedMembers.has(m.email))
+      .forEach(m => {
+        Object.keys(m.shifts).forEach(date => allDates.add(date));
+      });
+    
+    if (allDates.size === 0) return null;
+    
+    const sortedDates = Array.from(allDates).sort();
+    return {
+      start: sortedDates[0],
+      end: sortedDates[sortedDates.length - 1],
+      totalShifts: Array.from(allDates).length,
+    };
+  }, [parsedData, selectedMembers]);
 
   const parseCSV = (content: string): string[][] => {
     const lines = content.split('\n').filter(line => line.trim());
@@ -185,9 +204,13 @@ export function RosterImportDialog({ onImportComplete, year = 2026, month = 1 }:
         dayColumns.forEach(({ idx, day, month: csvMonth }) => {
           const shift = row[idx]?.toUpperCase()?.trim();
           if (shift && SHIFT_MAP[shift]) {
-            // Use the month from CSV header if available, otherwise use the prop month
-            const effectiveMonth = csvMonth || month;
-            const dateStr = format(new Date(year, effectiveMonth - 1, day), 'yyyy-MM-dd');
+            // Determine the year from the CSV context (use current year, or next year if month is in the past)
+            const currentDate = new Date();
+            const currentYear = currentDate.getFullYear();
+            const currentMonth = currentDate.getMonth() + 1;
+            // If CSV month is less than current month, assume next year
+            const effectiveYear = csvMonth < currentMonth ? currentYear + 1 : currentYear;
+            const dateStr = format(new Date(effectiveYear, csvMonth - 1, day), 'yyyy-MM-dd');
             shifts[dateStr] = SHIFT_MAP[shift];
           }
         });
@@ -508,12 +531,25 @@ export function RosterImportDialog({ onImportComplete, year = 2026, month = 1 }:
                 </div>
               </ScrollArea>
 
+              {/* Date Range Info */}
+              {dateRange && (
+                <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border">
+                  <Calendar size={16} className="text-primary" />
+                  <div className="text-sm">
+                    <span className="font-medium">Date Range: </span>
+                    <span className="text-muted-foreground">
+                      {format(new Date(dateRange.start), 'MMM d, yyyy')} - {format(new Date(dateRange.end), 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between pt-4 border-t">
                 <p className="text-sm text-muted-foreground">
                   {selectedMembers.size} of {parsedData.length} members selected
                 </p>
                 <Button 
-                  onClick={handleImport} 
+                  onClick={() => setShowConfirmDialog(true)} 
                   disabled={importing || selectedMembers.size === 0}
                   className="gap-2"
                 >
@@ -529,6 +565,62 @@ export function RosterImportDialog({ onImportComplete, year = 2026, month = 1 }:
           )}
         </div>
       </DialogContent>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertCircle size={20} className="text-amber-500" />
+              Confirm Roster Import
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>This will replace all existing shift assignments within the following date range:</p>
+                
+                {dateRange && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                    <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                      <Calendar size={16} />
+                      <span className="font-medium">
+                        {format(new Date(dateRange.start), 'MMMM d, yyyy')} – {format(new Date(dateRange.end), 'MMMM d, yyyy')}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="text-sm space-y-1">
+                  <p>• <strong>{selectedMembers.size}</strong> members will be imported</p>
+                  <p>• All existing assignments in this range will be deleted</p>
+                  <p>• New shifts from CSV will be created</p>
+                </div>
+                
+                <p className="text-destructive font-medium">This action cannot be undone.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={importing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                setShowConfirmDialog(false);
+                handleImport();
+              }}
+              disabled={importing}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {importing ? (
+                <>
+                  <Loader2 size={16} className="animate-spin mr-2" />
+                  Importing...
+                </>
+              ) : (
+                'Confirm Import'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
