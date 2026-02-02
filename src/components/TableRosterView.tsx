@@ -140,8 +140,9 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
   }, [teamMembers, tlFilter]);
 
   // Filter members by department, team, TL, shift and location
+  // Exclude unavailable members (left company)
   const filteredMembers = useMemo(() => {
-    let members = teamMembers;
+    let members = teamMembers.filter(m => m.status !== 'unavailable');
     if (departmentFilter !== 'all') {
       members = members.filter(m => m.department === departmentFilter);
     }
@@ -158,19 +159,18 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
         members = members.filter(m => m.workLocationId === locationFilter);
       }
     }
-    // Filter by shift: only show members who have the selected shift type in the current month
+    // Filter by shift: show members who have the selected shift type TODAY
     if (shiftFilter !== 'all') {
-      const monthStartStr = format(monthStart, 'yyyy-MM-dd');
-      const monthEndStr = format(monthEnd, 'yyyy-MM-dd');
-      const memberIdsWithShift = new Set(
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const memberIdsWithShiftToday = new Set(
         assignments
-          .filter(a => a.date >= monthStartStr && a.date <= monthEndStr && a.shiftType === shiftFilter)
+          .filter(a => a.date === todayStr && a.shiftType === shiftFilter)
           .map(a => a.memberId)
       );
-      members = members.filter(m => memberIdsWithShift.has(m.id));
+      members = members.filter(m => memberIdsWithShiftToday.has(m.id));
     }
     return members;
-  }, [teamMembers, departmentFilter, teamFilter, tlFilter, locationFilter, shiftFilter, assignments, monthStart, monthEnd]);
+  }, [teamMembers, departmentFilter, teamFilter, tlFilter, locationFilter, shiftFilter, assignments]);
 
   // Calculate single-person night shift WFH situations
   const singlePersonNightWfh = useMemo(() => {

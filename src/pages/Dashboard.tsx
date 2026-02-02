@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { StatCard } from '@/components/StatCard';
-import { ShiftBadge } from '@/components/ShiftBadge';
 import { WhosOutToday } from '@/components/WhosOutToday';
 import { MyUpcomingShifts } from '@/components/MyUpcomingShifts';
 import { LeaveSummaryWidget } from '@/components/LeaveSummaryWidget';
@@ -10,7 +9,8 @@ import { LowLeaveBalanceAlert } from '@/components/LowLeaveBalanceAlert';
 import { RolePermissionBadge } from '@/components/PermissionIndicator';
 import { SwapRequestsManager } from '@/components/SwapRequestsManager';
 import { WfhStaffWidget } from '@/components/WfhStaffWidget';
-import { SHIFT_DEFINITIONS, TeamMember, Department, Role } from '@/types/roster';
+import { TodaysShiftFilter } from '@/components/TodaysShiftFilter';
+import { TeamMember, Department, Role } from '@/types/roster';
 import { Users, Calendar, Building2, TrendingUp, ArrowRightLeft, Plus, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -132,15 +132,11 @@ export default function Dashboard() {
     };
   }, [queryClient, todayStr]);
 
-  const teamMembers = teamMembersData || [];
+  // Exclude unavailable members (left company) from counts
+  const activeMembers = (teamMembersData || []).filter(m => m.status !== 'unavailable');
   const departments = departmentsData || [];
-  const availableMembers = teamMembers.filter(m => m.status === 'available');
-  const onLeaveMembers = teamMembers.filter(m => m.status === 'on-leave');
-  
-  const shiftCounts = SHIFT_DEFINITIONS.reduce((acc, shift) => {
-    acc[shift.id] = todayAssignments.filter(a => a.shift_type === shift.id).length;
-    return acc;
-  }, {} as Record<string, number>);
+  const availableMembers = activeMembers.filter(m => m.status === 'available');
+  const onLeaveMembers = activeMembers.filter(m => m.status === 'on-leave');
 
   const isLoading = membersLoading || deptsLoading || shiftsLoading;
 
@@ -175,7 +171,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard
                 title="Total Team"
-                value={teamMembers.length}
+                value={activeMembers.length}
                 subtitle="Active members"
                 icon={Users}
                 iconColor="text-primary"
@@ -241,25 +237,17 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Today's Shift Overview */}
+              {/* Today's Shift Overview - Click to filter */}
               <div className="lg:col-span-2 bg-card rounded-xl border border-border/50 overflow-hidden">
                 <div className="p-4 border-b border-border/50">
                   <h2 className="font-semibold text-lg">Today's Shift Overview</h2>
-                  <p className="text-sm text-muted-foreground">Current shift distribution</p>
+                  <p className="text-sm text-muted-foreground">Click a shift to see who's working • Current shift distribution</p>
                 </div>
                 <div className="p-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {SHIFT_DEFINITIONS.map(shift => (
-                      <div 
-                        key={shift.id} 
-                        className={`p-4 rounded-xl border-2 ${shift.color} transition-all hover:scale-[1.02]`}
-                      >
-                        <ShiftBadge type={shift.id} size="sm" />
-                        <p className="text-3xl font-bold mt-3">{shiftCounts[shift.id]}</p>
-                        <p className="text-sm opacity-75 mt-1">{shift.startTime} - {shift.endTime}</p>
-                      </div>
-                    ))}
-                  </div>
+                  <TodaysShiftFilter 
+                    todayAssignments={todayAssignments}
+                    teamMembers={activeMembers}
+                  />
                 </div>
               </div>
 
@@ -290,9 +278,9 @@ export default function Dashboard() {
                 <div className="p-4">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {departments.map(dept => {
-                      const count = teamMembers.filter(m => m.department === dept.name).length;
-                      const percentage = teamMembers.length > 0 
-                        ? Math.round((count / teamMembers.length) * 100) 
+                      const count = activeMembers.filter(m => m.department === dept.name).length;
+                      const percentage = activeMembers.length > 0 
+                        ? Math.round((count / activeMembers.length) * 100) 
                         : 0;
                       
                       return (
