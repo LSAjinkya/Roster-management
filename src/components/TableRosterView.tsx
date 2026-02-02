@@ -527,11 +527,8 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
                                 {shiftLetters[shift]}
                               </span>
                             ) : (
-                              <span className={cn(
-                                "inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-medium",
-                                shiftCellColors.off
-                              )}>
-                                OFF
+                              <span className="inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-medium text-muted-foreground">
+                                -
                               </span>
                             )}
                           </td>
@@ -628,11 +625,8 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
                                       )}
                                     </span>
                                   ) : (
-                                    <span className={cn(
-                                      "inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-medium",
-                                      shiftCellColors.off
-                                    )}>
-                                      OFF
+                                    <span className="inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-medium text-muted-foreground">
+                                      -
                                     </span>
                                   )}
                                 </td>
