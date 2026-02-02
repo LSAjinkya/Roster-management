@@ -16,7 +16,7 @@ export function DailyRosterView({ date, assignments, teamMembers }: DailyRosterV
     const shiftAssignments = dayAssignments.filter(a => a.shiftType === shiftType);
     return shiftAssignments
       .map(a => teamMembers.find(m => m.id === a.memberId))
-      .filter((m): m is TeamMember => m !== undefined);
+      .filter((m): m is TeamMember => m !== undefined && m.status !== 'unavailable');
   };
 
   const isToday = format(new Date(), 'yyyy-MM-dd') === dateStr;

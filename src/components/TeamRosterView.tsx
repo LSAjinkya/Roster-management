@@ -90,7 +90,7 @@ export function TeamRosterView({ assignments, teamMembers }: TeamRosterViewProps
     return assignment?.shiftType || null;
   };
 
-  // Group members by team
+  // Group active members by team (exclude unavailable/left company)
   const membersByTeam = useMemo(() => {
     const groups: Record<TeamGroup | 'Unassigned', TeamMember[]> = {
       'Alpha': [],
@@ -99,21 +99,28 @@ export function TeamRosterView({ assignments, teamMembers }: TeamRosterViewProps
       'Unassigned': [],
     };
 
-    teamMembers.forEach(member => {
-      const team = member.team || 'Unassigned';
-      if (team in groups) {
-        groups[team as TeamGroup | 'Unassigned'].push(member);
-      } else {
-        groups['Unassigned'].push(member);
-      }
-    });
+    teamMembers
+      .filter(member => member.status !== 'unavailable')
+      .forEach(member => {
+        const team = member.team || 'Unassigned';
+        if (team in groups) {
+          groups[team as TeamGroup | 'Unassigned'].push(member);
+        } else {
+          groups['Unassigned'].push(member);
+        }
+      });
 
     return groups;
   }, [teamMembers]);
 
+  // Filter out unavailable members (left company) and apply search/team filters
+  const activeMembers = useMemo(() => {
+    return teamMembers.filter(m => m.status !== 'unavailable');
+  }, [teamMembers]);
+
   // Filter members based on search and selected team
   const filteredMembers = useMemo(() => {
-    let members = [...teamMembers];
+    let members = [...activeMembers];
 
     if (selectedTeam !== 'all') {
       members = members.filter(m => m.team === selectedTeam);
@@ -130,7 +137,7 @@ export function TeamRosterView({ assignments, teamMembers }: TeamRosterViewProps
     }
 
     return members;
-  }, [teamMembers, selectedTeam, searchQuery]);
+  }, [activeMembers, selectedTeam, searchQuery]);
 
   // Calculate team stats
   const teamStats = useMemo(() => {
@@ -221,7 +228,7 @@ export function TeamRosterView({ assignments, teamMembers }: TeamRosterViewProps
 
       {/* Members Count */}
       <p className="text-center text-sm text-muted-foreground">
-        Showing {filteredMembers.length} of {teamMembers.length} team members
+        Showing {filteredMembers.length} of {activeMembers.length} active team members
       </p>
 
       {/* Team Member Cards Grid */}
@@ -254,9 +261,8 @@ export function TeamRosterView({ assignments, teamMembers }: TeamRosterViewProps
                 </Avatar>
                 <div className={cn(
                   "absolute bottom-0 right-0 w-5 h-5 rounded-full border-2 border-card",
-                  member.status === 'available' ? 'bg-green-500' : 
-                  member.status === 'on-leave' ? 'bg-amber-500' : 'bg-gray-400'
-                )} />
+                  member.status === 'available' ? 'bg-green-500' : 'bg-red-500'
+                )} title={member.status === 'available' ? 'Online' : 'Offline'} />
               </div>
 
               {/* Name */}
