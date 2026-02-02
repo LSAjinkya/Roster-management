@@ -55,7 +55,7 @@ const shiftLetters: Record<ShiftType, string> = {
   afternoon: 'A',
   night: 'N',
   general: 'G',
-  leave: 'L',
+  leave: 'UL',
   'comp-off': 'CO',
   'week-off': 'OFF',
   'public-off': 'PO',
@@ -531,7 +531,7 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
                                 "inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-medium",
                                 shiftCellColors.off
                               )}>
-                                -
+                                OFF
                               </span>
                             )}
                           </td>
@@ -632,7 +632,7 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
                                       "inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-medium",
                                       shiftCellColors.off
                                     )}>
-                                      -
+                                      OFF
                                     </span>
                                   )}
                                 </td>
@@ -682,16 +682,16 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
           <span className="text-muted-foreground">General</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={cn("w-5 h-4 rounded flex items-center justify-center font-bold", shiftCellColors.leave)}>L</span>
-          <span className="text-muted-foreground">Leave</span>
+          <span className={cn("w-5 h-4 rounded flex items-center justify-center font-bold", shiftCellColors.leave)}>UL</span>
+          <span className="text-muted-foreground">Unpaid OFF</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={cn("w-5 h-4 rounded flex items-center justify-center font-bold", shiftCellColors['comp-off'])}>WO</span>
-          <span className="text-muted-foreground">Weekly Off</span>
+          <span className={cn("w-5 h-4 rounded flex items-center justify-center font-bold", shiftCellColors['week-off'])}>OFF</span>
+          <span className="text-muted-foreground">Weekly OFF</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={cn("w-5 h-4 rounded flex items-center justify-center", shiftCellColors.off)}>-</span>
-          <span className="text-muted-foreground">No Assignment</span>
+          <span className={cn("w-5 h-4 rounded flex items-center justify-center font-bold", shiftCellColors['comp-off'])}>CO</span>
+          <span className="text-muted-foreground">Comp OFF</span>
         </div>
         {canEditShifts && (
           <div className="flex items-center gap-1.5 border-l pl-4 ml-2">

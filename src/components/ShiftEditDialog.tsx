@@ -141,7 +141,8 @@ export function ShiftEditDialog({
             onValueChange={(value) => setSelectedShift(value as ShiftType | 'off')}
             className="grid grid-cols-2 gap-3"
           >
-            {SHIFT_DEFINITIONS.filter(s => !['leave', 'comp-off'].includes(s.id)).map((shift) => (
+            {/* Work Shifts */}
+            {SHIFT_DEFINITIONS.filter(s => ['morning', 'afternoon', 'night', 'general'].includes(s.id)).map((shift) => (
               <div key={shift.id}>
                 <RadioGroupItem
                   value={shift.id}
@@ -157,7 +158,9 @@ export function ShiftEditDialog({
                     shiftColors[shift.id]
                   )}
                 >
-                  <span className="text-lg font-bold">{shift.id.charAt(0).toUpperCase()}</span>
+                  <span className="text-lg font-bold">
+                    {shift.id === 'morning' ? 'M' : shift.id === 'afternoon' ? 'A' : shift.id === 'night' ? 'N' : 'G'}
+                  </span>
                   <span className="text-sm font-medium">{shift.name}</span>
                   {shift.startTime && (
                     <span className="text-xs text-muted-foreground mt-1">
@@ -168,26 +171,7 @@ export function ShiftEditDialog({
               </div>
             ))}
             
-            <div>
-              <RadioGroupItem
-                value="leave"
-                id="leave"
-                className="peer sr-only"
-              />
-              <Label
-                htmlFor="leave"
-                className={cn(
-                  "flex flex-col items-center justify-center rounded-lg border-2 border-muted p-4 cursor-pointer transition-all",
-                  "hover:bg-accent hover:text-accent-foreground",
-                  "peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-2 peer-data-[state=checked]:ring-primary/20",
-                  shiftColors.leave
-                )}
-              >
-                <span className="text-lg font-bold">L</span>
-                <span className="text-sm font-medium">Leave</span>
-              </Label>
-            </div>
-
+            {/* CO - Comp OFF */}
             <div>
               <RadioGroupItem
                 value="comp-off"
@@ -203,11 +187,96 @@ export function ShiftEditDialog({
                   shiftColors['comp-off']
                 )}
               >
-                <span className="text-lg font-bold">WO</span>
-                <span className="text-sm font-medium">Weekly Off</span>
+                <span className="text-lg font-bold">CO</span>
+                <span className="text-sm font-medium">Comp OFF</span>
               </Label>
             </div>
 
+            {/* PO - Public OFF */}
+            <div>
+              <RadioGroupItem
+                value="public-off"
+                id="public-off"
+                className="peer sr-only"
+              />
+              <Label
+                htmlFor="public-off"
+                className={cn(
+                  "flex flex-col items-center justify-center rounded-lg border-2 border-muted p-4 cursor-pointer transition-all",
+                  "hover:bg-accent hover:text-accent-foreground",
+                  "peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-2 peer-data-[state=checked]:ring-primary/20",
+                  shiftColors['public-off']
+                )}
+              >
+                <span className="text-lg font-bold">PO</span>
+                <span className="text-sm font-medium">Public OFF</span>
+              </Label>
+            </div>
+
+            {/* PL - Paid OFF */}
+            <div>
+              <RadioGroupItem
+                value="paid-leave"
+                id="paid-leave"
+                className="peer sr-only"
+              />
+              <Label
+                htmlFor="paid-leave"
+                className={cn(
+                  "flex flex-col items-center justify-center rounded-lg border-2 border-muted p-4 cursor-pointer transition-all",
+                  "hover:bg-accent hover:text-accent-foreground",
+                  "peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-2 peer-data-[state=checked]:ring-primary/20",
+                  shiftColors['paid-leave']
+                )}
+              >
+                <span className="text-lg font-bold">PL</span>
+                <span className="text-sm font-medium">Paid OFF</span>
+              </Label>
+            </div>
+
+            {/* UL - Unpaid OFF (Leave) */}
+            <div>
+              <RadioGroupItem
+                value="leave"
+                id="leave"
+                className="peer sr-only"
+              />
+              <Label
+                htmlFor="leave"
+                className={cn(
+                  "flex flex-col items-center justify-center rounded-lg border-2 border-muted p-4 cursor-pointer transition-all",
+                  "hover:bg-accent hover:text-accent-foreground",
+                  "peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-2 peer-data-[state=checked]:ring-primary/20",
+                  shiftColors.leave
+                )}
+              >
+                <span className="text-lg font-bold">UL</span>
+                <span className="text-sm font-medium">Unpaid OFF</span>
+              </Label>
+            </div>
+
+            {/* OFF - Weekly OFF */}
+            <div>
+              <RadioGroupItem
+                value="week-off"
+                id="week-off"
+                className="peer sr-only"
+              />
+              <Label
+                htmlFor="week-off"
+                className={cn(
+                  "flex flex-col items-center justify-center rounded-lg border-2 border-muted p-4 cursor-pointer transition-all",
+                  "hover:bg-accent hover:text-accent-foreground",
+                  "peer-data-[state=checked]:border-primary peer-data-[state=checked]:ring-2 peer-data-[state=checked]:ring-primary/20",
+                  shiftColors['week-off']
+                )}
+              >
+                <span className="text-lg font-bold">OFF</span>
+                <span className="text-sm font-medium">Weekly OFF</span>
+              </Label>
+            </div>
+
+            {/* No Assignment */}
             <div>
               <RadioGroupItem
                 value="off"

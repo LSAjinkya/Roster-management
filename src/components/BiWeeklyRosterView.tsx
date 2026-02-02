@@ -396,12 +396,12 @@ export function BiWeeklyRosterView({ assignments, teamMembers, onShiftChange, on
                                         shift === 'afternoon' ? 'A' :
                                         shift === 'night' ? 'N' :
                                         shift === 'general' ? 'G' :
-                                        shift === 'leave' ? 'L' :
+                                        shift === 'leave' ? 'UL' :
                                         shift === 'comp-off' ? 'CO' :
                                         shift === 'week-off' ? 'OFF' :
-                                        shift === 'public-off' ? 'PH' :
-                                        shift === 'paid-leave' ? 'PL' : '-'
-                                      ) : '-'}
+                                        shift === 'public-off' ? 'PO' :
+                                        shift === 'paid-leave' ? 'PL' : 'OFF'
+                                      ) : 'OFF'}
                                     </span>
                                     {isWorkShift && canEditShifts && (
                                       <ArrowLeftRight size={10} className="mt-0.5 opacity-50" />
@@ -450,12 +450,18 @@ export function BiWeeklyRosterView({ assignments, teamMembers, onShiftChange, on
                  shift.id === 'afternoon' ? 'A' :
                  shift.id === 'night' ? 'N' :
                  shift.id === 'general' ? 'G' :
-                 shift.id === 'leave' ? 'L' :
+                 shift.id === 'leave' ? 'UL' :
                  shift.id === 'comp-off' ? 'CO' :
                  shift.id === 'week-off' ? 'OFF' :
-                 shift.id === 'public-off' ? 'PH' : 'PL'}
+                 shift.id === 'public-off' ? 'PO' : 'PL'}
               </span>
-              <span>{shift.name}</span>
+              <span>
+                {shift.id === 'leave' ? 'Unpaid OFF' :
+                 shift.id === 'comp-off' ? 'Comp OFF' :
+                 shift.id === 'week-off' ? 'Weekly OFF' :
+                 shift.id === 'public-off' ? 'Public OFF' :
+                 shift.id === 'paid-leave' ? 'Paid OFF' : shift.name}
+              </span>
             </div>
           ))}
         </div>
