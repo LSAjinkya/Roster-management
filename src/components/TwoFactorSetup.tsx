@@ -81,26 +81,37 @@ export function TwoFactorSetup() {
 
     setSaving(true);
     try {
-      // In production, verify the TOTP code against the secret
-      // For now, we'll just save the settings
-      const { error } = await supabase
-        .from('user_2fa_settings')
-        .upsert({
-          user_id: user?.id,
-          totp_enabled: true,
-          totp_secret: totpSecret,
-          email_otp_enabled: settings.email_otp_enabled,
-        }, { onConflict: 'user_id' });
+      // Server-side TOTP verification
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-totp`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            userId: user?.id,
+            totpSecret: totpSecret,
+            code: verificationCode,
+            emailOtpEnabled: settings.email_otp_enabled,
+          }),
+        }
+      );
 
-      if (error) throw error;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to verify TOTP');
+      }
 
       setSettings(prev => ({ ...prev, totp_enabled: true }));
       setTotpDialogOpen(false);
       setVerificationCode('');
       toast.success('Authenticator app enabled successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error enabling TOTP:', error);
-      toast.error('Failed to enable authenticator');
+      toast.error(error.message || 'Failed to enable authenticator. Please scan the QR code and try again.');
     } finally {
       setSaving(false);
     }

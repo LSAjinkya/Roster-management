@@ -12,6 +12,9 @@ interface OTPRequest {
   userId: string;
 }
 
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
 const generateOTP = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
@@ -45,6 +48,97 @@ const handler = async (req: Request): Promise<Response> => {
         JSON.stringify({ error: "Email and userId are required" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
+    }
+
+    // Server-side rate limiting check
+    const { data: rateLimit, error: rateLimitError } = await supabase
+      .from("otp_rate_limits")
+      .select("*")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (rateLimitError) {
+      console.error("Error checking rate limit:", rateLimitError);
+    }
+
+    // Check if user is locked out
+    if (rateLimit?.lockout_until) {
+      const lockoutUntil = new Date(rateLimit.lockout_until);
+      if (new Date() < lockoutUntil) {
+        const remainingMinutes = Math.ceil((lockoutUntil.getTime() - Date.now()) / 60000);
+        return new Response(
+          JSON.stringify({ 
+            error: `Too many attempts. Please try again in ${remainingMinutes} minutes.`,
+            lockout: true,
+            lockoutUntil: lockoutUntil.toISOString()
+          }),
+          { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      } else {
+        // Lockout expired, reset attempts
+        await supabase
+          .from("otp_rate_limits")
+          .upsert({
+            email,
+            attempts: 1,
+            lockout_until: null,
+            last_attempt: new Date().toISOString()
+          }, { onConflict: "email" });
+      }
+    } else if (rateLimit) {
+      // Check if we need to reset based on time (reset after 1 hour of no attempts)
+      const lastAttempt = new Date(rateLimit.last_attempt);
+      const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      
+      if (lastAttempt < hourAgo) {
+        // Reset attempts after 1 hour of inactivity
+        await supabase
+          .from("otp_rate_limits")
+          .upsert({
+            email,
+            attempts: 1,
+            lockout_until: null,
+            last_attempt: new Date().toISOString()
+          }, { onConflict: "email" });
+      } else if (rateLimit.attempts >= MAX_ATTEMPTS) {
+        // Lock out user
+        const lockoutUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
+        await supabase
+          .from("otp_rate_limits")
+          .upsert({
+            email,
+            attempts: rateLimit.attempts + 1,
+            lockout_until: lockoutUntil.toISOString(),
+            last_attempt: new Date().toISOString()
+          }, { onConflict: "email" });
+
+        return new Response(
+          JSON.stringify({ 
+            error: "Too many attempts. Locked out for 15 minutes.",
+            lockout: true,
+            lockoutUntil: lockoutUntil.toISOString()
+          }),
+          { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      } else {
+        // Increment attempt counter
+        await supabase
+          .from("otp_rate_limits")
+          .upsert({
+            email,
+            attempts: rateLimit.attempts + 1,
+            last_attempt: new Date().toISOString()
+          }, { onConflict: "email" });
+      }
+    } else {
+      // First attempt - create rate limit record
+      await supabase
+        .from("otp_rate_limits")
+        .insert({
+          email,
+          attempts: 1,
+          last_attempt: new Date().toISOString()
+        });
     }
 
     console.log(`Generating OTP for user: ${userId}, email: ${email}`);

@@ -399,6 +399,33 @@ export type Database = {
           },
         ]
       }
+      otp_rate_limits: {
+        Row: {
+          attempts: number
+          created_at: string
+          email: string
+          id: string
+          last_attempt: string
+          lockout_until: string | null
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          email: string
+          id?: string
+          last_attempt?: string
+          lockout_until?: string | null
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          email?: string
+          id?: string
+          last_attempt?: string
+          lockout_until?: string | null
+        }
+        Relationships: []
+      }
       pending_2fa_verification: {
         Row: {
           created_at: string
