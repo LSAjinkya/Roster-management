@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { lovable } from '@/integrations/lovable';
 import { toast } from 'sonner';
 
 type AppRole = 'admin' | 'hr' | 'tl' | 'member';
@@ -265,18 +266,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     const redirectUrl = `${window.location.origin}/`;
     
-    // Use the first allowed domain for Google's hd parameter
-    // This hints to Google to show only accounts from this domain
-    const primaryDomain = allowedDomains[0] || 'leapswitch.com';
-    
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: redirectUrl,
-        queryParams: {
-          hd: primaryDomain, // Restrict to primary domain (hint only)
-        },
-      },
+    const { error } = await lovable.auth.signInWithOAuth('google', {
+      redirect_uri: redirectUrl,
     });
 
     if (error) {
