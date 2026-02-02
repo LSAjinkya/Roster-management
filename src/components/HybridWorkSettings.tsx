@@ -7,10 +7,9 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Home, Building2, Loader2 } from 'lucide-react';
+import { Home, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -34,15 +33,27 @@ export function HybridWorkSettings({
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hybrid, setHybrid] = useState(isHybrid);
-  const [office, setOffice] = useState(officeDays);
-  const [wfh, setWfh] = useState(wfhDays);
+  const [wfhPattern, setWfhPattern] = useState<number[]>([]);
+
+  const WEEKDAYS = [
+    { value: 1, label: 'Mon' },
+    { value: 2, label: 'Tue' },
+    { value: 3, label: 'Wed' },
+    { value: 4, label: 'Thu' },
+    { value: 5, label: 'Fri' },
+  ];
+
+  const toggleWfhDay = (day: number) => {
+    setWfhPattern(prev => 
+      prev.includes(day) 
+        ? prev.filter(d => d !== day) 
+        : [...prev, day].sort((a, b) => a - b)
+    );
+  };
 
   const handleSave = async () => {
-    // Validate: office + wfh should be 5 (work days per week)
-    if (hybrid && office + wfh !== 5) {
-      toast.error('Office days + WFH days must equal 5');
-      return;
-    }
+    const wfhCount = wfhPattern.length;
+    const officeCount = 5 - wfhCount;
 
     setSaving(true);
     try {
@@ -50,8 +61,9 @@ export function HybridWorkSettings({
         .from('team_members')
         .update({
           is_hybrid: hybrid,
-          hybrid_office_days: hybrid ? office : 5,
-          hybrid_wfh_days: hybrid ? wfh : 0,
+          hybrid_office_days: hybrid ? officeCount : 5,
+          hybrid_wfh_days: hybrid ? wfhCount : 0,
+          hybrid_wfh_days_pattern: hybrid && wfhPattern.length > 0 ? wfhPattern : null,
         })
         .eq('id', memberId);
 
@@ -66,18 +78,6 @@ export function HybridWorkSettings({
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleOfficeChange = (value: number) => {
-    const newOffice = Math.max(0, Math.min(5, value));
-    setOffice(newOffice);
-    setWfh(5 - newOffice);
-  };
-
-  const handleWfhChange = (value: number) => {
-    const newWfh = Math.max(0, Math.min(5, value));
-    setWfh(newWfh);
-    setOffice(5 - newWfh);
   };
 
   return (
@@ -106,39 +106,42 @@ export function HybridWorkSettings({
 
           {hybrid && (
             <div className="space-y-4 animate-in fade-in-50">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Building2 size={14} />
-                    Office Days
-                  </Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={5}
-                    value={office}
-                    onChange={(e) => handleOfficeChange(parseInt(e.target.value) || 0)}
-                  />
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2">
+                  <Home size={14} />
+                  Select WFH Days
+                </Label>
+                <div className="flex gap-2 flex-wrap">
+                  {WEEKDAYS.map((day) => (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() => toggleWfhDay(day.value)}
+                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                        wfhPattern.includes(day.value)
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background border-border hover:bg-secondary'
+                      }`}
+                    >
+                      {day.label}
+                    </button>
+                  ))}
                 </div>
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Home size={14} />
-                    WFH Days
-                  </Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={5}
-                    value={wfh}
-                    onChange={(e) => handleWfhChange(parseInt(e.target.value) || 0)}
-                  />
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Click days to toggle WFH. Selected days will be marked as work-from-home.
+                </p>
               </div>
 
               <div className="bg-muted/50 p-3 rounded-lg text-sm">
                 <p className="text-muted-foreground">
-                  {memberName} will work <strong>{office} days from office</strong> and{' '}
-                  <strong>{wfh} days from home</strong> per week.
+                  {memberName} will work{' '}
+                  <strong>{5 - wfhPattern.length} days from office</strong> and{' '}
+                  <strong>{wfhPattern.length} days from home</strong>
+                  {wfhPattern.length > 0 && (
+                    <span>
+                      {' '}({wfhPattern.map(d => WEEKDAYS.find(w => w.value === d)?.label).join(', ')})
+                    </span>
+                  )}.
                 </p>
               </div>
             </div>

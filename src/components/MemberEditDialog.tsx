@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Home, Building2, Loader2, MapPin, Calendar } from 'lucide-react';
+import { Home, Loader2, MapPin, Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { TeamMember, WorkLocation } from '@/types/roster';
@@ -40,9 +40,16 @@ export function MemberEditDialog({
   const [saving, setSaving] = useState(false);
   const [weekOffEntitlement, setWeekOffEntitlement] = useState<1 | 2>(2);
   const [isHybrid, setIsHybrid] = useState(false);
-  const [officeDays, setOfficeDays] = useState(5);
-  const [wfhDays, setWfhDays] = useState(0);
+  const [wfhDaysPattern, setWfhDaysPattern] = useState<number[]>([]);
   const [workLocationId, setWorkLocationId] = useState<string | null>(null);
+
+  const WEEKDAYS = [
+    { value: 1, label: 'Mon' },
+    { value: 2, label: 'Tue' },
+    { value: 3, label: 'Wed' },
+    { value: 4, label: 'Thu' },
+    { value: 5, label: 'Fri' },
+  ];
 
   // Office locations only (exclude datacenters for hybrid users)
   const officeLocations = workLocations.filter(l => l.location_type === 'office' || l.location_type === 'remote');
@@ -51,32 +58,24 @@ export function MemberEditDialog({
     if (member) {
       setWeekOffEntitlement(member.weekOffEntitlement || 2);
       setIsHybrid(member.isHybrid || false);
-      setOfficeDays(member.hybridOfficeDays || 5);
-      setWfhDays(member.hybridWfhDays || 0);
+      setWfhDaysPattern(member.hybridWfhDaysPattern || []);
       setWorkLocationId(member.workLocationId || null);
     }
   }, [member]);
 
-  const handleOfficeChange = (value: number) => {
-    const newOffice = Math.max(0, Math.min(5, value));
-    setOfficeDays(newOffice);
-    setWfhDays(5 - newOffice);
-  };
-
-  const handleWfhChange = (value: number) => {
-    const newWfh = Math.max(0, Math.min(5, value));
-    setWfhDays(newWfh);
-    setOfficeDays(5 - newWfh);
+  const toggleWfhDay = (day: number) => {
+    setWfhDaysPattern(prev => 
+      prev.includes(day) 
+        ? prev.filter(d => d !== day) 
+        : [...prev, day].sort((a, b) => a - b)
+    );
   };
 
   const handleSave = async () => {
     if (!member) return;
 
-    // Validate hybrid settings
-    if (isHybrid && officeDays + wfhDays !== 5) {
-      toast.error('Office days + WFH days must equal 5');
-      return;
-    }
+    const wfhDays = wfhDaysPattern.length;
+    const officeDays = 5 - wfhDays;
 
     setSaving(true);
     try {
@@ -87,6 +86,7 @@ export function MemberEditDialog({
           is_hybrid: isHybrid,
           hybrid_office_days: isHybrid ? officeDays : 5,
           hybrid_wfh_days: isHybrid ? wfhDays : 0,
+          hybrid_wfh_days_pattern: isHybrid && wfhDaysPattern.length > 0 ? wfhDaysPattern : null,
           work_location_id: workLocationId,
         })
         .eq('id', member.id);
@@ -175,39 +175,42 @@ export function MemberEditDialog({
           {/* Hybrid Days Configuration */}
           {isHybrid && (
             <div className="space-y-4 animate-in fade-in-50 border-t pt-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Building2 size={14} />
-                    Office Days
-                  </Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={5}
-                    value={officeDays}
-                    onChange={(e) => handleOfficeChange(parseInt(e.target.value) || 0)}
-                  />
+              <div className="space-y-3">
+                <Label className="flex items-center gap-2">
+                  <Home size={14} />
+                  Select WFH Days
+                </Label>
+                <div className="flex gap-2 flex-wrap">
+                  {WEEKDAYS.map((day) => (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() => toggleWfhDay(day.value)}
+                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                        wfhDaysPattern.includes(day.value)
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background border-border hover:bg-secondary'
+                      }`}
+                    >
+                      {day.label}
+                    </button>
+                  ))}
                 </div>
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Home size={14} />
-                    WFH Days
-                  </Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={5}
-                    value={wfhDays}
-                    onChange={(e) => handleWfhChange(parseInt(e.target.value) || 0)}
-                  />
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Click days to toggle WFH. Selected days will be marked as work-from-home.
+                </p>
               </div>
 
               <div className="bg-muted/50 p-3 rounded-lg text-sm">
                 <p className="text-muted-foreground">
-                  {member.name} will work <strong>{officeDays} days from office</strong> and{' '}
-                  <strong>{wfhDays} days from home</strong> per week.
+                  {member.name} will work{' '}
+                  <strong>{5 - wfhDaysPattern.length} days from office</strong> and{' '}
+                  <strong>{wfhDaysPattern.length} days from home</strong>
+                  {wfhDaysPattern.length > 0 && (
+                    <span>
+                      {' '}({wfhDaysPattern.map(d => WEEKDAYS.find(w => w.value === d)?.label).join(', ')})
+                    </span>
+                  )}.
                 </p>
               </div>
             </div>

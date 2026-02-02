@@ -57,10 +57,10 @@ export function WfhStaffWidget() {
           .gte('date', startDate)
           .lte('date', endDate),
         
-        // Get all team members
+        // Get all team members with hybrid settings
         supabase
           .from('team_members')
-          .select('id, name, department, email, is_hybrid, hybrid_wfh_days')
+          .select('id, name, department, email, is_hybrid, hybrid_wfh_days, hybrid_wfh_days_pattern')
           .neq('status', 'unavailable'),
         
         // Get work locations with min night shift settings
@@ -146,11 +146,11 @@ export function WfhStaffWidget() {
           .forEach(a => addEntry(a.member_id, date, 'wfh_shift'));
       });
 
-      // Condition 2b: Hybrid workers based on their settings
+      // Condition 2b: Hybrid workers based on their custom day pattern or fallback to count
       teamMembers
-        .filter(m => m.is_hybrid && (m.hybrid_wfh_days || 0) > 0)
+        .filter(m => m.is_hybrid && ((m.hybrid_wfh_days_pattern && m.hybrid_wfh_days_pattern.length > 0) || (m.hybrid_wfh_days || 0) > 0))
         .forEach(member => {
-          const wfhDaysPerWeek = member.hybrid_wfh_days || 0;
+          const wfhPattern = member.hybrid_wfh_days_pattern as number[] | null;
           
           dates.forEach(dateStr => {
             const date = new Date(dateStr);
@@ -159,24 +159,25 @@ export function WfhStaffWidget() {
             // Skip weekends
             if (dayOfWeek === 0 || dayOfWeek === 6) return;
             
-            // WFH pattern based on hybrid_wfh_days:
-            // 5 days = all weekdays WFH
-            // 4 days = Mon-Thu WFH
-            // 3 days = Mon-Wed WFH
-            // 2 days = Mon-Tue WFH
-            // 1 day = Monday only WFH
             let isWfhDay = false;
             
-            if (wfhDaysPerWeek >= 5) {
-              isWfhDay = dayOfWeek >= 1 && dayOfWeek <= 5;
-            } else if (wfhDaysPerWeek === 4) {
-              isWfhDay = dayOfWeek >= 1 && dayOfWeek <= 4;
-            } else if (wfhDaysPerWeek === 3) {
-              isWfhDay = dayOfWeek >= 1 && dayOfWeek <= 3;
-            } else if (wfhDaysPerWeek === 2) {
-              isWfhDay = dayOfWeek === 1 || dayOfWeek === 2;
-            } else if (wfhDaysPerWeek === 1) {
-              isWfhDay = dayOfWeek === 1;
+            // Use custom pattern if available
+            if (wfhPattern && wfhPattern.length > 0) {
+              isWfhDay = wfhPattern.includes(dayOfWeek);
+            } else {
+              // Fallback to old count-based logic
+              const wfhDaysPerWeek = member.hybrid_wfh_days || 0;
+              if (wfhDaysPerWeek >= 5) {
+                isWfhDay = dayOfWeek >= 1 && dayOfWeek <= 5;
+              } else if (wfhDaysPerWeek === 4) {
+                isWfhDay = dayOfWeek >= 1 && dayOfWeek <= 4;
+              } else if (wfhDaysPerWeek === 3) {
+                isWfhDay = dayOfWeek >= 1 && dayOfWeek <= 3;
+              } else if (wfhDaysPerWeek === 2) {
+                isWfhDay = dayOfWeek === 1 || dayOfWeek === 2;
+              } else if (wfhDaysPerWeek === 1) {
+                isWfhDay = dayOfWeek === 1;
+              }
             }
             
             if (isWfhDay) {
