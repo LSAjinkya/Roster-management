@@ -47,7 +47,7 @@ const shiftLetters: Record<ShiftType, string> = {
   afternoon: 'A',
   night: 'N',
   general: 'G',
-  leave: 'L',
+  leave: 'UL',
   'comp-off': 'CO',
   'week-off': 'OFF',
   'public-off': 'PO',
