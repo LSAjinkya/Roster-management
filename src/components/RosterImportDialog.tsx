@@ -332,30 +332,45 @@ export function RosterImportDialog({ onImportComplete }: RosterImportDialogProps
         }).eq('id', memberId);
       }
       
-      // Delete existing assignments for all dates found in the CSV (covers correct months)
+      // Delete existing assignments ONLY for members in the CSV (preserves other team members' shifts)
+      const memberIdsToUpdate = new Set<string>();
+      membersToImport.forEach(m => {
+        const memberId = updatedMemberMap.get(m.email);
+        if (memberId) memberIdsToUpdate.add(memberId);
+      });
+      
       const allDates = new Set<string>();
       membersToImport.forEach(m => {
         Object.keys(m.shifts).forEach(date => allDates.add(date));
       });
       
-      if (allDates.size > 0) {
+      if (allDates.size > 0 && memberIdsToUpdate.size > 0) {
         const sortedDates = Array.from(allDates).sort();
         const startDate = sortedDates[0];
         const endDate = sortedDates[sortedDates.length - 1];
+        const memberIds = Array.from(memberIdsToUpdate);
         
-        console.log(`Deleting existing assignments from ${startDate} to ${endDate}`);
+        console.log(`Deleting existing assignments for ${memberIds.length} members from ${startDate} to ${endDate}`);
         
-        const { error: deleteError, count: deleteCount } = await supabase
-          .from('shift_assignments')
-          .delete()
-          .gte('date', startDate)
-          .lte('date', endDate);
-        
-        if (deleteError) {
-          console.error('Error deleting existing assignments:', deleteError);
-        } else {
-          console.log(`Deleted ${deleteCount} existing assignments`);
+        // Delete in batches since we're filtering by member IDs
+        const batchSize = 50;
+        let totalDeleted = 0;
+        for (let i = 0; i < memberIds.length; i += batchSize) {
+          const batch = memberIds.slice(i, i + batchSize);
+          const { error: deleteError, count } = await supabase
+            .from('shift_assignments')
+            .delete()
+            .gte('date', startDate)
+            .lte('date', endDate)
+            .in('member_id', batch);
+          
+          if (deleteError) {
+            console.error('Error deleting existing assignments:', deleteError);
+          } else {
+            totalDeleted += count || 0;
+          }
         }
+        console.log(`Deleted ${totalDeleted} existing assignments for imported members only`);
       }
       
       // Insert shift assignments
@@ -576,7 +591,7 @@ export function RosterImportDialog({ onImportComplete }: RosterImportDialogProps
             </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
-                <p>This will replace all existing shift assignments within the following date range:</p>
+                <p>This will update shift assignments for the members in your CSV:</p>
                 
                 {dateRange && (
                   <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
@@ -590,9 +605,9 @@ export function RosterImportDialog({ onImportComplete }: RosterImportDialogProps
                 )}
                 
                 <div className="text-sm space-y-1">
-                  <p>• <strong>{selectedMembers.size}</strong> members will be imported</p>
-                  <p>• All existing assignments in this range will be deleted</p>
-                  <p>• New shifts from CSV will be created</p>
+                  <p>• <strong>{selectedMembers.size}</strong> members from CSV will be updated</p>
+                  <p>• Only these members' shifts will be replaced</p>
+                  <p>• <strong>Other team members' shifts will NOT be affected</strong></p>
                 </div>
                 
                 <p className="text-destructive font-medium">This action cannot be undone.</p>
