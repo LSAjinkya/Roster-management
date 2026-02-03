@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,12 +37,15 @@ import {
   CalendarDays,
   Edit2,
   Save,
+  Camera,
+  Phone,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { TeamMember, WorkLocation, Role, Department, ROLES, DEPARTMENTS } from '@/types/roster';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
+import { ImageCropper } from './ImageCropper';
 
 interface LeaveBalance {
   casual_leave_total: number;
@@ -77,16 +80,24 @@ export function MemberDetailDialog({
   onUpdate,
 }: MemberDetailDialogProps) {
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance | null>(null);
   const [loadingLeaves, setLoadingLeaves] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [currentShift, setCurrentShift] = useState<string | null>(null);
+  
+  // Image cropper state
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Editable fields
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [role, setRole] = useState<Role>('L1');
   const [department, setDepartment] = useState<Department>('Infra');
   const [team, setTeam] = useState<string | null>(null);
@@ -117,6 +128,7 @@ export function MemberDetailDialog({
     if (member && open) {
       setName(member.name);
       setEmail(member.email);
+      setPhoneNumber(member.phoneNumber || '');
       setRole(member.role);
       setDepartment(member.department);
       setTeam(member.team || null);
@@ -131,6 +143,7 @@ export function MemberDetailDialog({
         : allDays;
       setOfficeDaysPattern(derivedOfficeDays);
       setWorkLocationId(member.workLocationId || null);
+      setAvatarUrl(member.avatarUrl || null);
       setEditMode(false);
       
       fetchLeaveBalance();
@@ -238,6 +251,7 @@ export function MemberDetailDialog({
         .update({
           name,
           email,
+          phone_number: phoneNumber || null,
           role,
           department,
           team,
@@ -261,6 +275,65 @@ export function MemberDetailDialog({
       toast.error('Failed to update member');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImageToCrop(reader.result as string);
+      setCropperOpen(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    if (!member) return;
+
+    setUploadingAvatar(true);
+    try {
+      const fileName = `${member.id}/avatar_${Date.now()}.jpg`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, croppedBlob, { 
+          upsert: true,
+          contentType: 'image/jpeg',
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      // Update profile with new avatar URL
+      await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('email', member.email);
+
+      setAvatarUrl(publicUrl);
+      toast.success('Avatar updated successfully');
+      onUpdate?.();
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      toast.error('Failed to upload avatar');
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -316,11 +389,34 @@ export function MemberDetailDialog({
         <div className="flex-1 overflow-y-auto">
           {/* Profile Header */}
           <div className="flex items-start gap-4 p-4 bg-muted/30 rounded-lg mb-4">
-            <Avatar className="h-16 w-16">
-              <AvatarFallback className="text-lg bg-primary/10 text-primary">
-                {getInitials(member.name)}
-              </AvatarFallback>
-            </Avatar>
+            <div className="relative group">
+              <Avatar className="h-16 w-16">
+                {avatarUrl && <AvatarImage src={avatarUrl} alt={member.name} />}
+                <AvatarFallback className="text-lg bg-primary/10 text-primary">
+                  {getInitials(member.name)}
+                </AvatarFallback>
+              </Avatar>
+              {editMode && (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  disabled={uploadingAvatar}
+                >
+                  {uploadingAvatar ? (
+                    <Loader2 size={20} className="text-white animate-spin" />
+                  ) : (
+                    <Camera size={20} className="text-white" />
+                  )}
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 {editMode ? (
@@ -700,6 +796,18 @@ export function MemberDetailDialog({
           </Tabs>
         </div>
       </DialogContent>
+
+      {/* Image Cropper Dialog */}
+      {imageToCrop && (
+        <ImageCropper
+          open={cropperOpen}
+          onOpenChange={setCropperOpen}
+          imageSrc={imageToCrop}
+          onCropComplete={handleCropComplete}
+          aspectRatio={1}
+          circularCrop={true}
+        />
+      )}
     </Dialog>
   );
 }

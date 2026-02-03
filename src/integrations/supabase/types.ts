@@ -853,6 +853,7 @@ export type Database = {
           id: string
           is_hybrid: boolean | null
           name: string
+          phone_number: string | null
           reporting_tl_id: string | null
           role: string
           status: string
@@ -872,6 +873,7 @@ export type Database = {
           id: string
           is_hybrid?: boolean | null
           name: string
+          phone_number?: string | null
           reporting_tl_id?: string | null
           role: string
           status?: string
@@ -891,6 +893,7 @@ export type Database = {
           id?: string
           is_hybrid?: boolean | null
           name?: string
+          phone_number?: string | null
           reporting_tl_id?: string | null
           role?: string
           status?: string
