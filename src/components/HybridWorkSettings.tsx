@@ -33,7 +33,7 @@ export function HybridWorkSettings({
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hybrid, setHybrid] = useState(isHybrid);
-  const [wfhPattern, setWfhPattern] = useState<number[]>([]);
+  const [officePattern, setOfficePattern] = useState<number[]>([1, 2, 3, 4, 5]); // Default all office days
 
   const WEEKDAYS = [
     { value: 1, label: 'Mon' },
@@ -43,8 +43,13 @@ export function HybridWorkSettings({
     { value: 5, label: 'Fri' },
   ];
 
-  const toggleWfhDay = (day: number) => {
-    setWfhPattern(prev => 
+  // Derive WFH days from office days
+  const wfhPattern = WEEKDAYS
+    .map(d => d.value)
+    .filter(d => !officePattern.includes(d));
+
+  const toggleOfficeDay = (day: number) => {
+    setOfficePattern(prev => 
       prev.includes(day) 
         ? prev.filter(d => d !== day) 
         : [...prev, day].sort((a, b) => a - b)
@@ -53,7 +58,7 @@ export function HybridWorkSettings({
 
   const handleSave = async () => {
     const wfhCount = wfhPattern.length;
-    const officeCount = 5 - wfhCount;
+    const officeCount = officePattern.length;
 
     setSaving(true);
     try {
@@ -109,18 +114,18 @@ export function HybridWorkSettings({
               <div className="space-y-3">
                 <Label className="flex items-center gap-2">
                   <Home size={14} />
-                  Select WFH Days
+                  Select Office Days
                 </Label>
                 <div className="flex gap-2 flex-wrap">
                   {WEEKDAYS.map((day) => (
                     <button
                       key={day.value}
                       type="button"
-                      onClick={() => toggleWfhDay(day.value)}
+                      onClick={() => toggleOfficeDay(day.value)}
                       className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                        wfhPattern.includes(day.value)
+                        officePattern.includes(day.value)
                           ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-background border-border hover:bg-secondary'
+                          : 'bg-muted text-muted-foreground border-border hover:bg-secondary'
                       }`}
                     >
                       {day.label}
@@ -128,20 +133,26 @@ export function HybridWorkSettings({
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Click days to toggle WFH. Selected days will be marked as work-from-home.
+                  Select days to work from office. Remaining days will be WFH.
                 </p>
               </div>
 
-              <div className="bg-muted/50 p-3 rounded-lg text-sm">
-                <p className="text-muted-foreground">
-                  {memberName} will work{' '}
-                  <strong>{5 - wfhPattern.length} days from office</strong> and{' '}
+              <div className="bg-muted/50 p-3 rounded-lg text-sm space-y-1">
+                <p className="text-foreground">
+                  <strong>{officePattern.length} days from office</strong>
+                  {officePattern.length > 0 && (
+                    <span className="text-muted-foreground">
+                      {' '}({officePattern.map(d => WEEKDAYS.find(w => w.value === d)?.label).join(', ')})
+                    </span>
+                  )}
+                </p>
+                <p className="text-foreground">
                   <strong>{wfhPattern.length} days from home</strong>
                   {wfhPattern.length > 0 && (
-                    <span>
+                    <span className="text-muted-foreground">
                       {' '}({wfhPattern.map(d => WEEKDAYS.find(w => w.value === d)?.label).join(', ')})
                     </span>
-                  )}.
+                  )}
                 </p>
               </div>
             </div>
