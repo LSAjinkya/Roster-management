@@ -322,7 +322,13 @@ export function BulkShiftAssignment({ teamMembers, onComplete }: BulkShiftAssign
                       selected={dateRange}
                       onSelect={setDateRange}
                       numberOfMonths={1}
-                      className="rounded-md border"
+                      className="rounded-md border pointer-events-auto"
+                      classNames={{
+                        day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                        day_range_middle: "bg-primary/20 text-primary-foreground rounded-none",
+                        day_range_start: "bg-primary text-primary-foreground rounded-l-md",
+                        day_range_end: "bg-primary text-primary-foreground rounded-r-md",
+                      }}
                     />
                   </div>
                 </TabsContent>
@@ -334,7 +340,10 @@ export function BulkShiftAssignment({ teamMembers, onComplete }: BulkShiftAssign
                       selected={individualDates}
                       onSelect={(dates) => setIndividualDates(dates || [])}
                       numberOfMonths={1}
-                      className="rounded-md border"
+                      className="rounded-md border pointer-events-auto"
+                      classNames={{
+                        day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground font-semibold",
+                      }}
                     />
                   </div>
                 </TabsContent>
