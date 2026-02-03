@@ -144,7 +144,12 @@ export default function Team() {
           </Tabs>
 
           {viewMode === 'overview' && (
-            <TeamOverview members={members} workLocations={workLocations} onMemberUpdate={fetchTeamMembers} />
+            <TeamOverview 
+              members={members} 
+              workLocations={workLocations} 
+              assignments={assignments}
+              onMemberUpdate={fetchTeamMembers} 
+            />
           )}
           {viewMode === 'team' && (
             <TeamRosterView 
