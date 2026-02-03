@@ -93,9 +93,19 @@ export function MemberDetailDialog({
   const [reportingTLId, setReportingTLId] = useState<string | null>(null);
   const [weekOffEntitlement, setWeekOffEntitlement] = useState<1 | 2>(2);
   const [isHybrid, setIsHybrid] = useState(false);
-  const [officeDays, setOfficeDays] = useState(5);
-  const [wfhDays, setWfhDays] = useState(0);
+  const [officeDaysPattern, setOfficeDaysPattern] = useState<number[]>([1, 2, 3, 4, 5]);
   const [workLocationId, setWorkLocationId] = useState<string | null>(null);
+
+  const WEEKDAYS = [
+    { value: 1, label: 'Mon' },
+    { value: 2, label: 'Tue' },
+    { value: 3, label: 'Wed' },
+    { value: 4, label: 'Thu' },
+    { value: 5, label: 'Fri' },
+  ];
+
+  // Derive WFH days from office days
+  const wfhDaysPattern = WEEKDAYS.map(d => d.value).filter(d => !officeDaysPattern.includes(d));
 
   // Office locations only (exclude datacenters for hybrid users)
   const officeLocations = workLocations.filter(l => l.location_type === 'office' || l.location_type === 'remote');
@@ -113,8 +123,13 @@ export function MemberDetailDialog({
       setReportingTLId(member.reportingTLId || null);
       setWeekOffEntitlement(member.weekOffEntitlement || 2);
       setIsHybrid(member.isHybrid || false);
-      setOfficeDays(member.hybridOfficeDays || 5);
-      setWfhDays(member.hybridWfhDays || 0);
+      // Convert WFH days to office days (inverse)
+      const wfhPattern = member.hybridWfhDaysPattern || [];
+      const allDays = [1, 2, 3, 4, 5];
+      const derivedOfficeDays = wfhPattern.length > 0 
+        ? allDays.filter(d => !wfhPattern.includes(d))
+        : allDays;
+      setOfficeDaysPattern(derivedOfficeDays);
       setWorkLocationId(member.workLocationId || null);
       setEditMode(false);
       
@@ -202,25 +217,19 @@ export function MemberDetailDialog({
     }
   };
 
-  const handleOfficeChange = (value: number) => {
-    const newOffice = Math.max(0, Math.min(5, value));
-    setOfficeDays(newOffice);
-    setWfhDays(5 - newOffice);
-  };
-
-  const handleWfhChange = (value: number) => {
-    const newWfh = Math.max(0, Math.min(5, value));
-    setWfhDays(newWfh);
-    setOfficeDays(5 - newWfh);
+  const toggleOfficeDay = (day: number) => {
+    setOfficeDaysPattern(prev => 
+      prev.includes(day) 
+        ? prev.filter(d => d !== day) 
+        : [...prev, day].sort((a, b) => a - b)
+    );
   };
 
   const handleSave = async () => {
     if (!member) return;
 
-    if (isHybrid && officeDays + wfhDays !== 5) {
-      toast.error('Office days + WFH days must equal 5');
-      return;
-    }
+    const officeDaysCount = officeDaysPattern.length;
+    const wfhDaysCount = wfhDaysPattern.length;
 
     setSaving(true);
     try {
@@ -235,8 +244,9 @@ export function MemberDetailDialog({
           reporting_tl_id: reportingTLId,
           week_off_entitlement: weekOffEntitlement,
           is_hybrid: isHybrid,
-          hybrid_office_days: isHybrid ? officeDays : 5,
-          hybrid_wfh_days: isHybrid ? wfhDays : 0,
+          hybrid_office_days: isHybrid ? officeDaysCount : 5,
+          hybrid_wfh_days: isHybrid ? wfhDaysCount : 0,
+          hybrid_wfh_days_pattern: isHybrid && wfhDaysPattern.length > 0 ? wfhDaysPattern : null,
           work_location_id: workLocationId,
         })
         .eq('id', member.id);
@@ -533,32 +543,50 @@ export function MemberDetailDialog({
               {(editMode ? isHybrid : member.isHybrid) && (
                 <div className="space-y-4 border-t pt-4">
                   {editMode ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
+                    <div className="space-y-4">
+                      <div className="space-y-3">
                         <Label className="flex items-center gap-2">
                           <Building2 size={14} />
-                          Office Days
+                          Select Office Days
                         </Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={5}
-                          value={officeDays}
-                          onChange={(e) => handleOfficeChange(parseInt(e.target.value) || 0)}
-                        />
+                        <div className="flex gap-2 flex-wrap">
+                          {WEEKDAYS.map((day) => (
+                            <button
+                              key={day.value}
+                              type="button"
+                              onClick={() => toggleOfficeDay(day.value)}
+                              className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                                officeDaysPattern.includes(day.value)
+                                  ? 'bg-primary text-primary-foreground border-primary'
+                                  : 'bg-muted text-muted-foreground border-border hover:bg-secondary'
+                              }`}
+                            >
+                              {day.label}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Select days to work from office. Remaining days will be WFH.
+                        </p>
                       </div>
-                      <div className="space-y-2">
-                        <Label className="flex items-center gap-2">
-                          <Home size={14} />
-                          WFH Days
-                        </Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          max={5}
-                          value={wfhDays}
-                          onChange={(e) => handleWfhChange(parseInt(e.target.value) || 0)}
-                        />
+
+                      <div className="bg-muted/50 p-3 rounded-lg text-sm space-y-1">
+                        <p className="text-foreground">
+                          <strong>{officeDaysPattern.length} days from office</strong>
+                          {officeDaysPattern.length > 0 && (
+                            <span className="text-muted-foreground">
+                              {' '}({officeDaysPattern.map(d => WEEKDAYS.find(w => w.value === d)?.label).join(', ')})
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-foreground">
+                          <strong>{wfhDaysPattern.length} days from home</strong>
+                          {wfhDaysPattern.length > 0 && (
+                            <span className="text-muted-foreground">
+                              {' '}({wfhDaysPattern.map(d => WEEKDAYS.find(w => w.value === d)?.label).join(', ')})
+                            </span>
+                          )}
+                        </p>
                       </div>
                     </div>
                   ) : (
@@ -566,6 +594,11 @@ export function MemberDetailDialog({
                       <p className="text-sm">
                         <strong>{member.hybridOfficeDays || 5} days</strong> from office,{' '}
                         <strong>{member.hybridWfhDays || 0} days</strong> from home
+                        {member.hybridWfhDaysPattern && member.hybridWfhDaysPattern.length > 0 && (
+                          <span className="text-muted-foreground">
+                            {' '}(WFH: {member.hybridWfhDaysPattern.map(d => WEEKDAYS.find(w => w.value === d)?.label).join(', ')})
+                          </span>
+                        )}
                       </p>
                     </div>
                   )}
