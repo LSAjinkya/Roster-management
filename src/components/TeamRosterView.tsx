@@ -2,13 +2,16 @@ import { useState, useMemo, useEffect } from 'react';
 import { ShiftAssignment, TeamMember, ShiftType, TEAM_GROUPS, TeamGroup, WorkLocation } from '@/types/roster';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Search, Mail, MapPin, Users, Settings } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Search, Mail, MapPin, Users, Settings, Phone, Circle, Building2, IdCard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { MemberDetailDialog } from './MemberDetailDialog';
+import { EmployeeIDCard } from './EmployeeIDCard';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { useAuth } from '@/hooks/useAuth';
 
 interface TeamRosterViewProps {
   assignments: ShiftAssignment[];
@@ -41,11 +44,14 @@ const TEAM_SHIFT_TODAY: Record<TeamGroup, ShiftType> = {
 };
 
 export function TeamRosterView({ assignments, teamMembers }: TeamRosterViewProps) {
+  const { isAdmin, isHR } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTeam, setSelectedTeam] = useState<TeamGroup | 'all'>('all');
   const [workLocations, setWorkLocations] = useState<WorkLocation[]>([]);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [memberDetailOpen, setMemberDetailOpen] = useState(false);
+  const [idCardDialogOpen, setIdCardDialogOpen] = useState(false);
+  const [idCardMember, setIdCardMember] = useState<TeamMember | null>(null);
   const todayStr = format(new Date(), 'yyyy-MM-dd');
 
   // Fetch work locations
@@ -82,6 +88,17 @@ export function TeamRosterView({ assignments, teamMembers }: TeamRosterViewProps
   const handleOpenMemberDetail = (member: TeamMember) => {
     setSelectedMember(member);
     setMemberDetailOpen(true);
+  };
+
+  const handleGenerateIDCard = (member: TeamMember) => {
+    setIdCardMember(member);
+    setIdCardDialogOpen(true);
+  };
+
+  const getLocationName = (locationId?: string) => {
+    if (!locationId) return 'Not Assigned';
+    const loc = workLocations.find(l => l.id === locationId);
+    return loc?.name || 'Unknown';
   };
 
   // Get today's shift for each member
@@ -236,71 +253,119 @@ export function TeamRosterView({ assignments, teamMembers }: TeamRosterViewProps
         {filteredMembers.map(member => {
           const todayShift = getMemberTodayShift(member.id);
           const shiftStyle = todayShift ? SHIFT_COLORS[todayShift] : null;
+          const location = getLocationName(member.workLocationId);
+          const isOnline = member.status === 'available';
 
           return (
-            <div 
+            <Card 
               key={member.id}
-              className="bg-card rounded-xl border border-border/50 p-6 flex flex-col items-center text-center hover:shadow-lg transition-shadow relative group"
+              className="group hover:shadow-lg transition-all duration-200 hover:border-primary/20"
             >
-              {/* Settings Button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={() => handleOpenMemberDetail(member)}
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
+              <CardContent className="p-5">
+                <div className="flex flex-col items-center text-center">
+                  {/* Avatar with Status */}
+                  <div className="relative mb-4">
+                    <Avatar className="h-20 w-20 ring-2 ring-offset-2 ring-offset-background ring-border">
+                      {member.avatarUrl && <AvatarImage src={member.avatarUrl} alt={member.name} />}
+                      <AvatarFallback className="text-xl font-semibold bg-primary/10 text-primary">
+                        {member.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div 
+                      className={cn(
+                        "absolute bottom-0 right-0 w-5 h-5 rounded-full border-2 border-card",
+                        isOnline ? 'bg-emerald-500' : 'bg-destructive'
+                      )}
+                      title={isOnline ? 'Online' : 'Offline'}
+                    />
+                  </div>
 
-              {/* Avatar with status indicator */}
-              <div className="relative mb-4">
-                <Avatar className="h-20 w-20">
-                  <AvatarFallback className="bg-primary/10 text-primary text-xl font-medium">
-                    {member.name.split(' ').map(n => n[0]).join('')}
-                  </AvatarFallback>
-                </Avatar>
-                <div className={cn(
-                  "absolute bottom-0 right-0 w-5 h-5 rounded-full border-2 border-card",
-                  member.status === 'available' ? 'bg-green-500' : 'bg-red-500'
-                )} title={member.status === 'available' ? 'Online' : 'Offline'} />
-              </div>
+                  {/* Name */}
+                  <h3 className="font-semibold text-lg text-foreground mb-1">{member.name}</h3>
 
-              {/* Name */}
-              <h3 className="font-semibold text-lg text-foreground">{member.name}</h3>
-              
-              {/* Role */}
-              <p className="text-sm text-muted-foreground mb-2">{member.role}</p>
+                  {/* Role Badge */}
+                  <Badge variant="outline" className="mb-2">
+                    {member.role}
+                  </Badge>
 
-              {/* Department Badge */}
-              <Badge variant="secondary" className="mb-3">
-                {member.department}
-              </Badge>
+                  {/* Department */}
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground mb-3">
+                    <Building2 size={14} />
+                    <span>{member.department}</span>
+                  </div>
 
-              {/* Team Badge if assigned */}
-              {member.team && (
-                <div className="flex items-center gap-1.5 mb-3">
-                  <div className={cn("w-2 h-2 rounded-full", TEAM_COLORS[member.team])} />
-                  <span className="text-xs text-muted-foreground">Team {member.team}</span>
-                  {todayShift && shiftStyle && (
-                    <Badge className={cn("ml-2 text-xs", shiftStyle.bg, shiftStyle.text)}>
-                      {todayShift.charAt(0).toUpperCase()}
-                    </Badge>
+                  {/* Status */}
+                  <div className="flex items-center gap-1.5 text-sm mb-3">
+                    <Circle size={8} className={cn("fill-current", isOnline ? 'text-emerald-500' : 'text-destructive')} />
+                    <span className={cn("font-medium", isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive')}>
+                      {isOnline ? 'Online' : 'Offline'}
+                    </span>
+                  </div>
+
+                  {/* Team Badge if assigned */}
+                  {member.team && (
+                    <div className="flex items-center gap-1.5 mb-3">
+                      <div className={cn("w-2 h-2 rounded-full", TEAM_COLORS[member.team])} />
+                      <span className="text-xs text-muted-foreground">Team {member.team}</span>
+                      {todayShift && shiftStyle && (
+                        <Badge className={cn("ml-2 text-xs", shiftStyle.bg, shiftStyle.text)}>
+                          {todayShift.charAt(0).toUpperCase()}
+                        </Badge>
+                      )}
+                    </div>
                   )}
+
+                  {/* Details Grid */}
+                  <div className="w-full space-y-2 pt-3 border-t border-border/50">
+                    {/* Email */}
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Mail size={14} className="shrink-0" />
+                      <span className="truncate" title={member.email}>{member.email}</span>
+                    </div>
+
+                    {/* Phone */}
+                    {member.phoneNumber && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Phone size={14} className="shrink-0" />
+                        <span>{member.phoneNumber}</span>
+                      </div>
+                    )}
+
+                    {/* Work Location */}
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <MapPin size={14} className="shrink-0" />
+                      <span className="truncate" title={location}>{location}</span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2 mt-4 pt-3 border-t border-border/50 w-full">
+                    {(isAdmin || isHR) && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => handleOpenMemberDetail(member)}
+                      >
+                        <Settings size={14} className="mr-1.5" />
+                        Edit
+                      </Button>
+                    )}
+                    {isAdmin && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => handleGenerateIDCard(member)}
+                      >
+                        <IdCard size={14} className="mr-1.5" />
+                        ID Card
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              )}
-
-              {/* Email */}
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                <Mail size={14} />
-                <span className="truncate max-w-[180px]">{member.email}</span>
-              </div>
-
-              {/* Location/Department Icon */}
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <MapPin size={14} />
-                <span>{member.department}</span>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
@@ -324,6 +389,17 @@ export function TeamRosterView({ assignments, teamMembers }: TeamRosterViewProps
           onOpenChange={setMemberDetailOpen}
           workLocations={workLocations}
           allMembers={teamMembers}
+        />
+      )}
+
+      {/* Employee ID Card Dialog */}
+      {idCardMember && (
+        <EmployeeIDCard
+          open={idCardDialogOpen}
+          onOpenChange={setIdCardDialogOpen}
+          member={idCardMember}
+          workLocation={workLocations.find(l => l.id === idCardMember.workLocationId)}
+          avatarUrl={idCardMember.avatarUrl}
         />
       )}
     </div>

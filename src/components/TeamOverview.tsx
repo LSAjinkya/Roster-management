@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { TeamMember, Department, Role, DEPARTMENTS, ROLES, WorkLocation, ShiftAssignment, ShiftType } from '@/types/roster';
 import { TeamMemberCard } from './TeamMemberCard';
+import { UnifiedMemberCard } from './UnifiedMemberCard';
+import { EmployeeIDCard } from './EmployeeIDCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +21,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { MemberDetailDialog } from './MemberDetailDialog';
 import { format } from 'date-fns';
+import { useAuth } from '@/hooks/useAuth';
 
 interface TeamOverviewProps {
   members: TeamMember[];
@@ -65,6 +68,8 @@ const SHIFT_FILTER_CONFIG: { type: ShiftFilter; label: string; icon: React.React
 ];
 
 export function TeamOverview({ members, workLocations = [], assignments = [], onMemberUpdate }: TeamOverviewProps) {
+  const { isAdmin, isHR, canEditShifts } = useAuth();
+  
   const [search, setSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'all'>('all');
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
@@ -75,6 +80,8 @@ export function TeamOverview({ members, workLocations = [], assignments = [], on
   const [expandedDepts, setExpandedDepts] = useState<Set<Department>>(new Set());
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+  const [idCardDialogOpen, setIdCardDialogOpen] = useState(false);
+  const [idCardMember, setIdCardMember] = useState<TeamMember | null>(null);
   
   // Get today's date for shift filtering
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -100,6 +107,11 @@ export function TeamOverview({ members, workLocations = [], assignments = [], on
   const handleOpenMemberEdit = (member: TeamMember) => {
     setSelectedMember(member);
     setEditDialogOpen(true);
+  };
+
+  const handleGenerateIDCard = (member: TeamMember) => {
+    setIdCardMember(member);
+    setIdCardDialogOpen(true);
   };
 
   const getLocationName = (locationId?: string) => {
@@ -707,18 +719,16 @@ export function TeamOverview({ members, workLocations = [], assignments = [], on
       {/* Team Grid */}
       {viewMode === 'grid' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredMembers.map((member, index) => {
-            const reportingTL = member.reportingTLId 
-              ? members.find(m => m.id === member.reportingTLId) 
-              : undefined;
+          {filteredMembers.map((member) => {
+            const location = workLocations.find(l => l.id === member.workLocationId);
             return (
-              <TeamMemberCard 
+              <UnifiedMemberCard 
                 key={member.id} 
                 member={member}
-                reportingTL={reportingTL}
-                onEdit={handleOpenMemberEdit}
-                className="animate-fade-in"
-                style={{ animationDelay: `${index * 30}ms` } as React.CSSProperties}
+                workLocation={location}
+                onEdit={(isAdmin || isHR) ? handleOpenMemberEdit : undefined}
+                onGenerateIDCard={handleGenerateIDCard}
+                isAdmin={isAdmin}
               />
             );
           })}
@@ -819,6 +829,17 @@ export function TeamOverview({ members, workLocations = [], assignments = [], on
         allMembers={members}
         onUpdate={onMemberUpdate}
       />
+
+      {/* Employee ID Card Dialog */}
+      {idCardMember && (
+        <EmployeeIDCard
+          open={idCardDialogOpen}
+          onOpenChange={setIdCardDialogOpen}
+          member={idCardMember}
+          workLocation={workLocations.find(l => l.id === idCardMember.workLocationId)}
+          avatarUrl={idCardMember.avatarUrl}
+        />
+      )}
     </div>
   );
 }

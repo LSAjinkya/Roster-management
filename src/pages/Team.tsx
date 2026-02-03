@@ -51,12 +51,22 @@ export default function Team() {
 
   const fetchTeamMembers = async () => {
     try {
+      // Fetch team members with their profile avatar URLs
       const { data, error } = await supabase
         .from('team_members')
         .select('*')
         .order('name');
 
       if (error) throw error;
+
+      // Fetch profile avatar URLs
+      const emails = (data || []).map(m => m.email);
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('email, avatar_url')
+        .in('email', emails);
+
+      const avatarMap = new Map(profiles?.map(p => [p.email, p.avatar_url]) || []);
 
       const teamMembers: TeamMember[] = (data || []).map(member => ({
         id: member.id,
@@ -72,6 +82,8 @@ export default function Team() {
         isHybrid: member.is_hybrid || false,
         hybridOfficeDays: member.hybrid_office_days || 5,
         hybridWfhDays: member.hybrid_wfh_days || 0,
+        phoneNumber: (member as any).phone_number || undefined,
+        avatarUrl: avatarMap.get(member.email) || undefined,
       }));
 
       setMembers(teamMembers);

@@ -89,6 +89,8 @@ export interface TeamMember {
   department: Department;
   team?: TeamGroup; // Alpha, Gamma, or Beta
   avatar?: string;
+  avatarUrl?: string; // URL for profile photo
+  phoneNumber?: string; // Contact number
   status: 'available' | 'on-leave' | 'unavailable';
   reportingTLId?: string; // Assigned based on department
   weekOffEntitlement?: 1 | 2; // 1 or 2 OFF days per cycle (default: 2)
