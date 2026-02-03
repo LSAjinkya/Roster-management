@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { TeamMember, Department, Role, DEPARTMENTS, ROLES, WorkLocation } from '@/types/roster';
+import { useState, useEffect } from 'react';
+import { TeamMember, Department, Role, DEPARTMENTS, ROLES, WorkLocation, ShiftAssignment, ShiftType } from '@/types/roster';
 import { TeamMemberCard } from './TeamMemberCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Users, Grid, List, LayoutGrid, Building2, ChevronDown, ChevronUp, Mail, Circle, GripVertical, MapPin, Settings } from 'lucide-react';
+import { Search, Users, Grid, List, LayoutGrid, Building2, ChevronDown, ChevronUp, Mail, Circle, GripVertical, MapPin, Settings, Sun, Sunset, Moon, Clock } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -18,10 +18,12 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { MemberDetailDialog } from './MemberDetailDialog';
+import { format } from 'date-fns';
 
 interface TeamOverviewProps {
   members: TeamMember[];
   workLocations?: WorkLocation[];
+  assignments?: ShiftAssignment[];
   onMemberUpdate?: () => void;
 }
 
@@ -53,16 +55,47 @@ const STATUS_COLORS: Record<string, string> = {
   'unavailable': 'text-red-500',
 };
 
-export function TeamOverview({ members, workLocations = [], onMemberUpdate }: TeamOverviewProps) {
+type ShiftFilter = 'morning' | 'afternoon' | 'night' | 'general' | 'all';
+
+const SHIFT_FILTER_CONFIG: { type: ShiftFilter; label: string; icon: React.ReactNode; color: string }[] = [
+  { type: 'morning', label: 'Morning', icon: <Sun size={18} />, color: 'bg-amber-500 hover:bg-amber-600' },
+  { type: 'afternoon', label: 'Afternoon', icon: <Sunset size={18} />, color: 'bg-sky-500 hover:bg-sky-600' },
+  { type: 'night', label: 'Night', icon: <Moon size={18} />, color: 'bg-violet-600 hover:bg-violet-700' },
+  { type: 'general', label: 'General', icon: <Clock size={18} />, color: 'bg-emerald-500 hover:bg-emerald-600' },
+];
+
+export function TeamOverview({ members, workLocations = [], assignments = [], onMemberUpdate }: TeamOverviewProps) {
   const [search, setSearch] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<Department | 'all'>('all');
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
   const [locationFilter, setLocationFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'roles' | 'departments' | 'locations'>('roles');
+  const [shiftFilter, setShiftFilter] = useState<ShiftFilter>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'roles' | 'departments' | 'locations'>('grid');
   const [expandedRoles, setExpandedRoles] = useState<Set<Role>>(new Set());
   const [expandedDepts, setExpandedDepts] = useState<Set<Department>>(new Set());
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
+  
+  // Get today's date for shift filtering
+  const today = format(new Date(), 'yyyy-MM-dd');
+  
+  // Get today's assignments for shift counts
+  const todayAssignments = assignments.filter(a => a.date === today);
+  
+  // Count members per shift for today
+  const shiftCounts: Record<ShiftFilter, number> = {
+    morning: todayAssignments.filter(a => a.shiftType === 'morning').length,
+    afternoon: todayAssignments.filter(a => a.shiftType === 'afternoon').length,
+    night: todayAssignments.filter(a => a.shiftType === 'night').length,
+    general: todayAssignments.filter(a => a.shiftType === 'general').length,
+    all: members.filter(m => m.status !== 'unavailable').length,
+  };
+  
+  // Get member IDs for today's shift filter
+  const getMemberIdsForShift = (shift: ShiftFilter): Set<string> => {
+    if (shift === 'all') return new Set(members.map(m => m.id));
+    return new Set(todayAssignments.filter(a => a.shiftType === shift).map(a => a.memberId));
+  };
 
   const handleOpenMemberEdit = (member: TeamMember) => {
     setSelectedMember(member);
@@ -98,7 +131,12 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
     const matchesRole = roleFilter === 'all' || member.role === roleFilter;
     const matchesLocation = locationFilter === 'all' || 
                            (locationFilter === 'unassigned' ? !member.workLocationId : member.workLocationId === locationFilter);
-    return matchesSearch && matchesDepartment && matchesRole && matchesLocation;
+    
+    // Shift filter - check if member is in today's shift
+    const memberIdsForShift = getMemberIdsForShift(shiftFilter);
+    const matchesShift = shiftFilter === 'all' || memberIdsForShift.has(member.id);
+    
+    return matchesSearch && matchesDepartment && matchesRole && matchesLocation && matchesShift;
   });
 
   const departmentCounts = DEPARTMENTS.reduce((acc, dept) => {
@@ -199,25 +237,84 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-        {DEPARTMENTS.map(dept => (
-          <div 
-            key={dept} 
-            className={`bg-card p-3 rounded-lg border cursor-pointer transition-all ${
-              departmentFilter === dept 
-                ? 'border-primary bg-primary/5' 
-                : 'border-border/50 hover:border-primary/30'
-            }`}
-            onClick={() => setDepartmentFilter(departmentFilter === dept ? 'all' : dept)}
-          >
-            <p className="text-xs text-muted-foreground truncate">{dept}</p>
-            <p className="text-xl font-bold mt-1">{departmentCounts[dept]}</p>
-          </div>
-        ))}
+      {/* Department Filter Dropdown */}
+      <div className="flex items-center gap-3">
+        <Select value={departmentFilter} onValueChange={(v) => setDepartmentFilter(v as Department | 'all')}>
+          <SelectTrigger className="w-[200px] bg-card">
+            <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
+            <SelectValue placeholder="All Departments" />
+          </SelectTrigger>
+          <SelectContent className="bg-popover">
+            <SelectItem value="all">All Departments</SelectItem>
+            {DEPARTMENTS.map(dept => (
+              <SelectItem key={dept} value={dept}>
+                {dept} ({departmentCounts[dept]})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {departmentFilter !== 'all' && (
+          <Badge variant="secondary" className="gap-1">
+            {departmentFilter}
+            <button 
+              onClick={() => setDepartmentFilter('all')}
+              className="ml-1 hover:text-destructive"
+            >
+              ×
+            </button>
+          </Badge>
+        )}
       </div>
 
-      {/* Filters */}
+      {/* Shift Filter Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {SHIFT_FILTER_CONFIG.map(shift => {
+          const isActive = shiftFilter === shift.type;
+          const count = shiftCounts[shift.type];
+          
+          return (
+            <div
+              key={shift.type}
+              onClick={() => setShiftFilter(isActive ? 'all' : shift.type)}
+              className={`relative p-4 rounded-xl cursor-pointer transition-all duration-200 ${
+                isActive 
+                  ? `${shift.color} text-white shadow-lg scale-[1.02]` 
+                  : 'bg-card border border-border/50 hover:border-primary/30 hover:shadow-md'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`p-2 rounded-lg ${isActive ? 'bg-white/20' : 'bg-muted'}`}>
+                    {shift.icon}
+                  </div>
+                  <span className="font-semibold">{shift.label}</span>
+                </div>
+                <Badge 
+                  variant={isActive ? 'secondary' : 'outline'} 
+                  className={isActive ? 'bg-white/20 text-white border-white/30' : ''}
+                >
+                  {shift.label} Shift
+                </Badge>
+              </div>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-2xl font-bold">{count}</span>
+                <span className={`text-sm ${isActive ? 'text-white/80' : 'text-muted-foreground'}`}>
+                  members
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* Active filter summary */}
+      <p className="text-center text-sm text-muted-foreground">
+        Showing {filteredMembers.length} of {members.filter(m => m.status !== 'unavailable').length} active team members
+        {shiftFilter !== 'all' && ` in ${shiftFilter} shift`}
+        {departmentFilter !== 'all' && ` from ${departmentFilter}`}
+      </p>
+
+      {/* Search and View Filters */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between bg-card p-4 rounded-xl border border-border/50">
         <div className="flex items-center gap-3 flex-1 w-full md:w-auto">
           <div className="relative flex-1 max-w-md">
@@ -229,19 +326,8 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
               className="pl-10"
             />
           </div>
-          <Select value={departmentFilter} onValueChange={(v) => setDepartmentFilter(v as Department | 'all')}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Department" />
-            </SelectTrigger>
-            <SelectContent className="bg-popover">
-              <SelectItem value="all">All Departments</SelectItem>
-              {DEPARTMENTS.map(dept => (
-                <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as Role | 'all')}>
-            <SelectTrigger className="w-[120px]">
+            <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Role" />
             </SelectTrigger>
             <SelectContent className="bg-popover">
@@ -267,9 +353,6 @@ export function TeamOverview({ members, workLocations = [], onMemberUpdate }: Te
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">
-            {filteredMembers.length} of {members.length} members
-          </span>
           <div className="flex items-center border rounded-lg p-1 bg-secondary">
             <Button
               variant={viewMode === 'roles' ? 'default' : 'ghost'}
