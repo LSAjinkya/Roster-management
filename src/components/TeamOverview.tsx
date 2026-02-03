@@ -267,7 +267,32 @@ export function TeamOverview({ members, workLocations = [], assignments = [], on
       </div>
 
       {/* Shift Filter Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {/* All Shifts Button */}
+        <div
+          onClick={() => setShiftFilter('all')}
+          className={`relative p-4 rounded-xl cursor-pointer transition-all duration-200 ${
+            shiftFilter === 'all' 
+              ? 'bg-primary text-primary-foreground shadow-lg scale-[1.02]' 
+              : 'bg-card border border-border/50 hover:border-primary/30 hover:shadow-md'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className={`p-2 rounded-lg ${shiftFilter === 'all' ? 'bg-white/20' : 'bg-muted'}`}>
+                <Users size={18} />
+              </div>
+              <span className="font-semibold">All Shifts</span>
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-2xl font-bold">{shiftCounts.all}</span>
+            <span className={`text-sm ${shiftFilter === 'all' ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+              members
+            </span>
+          </div>
+        </div>
+        
         {SHIFT_FILTER_CONFIG.map(shift => {
           const isActive = shiftFilter === shift.type;
           const count = shiftCounts[shift.type];
@@ -289,12 +314,6 @@ export function TeamOverview({ members, workLocations = [], assignments = [], on
                   </div>
                   <span className="font-semibold">{shift.label}</span>
                 </div>
-                <Badge 
-                  variant={isActive ? 'secondary' : 'outline'} 
-                  className={isActive ? 'bg-white/20 text-white border-white/30' : ''}
-                >
-                  {shift.label} Shift
-                </Badge>
               </div>
               <div className="mt-3 flex items-baseline gap-2">
                 <span className="text-2xl font-bold">{count}</span>
