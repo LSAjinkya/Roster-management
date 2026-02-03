@@ -4,7 +4,19 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { UserCheck, Settings, Building2 } from 'lucide-react';
+import { UserCheck, Settings, Building2, Home, Briefcase } from 'lucide-react';
+
+// Helper to get weekday abbreviation
+const WEEKDAY_LABELS: Record<number, string> = { 1: 'M', 2: 'T', 3: 'W', 4: 'Th', 5: 'F' };
+
+function getHybridLabel(member: TeamMember): string | null {
+  if (!member.isHybrid) return null;
+  const wfhPattern = member.hybridWfhDaysPattern || [];
+  if (wfhPattern.length === 0) return null;
+  const officeDays = 5 - wfhPattern.length;
+  const wfhDays = wfhPattern.length;
+  return `${officeDays}O/${wfhDays}H`;
+}
 
 interface TeamMemberCardProps {
   member: TeamMember;
@@ -31,6 +43,7 @@ export function TeamMemberCard({ member, compact = false, className, style, repo
   };
 
   if (compact) {
+    const hybridLabel = getHybridLabel(member);
     return (
       <div style={style} className={cn('flex items-center gap-2 p-2 rounded-lg hover:bg-secondary/50 transition-colors', className)}>
         <div className="relative">
@@ -52,6 +65,12 @@ export function TeamMemberCard({ member, compact = false, className, style, repo
                 {member.datacenterCode}
               </Badge>
             )}
+            {hybridLabel && (
+              <Badge variant="outline" className="h-4 px-1 text-[9px] font-medium border-amber-500/50 bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+                <Home className="h-2.5 w-2.5 mr-0.5" />
+                {hybridLabel}
+              </Badge>
+            )}
             <p className="text-sm font-medium truncate">{member.name}</p>
           </div>
           <p className="text-xs text-muted-foreground truncate">{member.department}</p>
@@ -70,6 +89,8 @@ export function TeamMemberCard({ member, compact = false, className, style, repo
       </div>
     );
   }
+
+  const hybridLabel = getHybridLabel(member);
 
   return (
     <div 
@@ -92,11 +113,17 @@ export function TeamMemberCard({ member, compact = false, className, style, repo
           )} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             {member.datacenterCode && (
               <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
                 <Building2 className="h-3 w-3 mr-0.5" />
                 {member.datacenterCode}
+              </Badge>
+            )}
+            {hybridLabel && (
+              <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-medium border-amber-500/50 bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+                <Home className="h-3 w-3 mr-0.5" />
+                {hybridLabel}
               </Badge>
             )}
             <p className="font-semibold truncate">{member.name}</p>
