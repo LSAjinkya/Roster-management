@@ -561,6 +561,42 @@ export type Database = {
         }
         Relationships: []
       }
+      roster_versions: {
+        Row: {
+          assignments_snapshot: Json
+          change_type: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          snapshot_date_from: string
+          snapshot_date_to: string
+          version_name: string | null
+        }
+        Insert: {
+          assignments_snapshot: Json
+          change_type?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          snapshot_date_from: string
+          snapshot_date_to: string
+          version_name?: string | null
+        }
+        Update: {
+          assignments_snapshot?: Json
+          change_type?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          snapshot_date_from?: string
+          snapshot_date_to?: string
+          version_name?: string | null
+        }
+        Relationships: []
+      }
       rotation_config: {
         Row: {
           created_at: string

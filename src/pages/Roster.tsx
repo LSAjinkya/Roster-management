@@ -12,10 +12,11 @@ import { RotationPreview } from '@/components/RotationPreview';
 import { RosterImportDialog } from '@/components/RosterImportDialog';
 import { RosterDCTransferButton } from '@/components/RosterDCTransferButton';
 import { BulkShiftAssignment } from '@/components/BulkShiftAssignment';
+import { RosterVersionHistory } from '@/components/RosterVersionHistory';
 import { teamMembers as mockTeamMembers } from '@/data/mockData';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CalendarDays, Calendar, CalendarRange, User, Table2, Building2, Eye, CheckCircle2, AlertCircle, Clock, Loader2, Upload } from 'lucide-react';
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from 'date-fns';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, addMonths, subMonths } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { TeamMember, Department, Role, TeamGroup, ShiftAssignment, ShiftType } from '@/types/roster';
 import { useAuth } from '@/hooks/useAuth';
@@ -283,6 +284,12 @@ export default function Roster() {
 
           {canEditShifts && (
             <>
+              <RosterVersionHistory 
+                teamMembers={teamMembers}
+                currentDateFrom={subMonths(startOfMonth(currentDate), 1)}
+                currentDateTo={addMonths(endOfMonth(currentDate), 1)}
+                onRestore={handleRefresh}
+              />
               <BulkShiftAssignment 
                 teamMembers={teamMembers} 
                 onComplete={handleRefresh}

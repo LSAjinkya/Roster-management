@@ -14,9 +14,10 @@ import { CalendarPlus, Search, Loader2, CalendarDays, CalendarRange, X, Sun, Sun
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { TeamMember, ShiftType, DEPARTMENTS, Department } from '@/types/roster';
-import { format, eachDayOfInterval, isWeekend } from 'date-fns';
+import { format, eachDayOfInterval, isWeekend, min, max } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
+import { createRosterVersion } from './RosterVersionHistory';
 
 interface BulkShiftAssignmentProps {
   teamMembers: TeamMember[];
@@ -122,6 +123,18 @@ export function BulkShiftAssignment({ teamMembers, onComplete }: BulkShiftAssign
     setLoading(true);
     try {
       const memberIds = Array.from(selectedMembers);
+      
+      // Create a version backup before bulk assignment
+      const dateFrom = min(selectedDates);
+      const dateTo = max(selectedDates);
+      await createRosterVersion(
+        dateFrom,
+        dateTo,
+        'bulk_assign',
+        `Before bulk assignment`,
+        `Bulk assignment of ${selectedShift} shift to ${memberIds.length} member(s) for ${selectedDates.length} day(s)`
+      );
+      
       const assignments: {
         member_id: string;
         date: string;
