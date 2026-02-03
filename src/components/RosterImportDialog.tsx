@@ -8,7 +8,8 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
-import { format, parse as dateParse } from 'date-fns';
+import { format, parse as dateParse, min, max } from 'date-fns';
+import { createRosterVersion } from './RosterVersionHistory';
 
 interface ImportedMember {
   email: string;
@@ -408,6 +409,17 @@ export function RosterImportDialog({ onImportComplete }: RosterImportDialogProps
         const startDate = sortedDates[0];
         const endDate = sortedDates[sortedDates.length - 1];
         const memberIds = Array.from(memberIdsToUpdate);
+        
+        // Create a version backup before CSV import
+        const dateFrom = new Date(startDate);
+        const dateTo = new Date(endDate);
+        await createRosterVersion(
+          dateFrom,
+          dateTo,
+          'csv_import',
+          `Before CSV import`,
+          `CSV import for ${memberIds.length} member(s) from ${startDate} to ${endDate}`
+        );
         
         console.log(`Deleting existing assignments for ${memberIds.length} members from ${startDate} to ${endDate}`);
         
