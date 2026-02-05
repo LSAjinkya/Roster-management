@@ -18,7 +18,7 @@ import { format, eachDayOfInterval, isWeekend, min, max } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
 import { createRosterVersion } from './RosterVersionHistory';
-import { useAuth } from '@/hooks/useAuth';
+ import { useAuth } from '@/hooks/useAuth';
 
 interface BulkShiftAssignmentProps {
   teamMembers: TeamMember[];
@@ -36,7 +36,7 @@ const SHIFT_TYPES: { value: ShiftType; label: string; icon: React.ReactNode; col
 type DateSelectionMode = 'range' | 'individual';
 
 export function BulkShiftAssignment({ teamMembers, onComplete }: BulkShiftAssignmentProps) {
-  const { isTL, isHR, userDepartment } = useAuth();
+   const { isTL, isHR, isRosterManager, userDepartment } = useAuth();
   const [open, setOpen] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
   const [selectedShift, setSelectedShift] = useState<ShiftType>('morning');
@@ -56,7 +56,7 @@ export function BulkShiftAssignment({ teamMembers, onComplete }: BulkShiftAssign
 
   // Get available departments - TL only sees their own department
   const availableDepartments = useMemo((): Department[] => {
-    if (isTL && !isHR && userDepartment) {
+     if ((isTL || isRosterManager) && !isHR && userDepartment) {
       return [userDepartment as Department];
     }
     return DEPARTMENTS;

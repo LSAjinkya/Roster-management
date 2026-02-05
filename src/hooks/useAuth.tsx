@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable';
 import { toast } from 'sonner';
 
-type AppRole = 'admin' | 'hr' | 'tl' | 'member';
+ type AppRole = 'admin' | 'hr' | 'tl' | 'member' | 'roster_manager';
 
 interface UserProfile {
   full_name: string;
@@ -34,6 +34,7 @@ interface AuthContextType {
   isHR: boolean;
   isTL: boolean;
   isAdmin: boolean;
+   isRosterManager: boolean;
   userDepartment: string | null;
   tlMemberId: string | null;
 }
@@ -417,7 +418,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = roles.includes('admin');
   const isHR = roles.includes('hr') || isAdmin;
   const isTL = roles.includes('tl');
-  const canEditShifts = isHR || isTL;
+   const isRosterManager = roles.includes('roster_manager');
+   const canEditShifts = isHR || isTL || isRosterManager;
   const userDepartment = profile?.department || null;
   const tlMemberId = profile?.team_member_id || null;
 
@@ -442,6 +444,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isHR,
     isTL,
     isAdmin,
+     isRosterManager,
     userDepartment,
     tlMemberId,
   };
