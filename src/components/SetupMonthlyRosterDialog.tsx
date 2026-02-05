@@ -1245,7 +1245,9 @@ export function SetupMonthlyRosterDialog({
                 <div className="flex flex-wrap gap-2">
                   {visibleDepartments.map(dept => {
                     const isSelected = selectedDepartments.includes(dept.name);
-                    const memberCount = filteredTeamMembers.filter(m => m.department === dept.name).length;
+                    // Use teamMembers instead of filteredTeamMembers to avoid circular dependency
+                    // where selecting one dept hides all others (because they'd show 0 members)
+                    const memberCount = teamMembers.filter(m => m.department === dept.name).length;
                     if (memberCount === 0) return null;
                     return (
                       <Button
