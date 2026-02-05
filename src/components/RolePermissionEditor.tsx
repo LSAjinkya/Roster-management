@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type Role = 'admin' | 'hr' | 'tl' | 'member';
+ type Role = 'admin' | 'hr' | 'tl' | 'member' | 'roster_manager';
 type Permission = 'view' | 'create' | 'edit' | 'delete';
 
 interface FeatureConfig {
@@ -54,6 +54,11 @@ const ROLE_INFO: { role: Role; label: string; color: string }[] = [
     label: 'Team Lead', 
     color: 'bg-blue-500/10 text-blue-600 border-blue-500/30'
   },
+   { 
+     role: 'roster_manager', 
+     label: 'Roster Manager', 
+     color: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
+   },
   { 
     role: 'member', 
     label: 'Member', 
@@ -167,6 +172,17 @@ const DEFAULT_PERMISSIONS: Record<Role, Record<string, Permission[]>> = {
     'Users & Roles': [],
     'Settings': ['view'],
   },
+   roster_manager: {
+     'Dashboard': ['view'],
+     'Roster': ['view', 'create', 'edit', 'delete'],
+     'Team Members': ['view'],
+     'Shifts & Swaps': ['view', 'create', 'edit'],
+     'Departments': ['view'],
+     'Leave Requests': ['view'],
+     'Org Chart': ['view'],
+     'Users & Roles': [],
+     'Settings': ['view'],
+   },
   member: {
     'Dashboard': ['view'],
     'Roster': ['view'],

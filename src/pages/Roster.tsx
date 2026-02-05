@@ -31,7 +31,7 @@ type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member' | 'departmen
 type RosterStatus = 'no-data' | 'draft' | 'published';
 
 export default function Roster() {
-  const { canEditShifts, isTL, isHR, userDepartment, tlMemberId } = useAuth();
+   const { canEditShifts, isTL, isHR, isRosterManager, userDepartment, tlMemberId } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [currentDate] = useState(new Date());
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(mockTeamMembers);
@@ -215,8 +215,8 @@ export default function Roster() {
     // HR and Admin see all members
     if (isHR) return teamMembers;
     
-    // TL sees only their department members and those who report to them
-    if (isTL && userDepartment && tlMemberId) {
+     // TL and Roster Manager see only their department members and those who report to them
+     if ((isTL || isRosterManager) && userDepartment && tlMemberId) {
       return teamMembers.filter(m => 
         m.department === userDepartment || 
         m.reportingTLId === tlMemberId
@@ -224,30 +224,30 @@ export default function Roster() {
     }
     
     return teamMembers;
-  }, [teamMembers, isTL, isHR, userDepartment, tlMemberId]);
+   }, [teamMembers, isTL, isHR, isRosterManager, userDepartment, tlMemberId]);
 
   // Filter assignments for TL view
   const filteredAssignments = useMemo(() => {
     if (isHR) return assignments;
     
-    if (isTL && userDepartment && tlMemberId) {
+     if ((isTL || isRosterManager) && userDepartment && tlMemberId) {
       const memberIds = new Set(filteredTeamMembers.map(m => m.id));
       return assignments.filter(a => memberIds.has(a.memberId));
     }
     
     return assignments;
-  }, [assignments, filteredTeamMembers, isTL, isHR, userDepartment, tlMemberId]);
+   }, [assignments, filteredTeamMembers, isTL, isHR, isRosterManager, userDepartment, tlMemberId]);
 
   // Filter departments for TL
   const filteredDepartments = useMemo(() => {
     if (isHR) return departments;
     
-    if (isTL && userDepartment) {
+     if ((isTL || isRosterManager) && userDepartment) {
       return departments.filter(d => d.name === userDepartment);
     }
     
     return departments;
-  }, [departments, isTL, isHR, userDepartment]);
+   }, [departments, isTL, isHR, isRosterManager, userDepartment]);
 
   const exportDates = useMemo(() => {
     if (viewMode === 'weekly') {
@@ -360,11 +360,11 @@ export default function Roster() {
       <div className="flex-1 overflow-auto p-6 pt-3">
         <div className="space-y-4">
           {/* TL scope indicator */}
-          {isTL && !isHR && userDepartment && (
+           {(isTL || isRosterManager) && !isHR && userDepartment && (
             <Alert className="bg-accent/50 border-accent">
               <Info size={16} className="text-primary" />
               <AlertDescription>
-                You are viewing roster for <strong>{userDepartment}</strong> department and your direct reports ({filteredTeamMembers.length} members).
+                 You are viewing roster for <strong>{userDepartment}</strong> department{tlMemberId ? ' and your direct reports' : ''} ({filteredTeamMembers.length} members).
               </AlertDescription>
             </Alert>
           )}

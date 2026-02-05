@@ -24,7 +24,7 @@ import { format } from 'date-fns';
 import { DEPARTMENTS, Department, ROLES, Role, TEAM_GROUPS, TeamGroup } from '@/types/roster';
 import { BulkTeamAssignment } from '@/components/BulkTeamAssignment';
 
-type AppRole = 'admin' | 'hr' | 'tl' | 'member';
+ type AppRole = 'admin' | 'hr' | 'tl' | 'member' | 'roster_manager';
 type UserStatus = 'available' | 'on-leave' | 'unavailable';
 
 interface UserWithRoles {
@@ -64,6 +64,7 @@ const ROLE_LABELS: Record<AppRole, string> = {
   hr: 'HR',
   tl: 'Team Lead',
   member: 'Member',
+   roster_manager: 'Roster Manager',
 };
 
 const ROLE_COLORS: Record<AppRole, string> = {
@@ -71,6 +72,7 @@ const ROLE_COLORS: Record<AppRole, string> = {
   hr: 'bg-primary text-primary-foreground',
   tl: 'bg-secondary text-secondary-foreground',
   member: 'bg-muted text-muted-foreground',
+   roster_manager: 'bg-emerald-500 text-white',
 };
 
 const STATUS_LABELS: Record<UserStatus, string> = {
