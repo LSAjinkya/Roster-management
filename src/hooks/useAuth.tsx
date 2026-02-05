@@ -365,13 +365,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const fileExt = file.name.split('.').pop();
+      // Handle both File objects and Blobs (from image cropper)
+      const fileExt = file.name ? file.name.split('.').pop() : 'jpeg';
       const fileName = `${user.id}/avatar.${fileExt}`;
 
       // Upload to storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(fileName, file, { upsert: true });
+        .upload(fileName, file, { 
+          upsert: true,
+          contentType: file.type || 'image/jpeg'
+        });
 
       if (uploadError) throw uploadError;
 
