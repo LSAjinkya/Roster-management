@@ -10,6 +10,7 @@ interface UserProfile {
   full_name: string;
   department: string | null;
   avatar_url: string | null;
+  team_member_id: string | null;
 }
 
 interface AuthContextType {
@@ -33,6 +34,8 @@ interface AuthContextType {
   isHR: boolean;
   isTL: boolean;
   isAdmin: boolean;
+  userDepartment: string | null;
+  tlMemberId: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -157,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('full_name, department, avatar_url')
+        .select('full_name, department, avatar_url, team_member_id')
         .eq('user_id', userId)
         .single();
 
@@ -415,6 +418,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isHR = roles.includes('hr') || isAdmin;
   const isTL = roles.includes('tl');
   const canEditShifts = isHR || isTL;
+  const userDepartment = profile?.department || null;
+  const tlMemberId = profile?.team_member_id || null;
 
   const value = {
     user,
@@ -437,6 +442,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isHR,
     isTL,
     isAdmin,
+    userDepartment,
+    tlMemberId,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
