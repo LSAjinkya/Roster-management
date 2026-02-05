@@ -28,32 +28,33 @@ interface NavItem {
   icon: typeof LayoutDashboard;
   label: string;
   path: string;
-  requiredRoles?: ('admin' | 'hr' | 'tl' | 'member')[];
-  hideFromRoles?: ('admin' | 'hr' | 'tl' | 'member')[];
+  requiredRoles?: ('admin' | 'hr' | 'tl' | 'member' | 'roster_manager')[];
+  hideFromRoles?: ('admin' | 'hr' | 'tl' | 'member' | 'roster_manager')[];
 }
 
 const navItems: NavItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
   { icon: Calendar, label: 'Roster', path: '/roster' },
   { icon: Users, label: 'Team', path: '/team' },
-  { icon: Clock, label: 'Shifts', path: '/shifts', requiredRoles: ['admin', 'hr', 'tl'] },
+  { icon: Clock, label: 'Shifts', path: '/shifts', requiredRoles: ['admin', 'hr', 'tl', 'roster_manager'] },
   { icon: CalendarDays, label: 'Leave', path: '/leave' },
   { icon: Building2, label: 'Departments', path: '/departments', requiredRoles: ['admin', 'hr', 'tl'] },
   { icon: Network, label: 'Org Chart', path: '/org-chart' },
   { icon: Shield, label: 'Users & Roles', path: '/admin/roles', requiredRoles: ['admin', 'hr'] },
-  { icon: SlidersHorizontal, label: 'Roster Settings', path: '/roster-settings', requiredRoles: ['admin', 'hr'] },
+  { icon: SlidersHorizontal, label: 'Roster Settings', path: '/roster-settings', requiredRoles: ['admin', 'hr', 'roster_manager'] },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
 export function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const { user, signOut, roles, isHR, isTL, isAdmin, profile } = useAuth();
+  const { user, signOut, roles, isHR, isTL, isAdmin, isRosterManager, profile } = useAuth();
 
   const getRoleBadge = () => {
     if (isAdmin) return 'Admin';
     if (isHR) return 'HR';
     if (isTL) return 'TL';
+    if (isRosterManager) return 'Roster Mgr';
     return 'Member';
   };
 
@@ -108,6 +109,7 @@ export function AppSidebar() {
               if (role === 'admin') return isAdmin;
               if (role === 'hr') return isHR;
               if (role === 'tl') return isTL;
+              if (role === 'roster_manager') return isRosterManager;
               return true;
             });
           })
