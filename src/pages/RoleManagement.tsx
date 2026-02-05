@@ -145,13 +145,25 @@ export default function RoleManagement() {
   const canAccess = isAdmin || isHR;
 
   useEffect(() => {
-    if (!authLoading && roles.length >= 0 && user) {
+    // Wait until auth is fully loaded AND roles have been fetched
+    // roles array will be populated after auth loads, so we check if auth is done loading
+    if (!authLoading && user) {
+      // Give a brief moment for roles to be fetched after auth state change
+      // Only redirect if we're sure roles have loaded and user doesn't have access
       if (!canAccess) {
-        toast.error('Access denied. Admin or HR only.');
-        navigate('/');
+        // Check if roles are still being fetched (empty roles but user exists)
+        // We need to wait for roles to be populated
+        const timeout = setTimeout(() => {
+          // Recheck after brief delay to allow role fetch to complete
+          if (!isAdmin && !isHR) {
+            toast.error('Access denied. Admin or HR only.');
+            navigate('/');
+          }
+        }, 500);
+        return () => clearTimeout(timeout);
       }
     }
-  }, [authLoading, canAccess, navigate, roles, user]);
+  }, [authLoading, canAccess, navigate, user, isAdmin, isHR]);
 
   useEffect(() => {
     if (canAccess) {
