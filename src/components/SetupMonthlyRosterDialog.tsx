@@ -22,6 +22,7 @@ import { useInfraTeamSettings, isRoleEligibleForShift } from '@/hooks/useInfraTe
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
 
 interface SetupMonthlyRosterDialogProps {
   teamMembers: TeamMember[];
@@ -119,6 +120,28 @@ export function SetupMonthlyRosterDialog({
 
   // Infra team settings from the hook
   const infraSettings = useInfraTeamSettings();
+
+  // Auth context for role-based filtering
+  const { isTL, isRosterManager, isHR, isAdmin, userDepartment } = useAuth();
+
+  // Filter departments based on user role - TL and Roster Manager only see their department
+  const visibleDepartments = useMemo(() => {
+    if (isAdmin || isHR) {
+      return departments;
+    }
+    if ((isTL || isRosterManager) && userDepartment) {
+      return departments.filter(d => d.name === userDepartment);
+    }
+    return departments;
+  }, [departments, isAdmin, isHR, isTL, isRosterManager, userDepartment]);
+
+  // Auto-select department for TL/Roster Manager
+  useEffect(() => {
+    if (open && (isTL || isRosterManager) && !isAdmin && !isHR && userDepartment) {
+      // Auto-select the user's department
+      setSelectedDepartments([userDepartment]);
+    }
+  }, [open, isTL, isRosterManager, isAdmin, isHR, userDepartment]);
 
   // Fetch work locations on dialog open
   useEffect(() => {
@@ -1216,11 +1239,11 @@ export function SetupMonthlyRosterDialog({
                 <div>
                   <Label className="text-base">Select Departments</Label>
                   <p className="text-sm text-muted-foreground">
-                    Choose which departments to set up roster for (leave empty for all)
+                    Choose which departments to set up roster for {(isAdmin || isHR) && '(leave empty for all)'}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {departments.map(dept => {
+                  {visibleDepartments.map(dept => {
                     const isSelected = selectedDepartments.includes(dept.name);
                     const memberCount = filteredTeamMembers.filter(m => m.department === dept.name).length;
                     if (memberCount === 0) return null;
@@ -1251,14 +1274,16 @@ export function SetupMonthlyRosterDialog({
                     <p className="text-sm text-primary">
                       Roster will be generated for {filteredTeamMembers.filter(m => selectedDepartments.includes(m.department)).length} member(s) in {selectedDepartments.length} department(s)
                     </p>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => setSelectedDepartments([])}
-                      className="text-xs h-6"
-                    >
-                      Clear selection
-                    </Button>
+                    {(isAdmin || isHR) && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setSelectedDepartments([])}
+                        className="text-xs h-6"
+                      >
+                        Clear selection
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1392,9 +1417,18 @@ export function SetupMonthlyRosterDialog({
               <TabsContent value="shifts" className="mt-4">
                 <ScrollArea className="h-[300px] pr-4">
                   <div className="space-y-3">
-                    {deptConfigs.map(config => {
-                  const memberCount = teamMembers.filter(m => m.department === config.department).length;
-                  if (memberCount === 0) return null;
+                    {deptConfigs
+                      .filter(config => {
+                        // If departments are selected, only show those
+                        if (selectedDepartments.length > 0) {
+                          return selectedDepartments.includes(config.department);
+                        }
+                        // Otherwise show all visible departments (based on role)
+                        return visibleDepartments.some(d => d.name === config.department);
+                      })
+                      .map(config => {
+                  const memberCount = filteredTeamMembers.filter(m => m.department === config.department).length;
+                  if (memberCount === 0 && selectedDepartments.length > 0) return null;
                   return <div key={config.department} className="rounded-lg border p-3 space-y-3">
                           <div className="flex items-center justify-between">
                             <div>
