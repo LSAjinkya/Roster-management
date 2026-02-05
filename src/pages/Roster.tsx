@@ -24,12 +24,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Info } from 'lucide-react';
 
 type ViewMode = 'daily' | 'weekly' | 'monthly' | 'table' | 'member' | 'department' | 'rotation';
 type RosterStatus = 'no-data' | 'draft' | 'published';
 
 export default function Roster() {
-  const { canEditShifts } = useAuth();
+  const { canEditShifts, isTL, isHR, userDepartment, tlMemberId } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [currentDate] = useState(new Date());
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(mockTeamMembers);
@@ -208,6 +210,45 @@ export default function Roster() {
   };
 
   // Calculate date ranges for export
+  // Filter team members for TL view - only their department and reporting members
+  const filteredTeamMembers = useMemo(() => {
+    // HR and Admin see all members
+    if (isHR) return teamMembers;
+    
+    // TL sees only their department members and those who report to them
+    if (isTL && userDepartment && tlMemberId) {
+      return teamMembers.filter(m => 
+        m.department === userDepartment || 
+        m.reportingTLId === tlMemberId
+      );
+    }
+    
+    return teamMembers;
+  }, [teamMembers, isTL, isHR, userDepartment, tlMemberId]);
+
+  // Filter assignments for TL view
+  const filteredAssignments = useMemo(() => {
+    if (isHR) return assignments;
+    
+    if (isTL && userDepartment && tlMemberId) {
+      const memberIds = new Set(filteredTeamMembers.map(m => m.id));
+      return assignments.filter(a => memberIds.has(a.memberId));
+    }
+    
+    return assignments;
+  }, [assignments, filteredTeamMembers, isTL, isHR, userDepartment, tlMemberId]);
+
+  // Filter departments for TL
+  const filteredDepartments = useMemo(() => {
+    if (isHR) return departments;
+    
+    if (isTL && userDepartment) {
+      return departments.filter(d => d.name === userDepartment);
+    }
+    
+    return departments;
+  }, [departments, isTL, isHR, userDepartment]);
+
   const exportDates = useMemo(() => {
     if (viewMode === 'weekly') {
       const start = startOfWeek(currentDate, { weekStartsOn: 1 });
@@ -285,20 +326,20 @@ export default function Roster() {
           {canEditShifts && (
             <>
               <RosterVersionHistory 
-                teamMembers={teamMembers}
+                teamMembers={filteredTeamMembers}
                 currentDateFrom={subMonths(startOfMonth(currentDate), 1)}
                 currentDateTo={addMonths(endOfMonth(currentDate), 1)}
                 onRestore={handleRefresh}
               />
               <BulkShiftAssignment 
-                teamMembers={teamMembers} 
+                teamMembers={filteredTeamMembers} 
                 onComplete={handleRefresh}
               />
               <RosterDCTransferButton />
               <RosterImportDialog onImportComplete={handleRefresh} />
               <SetupMonthlyRosterDialog 
-                teamMembers={teamMembers} 
-                departments={departments}
+                teamMembers={filteredTeamMembers} 
+                departments={filteredDepartments}
                 onComplete={handleRefresh}
               />
             </>
@@ -306,8 +347,8 @@ export default function Roster() {
 
           {showExport && (
             <ExportDropdown
-              assignments={assignments}
-              teamMembers={teamMembers}
+              assignments={filteredAssignments}
+              teamMembers={filteredTeamMembers}
               startDate={exportDates.start}
               endDate={exportDates.end}
               viewType={viewMode === 'weekly' ? 'weekly' : 'monthly'}
@@ -318,6 +359,16 @@ export default function Roster() {
       
       <div className="flex-1 overflow-auto p-6 pt-3">
         <div className="space-y-4">
+          {/* TL scope indicator */}
+          {isTL && !isHR && userDepartment && (
+            <Alert className="bg-accent/50 border-accent">
+              <Info size={16} className="text-primary" />
+              <AlertDescription>
+                You are viewing roster for <strong>{userDepartment}</strong> department and your direct reports ({filteredTeamMembers.length} members).
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
             <TabsList className="bg-muted/50">
               <TabsTrigger value="table" className="gap-2">
@@ -358,42 +409,42 @@ export default function Roster() {
           <>
             {viewMode === 'table' && (
               <TableRosterView 
-                assignments={assignments} 
-                teamMembers={teamMembers}
+                assignments={filteredAssignments} 
+                teamMembers={filteredTeamMembers}
                 onRefresh={handleRefresh}
               />
             )}
             {viewMode === 'rotation' && (
-              <RotationPreview teamMembers={teamMembers} />
+              <RotationPreview teamMembers={filteredTeamMembers} />
             )}
             {viewMode === 'daily' && (
               <SingleDayRosterView 
-                assignments={assignments} 
-                teamMembers={teamMembers} 
+                assignments={filteredAssignments} 
+                teamMembers={filteredTeamMembers} 
               />
             )}
             {viewMode === 'weekly' && (
               <WeeklyRosterView 
-                assignments={assignments} 
-                teamMembers={teamMembers} 
+                assignments={filteredAssignments} 
+                teamMembers={filteredTeamMembers} 
               />
             )}
             {viewMode === 'monthly' && (
               <MonthlyRosterView 
-                assignments={assignments} 
-                teamMembers={teamMembers} 
+                assignments={filteredAssignments} 
+                teamMembers={filteredTeamMembers} 
               />
             )}
             {viewMode === 'member' && (
               <MemberRosterView 
-                assignments={assignments} 
-                teamMembers={teamMembers} 
+                assignments={filteredAssignments} 
+                teamMembers={filteredTeamMembers} 
               />
             )}
             {viewMode === 'department' && (
               <DepartmentSheetView 
-                assignments={assignments} 
-                teamMembers={teamMembers} 
+                assignments={filteredAssignments} 
+                teamMembers={filteredTeamMembers} 
               />
             )}
           </>
