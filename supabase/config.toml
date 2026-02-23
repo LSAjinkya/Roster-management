@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.send-2fa-otp]
 verify_jwt = false
+
+[functions.ai-roster-assistant]
+verify_jwt = false
