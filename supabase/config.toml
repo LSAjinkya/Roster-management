@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.ai-roster-assistant]
 verify_jwt = false
+
+[functions.export-database]
+verify_jwt = false

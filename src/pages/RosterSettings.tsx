@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DashboardHeader } from '@/components/DashboardHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { 
   Home, 
   CalendarDays, 
@@ -11,7 +12,9 @@ import {
   Settings2, 
   MapPin,
   Briefcase,
-  Server
+  Server,
+  DatabaseBackup,
+  Loader2
 } from 'lucide-react';
 import { ShiftCompositionRulesManager } from '@/components/ShiftCompositionRulesManager';
 import { RotationConfigManager } from '@/components/RotationConfigManager';
@@ -23,10 +26,54 @@ import { DepartmentRosterSettings } from '@/components/roster-settings/Departmen
 import { InfraTeamSettings } from '@/components/roster-settings/InfraTeamSettings';
 import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 export default function RosterSettings() {
   const { isAdmin, isHR } = useAuth();
   const [activeTab, setActiveTab] = useState('wfh');
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportDatabase = async () => {
+    setExporting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('You must be logged in');
+        return;
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-database`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Export failed');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `database_export_${new Date().toISOString().split('T')[0]}.sql`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Database export downloaded successfully');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to export database');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (!isAdmin && !isHR) {
     return <Navigate to="/" replace />;
@@ -40,6 +87,19 @@ export default function RosterSettings() {
       />
 
       <div className="flex-1 overflow-auto p-6">
+        <div className="flex justify-end mb-4">
+          {isAdmin && (
+            <Button
+              variant="outline"
+              onClick={handleExportDatabase}
+              disabled={exporting}
+              className="gap-2"
+            >
+              {exporting ? <Loader2 size={16} className="animate-spin" /> : <DatabaseBackup size={16} />}
+              {exporting ? 'Exporting...' : 'Export Database (.sql)'}
+            </Button>
+          )}
+        </div>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 h-auto gap-2 bg-transparent p-0">
             <TabsTrigger 
