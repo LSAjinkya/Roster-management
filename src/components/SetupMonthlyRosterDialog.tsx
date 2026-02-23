@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarPlus, Loader2, Settings2, Eye, Save, ChevronLeft, ChevronRight, AlertTriangle, FileCheck, Upload, Check, ChevronsUpDown } from 'lucide-react';
+import { CalendarPlus, Loader2, Settings2, Eye, Save, ChevronLeft, ChevronRight, AlertTriangle, FileCheck, Upload, Check, ChevronsUpDown, Bot } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { TeamMember, ShiftType, Department, DEPARTMENTS, TeamGroup } from '@/types/roster';
@@ -23,6 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { AIRosterAssistant } from './AIRosterAssistant';
 
 interface SetupMonthlyRosterDialogProps {
   teamMembers: TeamMember[];
@@ -1292,9 +1293,13 @@ export function SetupMonthlyRosterDialog({
             </div>
 
             <Tabs defaultValue="rotation" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="rotation">{rotationConfig?.rotation_cycle_days || 14}-Day Rotation</TabsTrigger>
                 <TabsTrigger value="shifts">Department Shifts</TabsTrigger>
+                <TabsTrigger value="ai-assistant" className="gap-1">
+                  <Bot size={14} />
+                  AI Assistant
+                </TabsTrigger>
                 <TabsTrigger value="summary">Summary</TabsTrigger>
               </TabsList>
 
@@ -1546,6 +1551,18 @@ export function SetupMonthlyRosterDialog({
                     Save Config
                   </Button>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="ai-assistant" className="mt-4">
+                <AIRosterAssistant
+                  teamMembers={filteredTeamMembers}
+                  selectedDepartments={selectedDepartments}
+                  monthName={monthName}
+                  rotationStates={rotationStates}
+                  publicHolidays={publicHolidays}
+                  weeklyOffPolicy={weeklyOffPolicy}
+                  previewAssignments={previewAssignments}
+                />
               </TabsContent>
 
               <TabsContent value="summary" className="mt-4 space-y-4">
