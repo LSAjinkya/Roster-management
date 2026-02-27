@@ -1,73 +1,145 @@
-# Welcome to your Lovable project
+# Roster Management System
 
-## Project info
+A comprehensive workforce roster and shift management application built for LeapSwitch Networks. Manage team schedules, shifts, leave requests, and organizational structure — all in one place.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+### Core Modules
+- **Dashboard** — Overview of team status, shift distribution, and key metrics
+- **Roster Management** — Daily, weekly, bi-weekly, and monthly roster views with drag-and-drop support
+- **Shift Management** — Create, assign, and swap shifts with validation rules
+- **Leave Management** — Submit, approve/reject leave requests with balance tracking
+- **Team Management** — Manage team members, roles, departments, and reporting hierarchy
 
-There are several ways of editing your application.
+### Advanced Features
+- **Rotation Engine** — Automated shift rotation with configurable cycles and sequences
+- **Shift Composition Rules** — Minimum staffing requirements per shift type and department
+- **WFH & Hybrid Policies** — Work-from-home day tracking and hybrid schedule management
+- **Datacenter/Location Support** — Multi-location roster with DC-specific shift availability
+- **Org Chart** — Visual organizational hierarchy and reporting structure
+- **Role-Based Access Control** — Granular permissions for Admin, HR, Team Lead, Member, and Roster Manager roles
+- **2FA Authentication** — TOTP and Email OTP-based two-factor authentication
+- **Shift Swap Requests** — Employee-initiated shift swap workflow with manager approval
+- **Public Holidays Calendar** — Holiday management integrated with leave tracking
+- **Roster Version History** — Snapshot and restore previous roster configurations
+- **Database Export** — Full SQL dump download for admins (bypasses 1000-row limit)
+- **AI Roster Assistant** — AI-powered roster suggestions and conflict resolution
 
-**Use Lovable**
+## Tech Stack
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18, TypeScript, Vite |
+| Styling | Tailwind CSS, shadcn/ui |
+| State Management | TanStack React Query |
+| Routing | React Router v6 |
+| Backend | Supabase (PostgreSQL, Auth, Edge Functions, Storage) |
+| Charts | Recharts |
+| Animations | Framer Motion |
 
-Changes made via Lovable will be committed automatically to this repo.
+## Project Structure
 
-**Use your preferred IDE**
+```
+src/
+├── components/          # Reusable UI components
+│   ├── ui/              # shadcn/ui base components
+│   └── roster-settings/ # Roster settings sub-components
+├── hooks/               # Custom React hooks (auth, mobile, toast)
+├── pages/               # Route-level page components
+├── layouts/             # Layout wrappers (DashboardLayout)
+├── data/                # Mock data for development
+├── types/               # TypeScript type definitions
+├── utils/               # Utility functions (export, validation, auto-assign)
+├── integrations/        # Supabase client & types
+└── assets/              # Static assets (logos, images)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+supabase/
+└── functions/           # Edge Functions (auth, export, AI, sync)
+```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Database Tables
 
-Follow these steps:
+| Table | Purpose |
+|-------|---------|
+| `profiles` | User profiles linked to auth |
+| `team_members` | Employee records with department, role, location |
+| `shift_assignments` | Daily shift assignments per member |
+| `shift_history` | Audit log of shift changes |
+| `leave_requests` | Leave applications with approval workflow |
+| `leave_balances` | Annual leave quota tracking |
+| `departments` | Department configuration and off-day policies |
+| `rotation_config` | Shift rotation cycle settings |
+| `member_rotation_state` | Current rotation position per member |
+| `swap_requests` | Shift swap request workflow |
+| `datacenters` | Datacenter/location definitions |
+| `work_locations` | Office and site management |
+| `user_roles` | Role-based access control |
+| `public_holidays` | Holiday calendar |
+| `roster_versions` | Roster snapshot history |
+| `shift_composition_rules` | Minimum staffing rules |
+| `app_settings` | Application-wide settings |
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## Roles & Permissions
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+| Role | Access Level |
+|------|-------------|
+| **Admin** | Full system access, user management, database export |
+| **HR** | Team management, leave approvals, roster settings |
+| **Team Lead** | Team roster management, shift swaps, leave approvals |
+| **Roster Manager** | Roster creation and editing |
+| **Member** | View own schedule, request leaves and swaps |
 
-# Step 3: Install the necessary dependencies.
-npm i
+## Getting Started
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### Prerequisites
+- Node.js 18+ (or Bun)
+- npm or bun package manager
+
+### Local Development
+
+```bash
+# Clone the repository
+git clone https://github.com/LSAjinkya/Roster-management.git
+
+# Navigate to project directory
+cd Roster-management
+
+# Install dependencies
+npm install
+
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Environment Variables
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+The following environment variables are required:
 
-**Use GitHub Codespaces**
+| Variable | Description |
+|----------|-------------|
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/public key |
+| `VITE_SUPABASE_PROJECT_ID` | Supabase project ID |
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Self-Hosting Requirements
 
-## What technologies are used for this project?
+| Requirement | Details |
+|-------------|---------|
+| OS | Ubuntu 20.04+ or any Linux distro |
+| Node.js | v18+ |
+| RAM | Minimum 1GB, recommended 2GB+ |
+| Storage | 5GB+ |
+| Database | Self-hosted Supabase (Docker) or PostgreSQL |
+| Web Server | Nginx or Caddy as reverse proxy |
+| SSL | Let's Encrypt via Certbot |
 
-This project is built with:
+```bash
+# Build for production
+npm run build
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+# Serve the dist/ folder via Nginx or any static file server
+```
 
-## How can I deploy this project?
+## License
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Private — LeapSwitch Networks Internal Use
