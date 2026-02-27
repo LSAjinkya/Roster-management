@@ -236,7 +236,7 @@ Three teams rotate in sync so all shifts are always covered:
 
 ```bash
 # Clone the repository
-git clone https://github.com/LSAjinkya/Roster-management.git
+git clone https://github.com/Leapswitch-Networks/ls-calendar.git
 
 # Navigate to project directory
 cd Roster-management
