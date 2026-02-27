@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Settings, Bell, Shield, Clock, Save, User, Loader2, Link2, KeyRound, CalendarCog, MapPin } from 'lucide-react';
+import { Settings, Bell, Shield, Clock, Save, User, Loader2, Link2, KeyRound, CalendarCog, MapPin, Database, Download } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
@@ -157,17 +157,17 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [connectedIntegrations, setConnectedIntegrations] = useState<Set<string>>(new Set());
+  const [exportLoading, setExportLoading] = useState(false);
+
   useEffect(() => {
     if (user) {
       fetchUserProfile();
     }
   }, [user]);
+
   const fetchUserProfile = async () => {
     try {
-      const {
-        data,
-        error
-      } = await supabase.from('profiles').select('status').eq('user_id', user?.id).maybeSingle();
+      const { data, error } = await supabase.from('profiles').select('status').eq('user_id', user?.id).maybeSingle();
       if (error) throw error;
       if (data?.status) {
         setStatus(data.status as UserStatus);
@@ -178,14 +178,11 @@ export default function SettingsPage() {
       setLoading(false);
     }
   };
+
   const handleStatusChange = async (newStatus: UserStatus) => {
     setSaving(true);
     try {
-      const {
-        error
-      } = await supabase.from('profiles').update({
-        status: newStatus
-      }).eq('user_id', user?.id);
+      const { error } = await supabase.from('profiles').update({ status: newStatus }).eq('user_id', user?.id);
       if (error) throw error;
       setStatus(newStatus);
       toast.success('Status updated successfully');
@@ -196,12 +193,53 @@ export default function SettingsPage() {
       setSaving(false);
     }
   };
+
+  const handleExportDatabase = async () => {
+    setExportLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('You must be logged in');
+        return;
+      }
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const res = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/export-database`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Export failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `database_export_${new Date().toISOString().split('T')[0]}.sql`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Database exported successfully');
+    } catch (error: any) {
+      console.error('Export error:', error);
+      toast.error(error.message || 'Failed to export database');
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   const handleConnect = (id: string, values: Record<string, string>) => {
-    // In a real app, you would store these credentials securely
     console.log(`Connecting ${id} with values:`, Object.keys(values));
     setConnectedIntegrations(prev => new Set([...prev, id]));
     toast.success(`${INTEGRATIONS.find(i => i.id === id)?.name} connected successfully`);
   };
+
   const handleDisconnect = (id: string) => {
     setConnectedIntegrations(prev => {
       const next = new Set(prev);
@@ -265,7 +303,26 @@ export default function SettingsPage() {
             </div>
           </div>}
 
-        {/* General Settings */}
+        {/* Database Export - Admin Only */}
+        {isAdmin && <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+            <div className="p-4 border-b border-border/50 flex items-center gap-3">
+              <Database size={20} className="text-muted-foreground" />
+              <h2 className="font-semibold">Database Export</h2>
+              <Badge variant="outline" className="ml-auto">Admin Only</Badge>
+            </div>
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Download Full SQL Dump</p>
+                  <p className="text-sm text-muted-foreground">Export the entire database schema and data as a .sql file (no row limit)</p>
+                </div>
+                <Button variant="outline" className="gap-2" onClick={handleExportDatabase} disabled={exportLoading}>
+                  {exportLoading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                  {exportLoading ? 'Exporting...' : 'Download .sql'}
+                </Button>
+              </div>
+            </div>
+          </div>}
         <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
           <div className="p-4 border-b border-border/50 flex items-center gap-3">
             <Settings size={20} className="text-muted-foreground" />
