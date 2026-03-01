@@ -262,6 +262,36 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
     };
   };
 
+  // Day-wise shift counts for filtered members
+  const dayShiftCounts = useMemo(() => {
+    const result: Record<string, { morning: number; afternoon: number; night: number; general: number }> = {};
+    monthDays.forEach(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      result[dateStr] = { morning: 0, afternoon: 0, night: 0, general: 0 };
+      filteredMembers.forEach(member => {
+        const shift = getMemberShift(member.id, day);
+        if (shift === 'morning')        result[dateStr].morning++;
+        else if (shift === 'afternoon') result[dateStr].afternoon++;
+        else if (shift === 'night')     result[dateStr].night++;
+        else if (shift === 'general')   result[dateStr].general++;
+      });
+    });
+    return result;
+  }, [filteredMembers, monthDays, assignments]);
+
+  // Monthly totals across all days for the shift count row
+  const monthShiftTotals = useMemo(() => {
+    return Object.values(dayShiftCounts).reduce(
+      (acc, c) => ({
+        morning:   acc.morning   + c.morning,
+        afternoon: acc.afternoon + c.afternoon,
+        night:     acc.night     + c.night,
+        general:   acc.general   + c.general,
+      }),
+      { morning: 0, afternoon: 0, night: 0, general: 0 }
+    );
+  }, [dayShiftCounts]);
+
   // Find department manager for a member
   const getDepartmentManager = (member: TeamMember): TeamMember | undefined => {
     return departmentManagers[member.department];
@@ -460,8 +490,8 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
               {/* Day numbers row */}
               <tr className="border-b border-border bg-muted/80">
                 {monthDays.map(day => (
-                  <th 
-                    key={format(day, 'yyyy-MM-dd')} 
+                  <th
+                    key={format(day, 'yyyy-MM-dd')}
                     className={cn(
                       "p-1 text-center font-semibold bg-muted/80 w-[32px] min-w-[32px] max-w-[32px]",
                       isWeekend(day) && "bg-muted text-muted-foreground",
@@ -471,6 +501,40 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
                     {format(day, 'd')}
                   </th>
                 ))}
+              </tr>
+              {/* Shift count summary row */}
+              <tr className="border-b border-border/50 bg-background">
+                <th
+                  colSpan={3}
+                  className="sticky left-0 z-40 bg-background px-2 text-left text-[10px] font-medium text-muted-foreground whitespace-nowrap"
+                >
+                  Shift counts
+                </th>
+                {monthDays.map(day => {
+                  const dateStr = format(day, 'yyyy-MM-dd');
+                  const c = dayShiftCounts[dateStr] ?? { morning: 0, afternoon: 0, night: 0, general: 0 };
+                  return (
+                    <th
+                      key={dateStr}
+                      className="p-0.5 text-center w-[32px] min-w-[32px] max-w-[32px] bg-background"
+                    >
+                      <div className="flex flex-col gap-[1px] items-center">
+                        {c.morning   > 0 && <span className="text-[8px] font-bold leading-none text-white bg-shift-morning   rounded-sm px-0.5">{c.morning}</span>}
+                        {c.afternoon > 0 && <span className="text-[8px] font-bold leading-none text-white bg-shift-afternoon rounded-sm px-0.5">{c.afternoon}</span>}
+                        {c.night     > 0 && <span className="text-[8px] font-bold leading-none text-white bg-shift-night     rounded-sm px-0.5">{c.night}</span>}
+                        {c.general   > 0 && <span className="text-[8px] font-bold leading-none text-white bg-shift-general   rounded-sm px-0.5">{c.general}</span>}
+                      </div>
+                    </th>
+                  );
+                })}
+                {/* Monthly totals for the 7 summary stat columns */}
+                <th className="p-1 text-center text-[10px] font-bold bg-shift-morning/30">{monthShiftTotals.morning || '-'}</th>
+                <th className="p-1 text-center text-[10px] font-bold bg-shift-afternoon/30">{monthShiftTotals.afternoon || '-'}</th>
+                <th className="p-1 text-center text-[10px] font-bold bg-shift-night/30">{monthShiftTotals.night || '-'}</th>
+                <th className="p-1 text-center text-[10px] font-bold bg-shift-general/30">{monthShiftTotals.general || '-'}</th>
+                <th className="bg-red-100/30"></th>
+                <th className="bg-muted/50"></th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
