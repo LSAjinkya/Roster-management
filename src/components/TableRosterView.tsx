@@ -279,6 +279,23 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
     return result;
   }, [filteredMembers, monthDays, assignments]);
 
+  // Today's shift counts across ALL (non-unavailable) team members for the shift filter boxes
+  const todayShiftCounts = useMemo(() => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const available = teamMembers.filter(m => m.status !== 'unavailable');
+    const counts = { morning: 0, afternoon: 0, night: 0, general: 0, off: 0 };
+    available.forEach(member => {
+      const a = assignments.find(x => x.memberId === member.id && x.date === todayStr);
+      if (!a || ['week-off', 'public-off', 'leave', 'comp-off', 'paid-leave'].includes(a.shiftType)) {
+        counts.off++;
+      } else if (a.shiftType === 'morning')   counts.morning++;
+      else if (a.shiftType === 'afternoon')   counts.afternoon++;
+      else if (a.shiftType === 'night')       counts.night++;
+      else if (a.shiftType === 'general')     counts.general++;
+    });
+    return { ...counts, total: available.length };
+  }, [teamMembers, assignments]);
+
   // Monthly totals across all days for the shift count row
   const monthShiftTotals = useMemo(() => {
     return Object.values(dayShiftCounts).reduce(
@@ -416,18 +433,30 @@ export function TableRosterView({ assignments, teamMembers, onShiftChange, onRef
             </SelectContent>
           </Select>
 
-          <Select value={shiftFilter} onValueChange={(v) => setShiftFilter(v as ShiftType | 'all')}>
-            <SelectTrigger className="w-[110px] h-9 text-sm">
-              <SelectValue placeholder="All Shifts" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Shifts</SelectItem>
-              <SelectItem value="morning">Morning</SelectItem>
-              <SelectItem value="afternoon">Afternoon</SelectItem>
-              <SelectItem value="night">Night</SelectItem>
-              <SelectItem value="general">General</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Shift filter boxes — today's counts, click to filter */}
+          <div className="flex items-center gap-1">
+            {([
+              { type: 'all',       label: 'All', count: todayShiftCounts.total,     bg: 'bg-muted',             ring: 'ring-foreground/40',  text: 'text-foreground' },
+              { type: 'morning',   label: 'M',   count: todayShiftCounts.morning,   bg: 'bg-shift-morning',     ring: 'ring-amber-500',      text: 'text-amber-900'  },
+              { type: 'afternoon', label: 'A',   count: todayShiftCounts.afternoon, bg: 'bg-shift-afternoon',   ring: 'ring-sky-500',        text: 'text-sky-900'    },
+              { type: 'night',     label: 'N',   count: todayShiftCounts.night,     bg: 'bg-shift-night',       ring: 'ring-violet-500',     text: 'text-violet-900' },
+              { type: 'general',   label: 'G',   count: todayShiftCounts.general,   bg: 'bg-shift-general',     ring: 'ring-emerald-500',    text: 'text-emerald-900'},
+              { type: 'off',       label: 'Off', count: todayShiftCounts.off,       bg: 'bg-gray-200',          ring: 'ring-gray-400',       text: 'text-gray-700'   },
+            ] as const).map(({ type, label, count, bg, ring, text }) => (
+              <button
+                key={type}
+                onClick={() => setShiftFilter(type === 'off' ? 'all' : type as ShiftType | 'all')}
+                className={cn(
+                  "flex flex-col items-center justify-center px-2.5 py-1 rounded-lg min-w-[44px] cursor-pointer transition-all border border-transparent",
+                  bg, text,
+                  shiftFilter === type ? `ring-2 ring-offset-1 ${ring} opacity-100` : 'opacity-75 hover:opacity-100'
+                )}
+              >
+                <span className="text-[10px] font-semibold leading-none">{label}</span>
+                <span className="text-base font-bold leading-tight">{count}</span>
+              </button>
+            ))}
+          </div>
 
           <Select value={locationFilter} onValueChange={setLocationFilter}>
             <SelectTrigger className="w-[130px] h-9 text-sm">
